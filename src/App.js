@@ -446,25 +446,71 @@ function Dashboard({ solicitacoes, policiais, onAtualizarPolicial, onRemoverPoli
         </Card>
       )}
 
-      {emFerias.length > 0 && (
-        <Card>
-          <h4 style={{ fontSize:13, fontWeight:800, color:'#1a3a5c', marginBottom:12 }}>🏖️ Policiais em Férias</h4>
-          {emFerias.map(p => {
+      {/* Efetivo operacional */}
+<Card>
+  <h4 style={{ fontSize:13, fontWeight:800, color:'#1a3a5c', marginBottom:12 }}>⚙️ Capacidade Operacional</h4>
+  <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:10 }}>
+    {[
+      { l:'Total do Efetivo', v:policiais.length, c:'#1a3a5c' },
+      { l:'Prontos p/ Serviço', v:policiais.filter(p=>(p.situacao||'Pronto')==='Pronto').length, c:'#1B5E20' },
+      { l:'Afastados', v:policiais.filter(p=>(p.situacao||'Pronto')!=='Pronto').length, c:'#B71C1C' },
+      { l:'Com Restrição', v:policiais.filter(p=>temRestricao(p)).length, c:'#E65100' },
+      { l:'Apto A c/ Rest.', v:policiais.filter(p=>(p.sit_sanitaria||'Apto A')==='Apto A'&&temRestricao(p)).length, c:'#E65100' },
+      { l:'LTS Sanitário', v:policiais.filter(p=>(p.sit_sanitaria||'Apto A')==='LTS').length, c:'#6A1B9A' },
+    ].map(s => (
+      <div key={s.l} style={{ background:'#f8fafc', borderRadius:10, padding:'12px 8px', textAlign:'center', border:`1px solid #e0e8f0` }}>
+        <div style={{ fontSize:22, fontWeight:900, color:s.c }}>{s.v}</div>
+        <div style={{ fontSize:10, color:'#6b8099', fontWeight:700 }}>{s.l}</div>
+      </div>
+    ))}
+  </div>
+</Card>
+
+{/* Todos os afastados */}
+{policiais.filter(p => (p.situacao||'Pronto') !== 'Pronto').length > 0 && (
+  <Card>
+    <h4 style={{ fontSize:13, fontWeight:800, color:'#1a3a5c', marginBottom:12 }}>🚨 Policiais Afastados</h4>
+    {SITUACOES.filter(sit => sit !== 'Pronto').map(sit => {
+      const afastados = policiais.filter(p => (p.situacao||'Pronto') === sit);
+      if (afastados.length === 0) return null;
+      return (
+        <div key={sit} style={{ marginBottom:12 }}>
+          <div style={{ fontWeight:800, color:'#B71C1C', fontSize:12, marginBottom:6, background:'#FFEBEE', borderRadius:6, padding:'4px 10px', display:'inline-block' }}>{sit} ({afastados.length})</div>
+          {afastados.map(p => {
             const dias = diasParaRetorno(p.ferias_fim);
             return (
-              <div key={p.id} style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'6px 0', borderBottom:'1px solid #f0f4f8', flexWrap:'wrap', gap:6 }}>
-                <span style={{ fontWeight:700, color:'#1a3a5c', fontSize:13 }}>{p.patente} {p.nome}</span>
+              <div key={p.id} style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'5px 0', borderBottom:'1px solid #f0f4f8', flexWrap:'wrap', gap:6 }}>
+                <span style={{ fontWeight:700, color:'#1a3a5c', fontSize:12 }}>{p.patente} {p.nome}</span>
                 <div style={{ display:'flex', gap:6, alignItems:'center' }}>
-                  <span style={{ color:'#6b8099', fontSize:12 }}>{p.ferias_inicio?new Date(p.ferias_inicio+'T00:00:00').toLocaleDateString('pt-BR'):'—'} → {p.ferias_fim?new Date(p.ferias_fim+'T00:00:00').toLocaleDateString('pt-BR'):'—'}</span>
+                  {p.ferias_fim && <span style={{ color:'#6b8099', fontSize:11 }}>{p.ferias_inicio?new Date(p.ferias_inicio+'T00:00:00').toLocaleDateString('pt-BR'):'—'} → {new Date(p.ferias_fim+'T00:00:00').toLocaleDateString('pt-BR')}</span>}
                   {dias!==null&&dias>=0&&<span style={{ background:dias<=3?'#B71C1C':'#1B5E20', color:'#fff', borderRadius:6, padding:'1px 8px', fontSize:11, fontWeight:800 }}>{dias===0?'Retorna hoje!':dias===1?'1 dia':`${dias} dias`}</span>}
                   {dias!==null&&dias<0&&<span style={{ background:'#7B5800', color:'#fff', borderRadius:6, padding:'1px 8px', fontSize:11, fontWeight:800 }}>Vencido</span>}
                 </div>
               </div>
             );
           })}
-        </Card>
-      )}
+        </div>
+      );
+    })}
+  </Card>
+)}
 
+{/* Alerta LTS sanitário */}
+{policiais.filter(p => (p.sit_sanitaria||'Apto A') === 'LTS' && p.ferias_fim && diasParaRetorno(p.ferias_fim) !== null && diasParaRetorno(p.ferias_fim) <= 3 && diasParaRetorno(p.ferias_fim) >= 0).length > 0 && (
+  <div style={{ background:'#F3E5F5', border:'2px solid #CE93D8', borderRadius:10, padding:'12px 16px', marginBottom:14 }}>
+    <div style={{ fontWeight:800, color:'#6A1B9A', fontSize:13, marginBottom:8 }}>🟣 LTS Sanitário encerrando em até 3 dias:</div>
+    {policiais.filter(p => (p.sit_sanitaria||'Apto A') === 'LTS' && p.ferias_fim && diasParaRetorno(p.ferias_fim) !== null && diasParaRetorno(p.ferias_fim) <= 3 && diasParaRetorno(p.ferias_fim) >= 0).map(p => {
+      const dias = diasParaRetorno(p.ferias_fim);
+      return (
+        <div key={p.id} style={{ display:'flex', gap:8, alignItems:'center', marginBottom:4 }}>
+          <span style={{ fontWeight:700, color:'#1a3a5c', fontSize:12 }}>{p.patente} {p.nome}</span>
+          <span style={{ background:dias===0?'#6A1B9A':dias<=1?'#8E24AA':'#AB47BC', color:'#fff', borderRadius:6, padding:'1px 8px', fontSize:11, fontWeight:800 }}>{dias===0?'Retorna hoje!':dias===1?'Retorna amanhã!':`${dias} dias`}</span>
+          <span style={{ color:'#6b8099', fontSize:11 }}>Fim: {new Date(p.ferias_fim+'T00:00:00').toLocaleDateString('pt-BR')}</span>
+        </div>
+      );
+    })}
+  </div>
+)}
       <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:10, marginBottom:20 }}>
         {[{l:'Total',v:total,c:'#1a3a5c'},{l:'Folgas aprovadas',v:totalFolgas,c:'#0D47A1'},{l:'Concessões aprovadas',v:totalConcessoes,c:'#6A1B9A'},{l:'Pendentes',v:totalPendentes,c:'#7B5800'},{l:'Recusadas',v:totalRecusadas,c:'#B71C1C'},{l:'Total aprovadas',v:totalAprovadas,c:'#1B5E20'}]
           .map(s => <div key={s.l} style={{ background:'#fff', borderRadius:10, padding:'14px 10px', boxShadow:'0 2px 8px #00000012', textAlign:'center' }}><div style={{ fontSize:26, fontWeight:900, color:s.c }}>{s.v}</div><div style={{ fontSize:11, color:'#6b8099', fontWeight:700 }}>{s.l}</div></div>)}
