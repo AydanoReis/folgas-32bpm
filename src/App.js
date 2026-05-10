@@ -57,7 +57,7 @@ function TelaSolicitacao({ usuario }) {
   useEffect(() => { carregarMinhas(); }, [carregarMinhas]);
 
   async function enviar() {
-    if (!dia || !semana || !motivo) { setMsg({ tipo:'erro', texto:'Selecione o tipo, o dia e a semana.' }); return; }
+    if (!dia || !semana || !motivo) { setMsg({ tipo:'erro', texto:'Selecione o tipo, o dia e a data.' }); return; }
     if (!email || !email.includes('@')) { setMsg({ tipo:'erro', texto:'Informe um email válido para receber a confirmação.' }); return; }
     setEnviando(true);
     const { error } = await supabase.from('solicitacoes').insert({
@@ -71,6 +71,12 @@ function TelaSolicitacao({ usuario }) {
     setMsg({ tipo:'ok', texto:'Solicitação enviada! Você receberá um email quando for aprovada ou recusada.' });
     setTimeout(() => setMsg(null), 4000);
     carregarMinhas();
+  }
+
+  async function cancelarSolicitacao(id) {
+    if (!window.confirm('Cancelar esta solicitação?')) return;
+    await supabase.from('solicitacoes').delete().eq('id', id);
+    setMinhas(prev => prev.filter(s => s.id !== id));
   }
 
   return (
@@ -108,8 +114,9 @@ function TelaSolicitacao({ usuario }) {
           ))}
         </div>
 
-        <label style={lbl}>Semana de referência *</label>
-<input type="date" value={semana} onChange={e => setSemana(e.target.value)} style={{ ...inp, marginBottom:14 }} />
+        <label style={lbl}>Data de referência *</label>
+        <input type="date" value={semana} onChange={e => setSemana(e.target.value)} style={{ ...inp, marginBottom:14 }} />
+
         <label style={lbl}>Seu email para receber confirmação *</label>
         <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="seu.email@gmail.com" style={{ ...inp, marginBottom:6 }} />
 
@@ -126,14 +133,15 @@ function TelaSolicitacao({ usuario }) {
               <div style={{ display:'flex', gap:8, alignItems:'center', flexWrap:'wrap' }}>
                 <MotivoBadge motivo={s.motivo} />
                 <span style={{ fontWeight:800, color:'#1a3a5c' }}>{s.dia}</span>
-                <span style={{ color:'#6b8099', fontSize:13 }}>Semana: {s.semana}</span>
+                <span style={{ color:'#6b8099', fontSize:13 }}>{s.semana}</span>
               </div>
               <Badge status={s.status} />
             </div>
-<p style={{ color:'#bbb', fontSize:12, marginTop:6 }}>Enviado em {new Date(s.created_at).toLocaleDateString('pt-BR')}</p>
-{s.status === 'pendente' && (
-  <button onClick={() => cancelarSolicitacao(s.id)} style={{ ...btnSm, background:'#FFEBEE', color:'#B71C1C', marginTop:8 }}>✕ Cancelar solicitação</button>
-)}          </Card>
+            <p style={{ color:'#bbb', fontSize:12, marginTop:6 }}>Enviado em {new Date(s.created_at).toLocaleDateString('pt-BR')}</p>
+            {s.status === 'pendente' && (
+              <button onClick={() => cancelarSolicitacao(s.id)} style={{ ...btnSm, background:'#FFEBEE', color:'#B71C1C', marginTop:8 }}>✕ Cancelar solicitação</button>
+            )}
+          </Card>
         ))
       }
     </div>
@@ -196,6 +204,12 @@ function TelaGestor({ gestorLogado }) {
         matricula: sol.matricula,
       });
     }
+  }
+
+  async function excluirSolicitacao(id) {
+    if (!window.confirm('Excluir esta solicitação?')) return;
+    await supabase.from('solicitacoes').delete().eq('id', id);
+    setSolicitacoes(prev => prev.filter(s => s.id !== id));
   }
 
   async function adicionarPolicial() {
@@ -329,6 +343,9 @@ function TelaGestor({ gestorLogado }) {
                     <button onClick={() => mudarStatus(s.id,'aprovado')} style={{ ...btnSm, background:'#1B5E20', color:'#fff' }}>✔ Aprovar</button>
                     <button onClick={() => mudarStatus(s.id,'recusado')} style={{ ...btnSm, background:'#B71C1C', color:'#fff' }}>✘ Recusar</button>
                   </div>
+                )}
+                {s.status === 'recusado' && (
+                  <button onClick={() => excluirSolicitacao(s.id)} style={{ ...btnSm, background:'#FFEBEE', color:'#B71C1C', marginTop:8 }}>🗑️ Excluir</button>
                 )}
               </Card>
             ))
