@@ -3,6 +3,7 @@ import { supabase } from './supabaseClient';
 import emailjs from '@emailjs/browser';
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
 
 const EMAILJS_SERVICE_ID = 'service_97rq307';
 const EMAILJS_TEMPLATE_ID = 'template_y0wm9hp';
@@ -16,6 +17,7 @@ const STATUS_COLORS = {
   aprovado:  { bg:'#E8F5E9', text:'#1B5E20', border:'#A5D6A7' },
   recusado:  { bg:'#FFEBEE', text:'#B71C1C', border:'#EF9A9A' },
 };
+const CORES_GRAFICO = ['#1a3a5c','#2E7D32','#6A1B9A','#0D47A1','#B71C1C','#E65100','#00695C','#4A148C','#880E4F','#1B5E20','#F57F17','#37474F','#1565C0','#283593','#4E342E','#33691E','#006064','#01579B'];
 
 const inp = { width:'100%', padding:'10px 12px', borderRadius:8, border:'1.5px solid #d0dce8', fontSize:14, color:'#1a3a5c', background:'#f8fafc', boxSizing:'border-box', outline:'none' };
 const lbl = { display:'block', fontSize:11, fontWeight:800, color:'#4a6580', marginBottom:5, textTransform:'uppercase', letterSpacing:0.5 };
@@ -98,10 +100,117 @@ function gerarPDF(solicitacoes) {
   doc.save(`relatorio-folgas-32bpm-${new Date().toLocaleDateString('pt-BR').replace(/\//g,'-')}.pdf`);
 }
 
+function Dashboard({ solicitacoes }) {
+  const aprovadas = solicitacoes.filter(s => s.status === 'aprovado');
+  const total = solicitacoes.length;
+  const totalAprovadas = aprovadas.length;
+  const totalPendentes = solicitacoes.filter(s => s.status === 'pendente').length;
+  const totalRecusadas = solicitacoes.filter(s => s.status === 'recusado').length;
+  const totalFolgas = aprovadas.filter(s => s.motivo === 'Folga').length;
+  const totalConcessoes = aprovadas.filter(s => s.motivo === 'Concessão').length;
+
+  // Dados por dia
+  const porDia = DIAS.map(dia => ({
+    dia: dia.substring(0, 3),
+    Folgas: aprovadas.filter(s => s.dia === dia && s.motivo === 'Folga').length,
+    Concessões: aprovadas.filter(s => s.dia === dia && s.motivo === 'Concessão').length,
+  }));
+
+  // Dados por seção
+  const porSecao = SECOES
+    .map(secao => ({ secao, total: aprovadas.filter(s => s.secao === secao).length }))
+    .filter(s => s.total > 0)
+    .sort((a, b) => b.total - a.total);
+
+  // Dia mais solicitado
+  const diaMais = porDia.reduce((a, b) => (a.Folgas + a.Concessões) >= (b.Folgas + b.Concessões) ? a : b, porDia[0]);
+  const secaoMais = porSecao[0];
+
+  return (
+    <div>
+      <h3 style={{ fontSize:15, fontWeight:800, color:'#1a3a5c', marginBottom:16 }}>📈 Dashboard de Estatísticas</h3>
+
+      {/* Cards de resumo */}
+      <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:10, marginBottom:20 }}>
+        {[
+          { l:'Total de solicitações', v:total, c:'#1a3a5c' },
+          { l:'Folgas aprovadas', v:totalFolgas, c:'#0D47A1' },
+          { l:'Concessões aprovadas', v:totalConcessoes, c:'#6A1B9A' },
+          { l:'Pendentes', v:totalPendentes, c:'#7B5800' },
+          { l:'Recusadas', v:totalRecusadas, c:'#B71C1C' },
+          { l:'Total aprovadas', v:totalAprovadas, c:'#1B5E20' },
+        ].map(s => (
+          <div key={s.l} style={{ background:'#fff', borderRadius:10, padding:'14px 10px', boxShadow:'0 2px 8px #00000012', textAlign:'center' }}>
+            <div style={{ fontSize:26, fontWeight:900, color:s.c }}>{s.v}</div>
+            <div style={{ fontSize:11, color:'#6b8099', fontWeight:700 }}>{s.l}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Destaques */}
+      {aprovadas.length > 0 && (
+        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, marginBottom:20 }}>
+          <Card style={{ margin:0, textAlign:'center' }}>
+            <div style={{ fontSize:11, color:'#6b8099', fontWeight:700, marginBottom:4 }}>DIA MAIS SOLICITADO</div>
+            <div style={{ fontSize:20, fontWeight:900, color:'#1a3a5c' }}>{diaMais.dia}</div>
+            <div style={{ fontSize:12, color:'#6b8099' }}>{diaMais.Folgas + diaMais.Concessões} folgas</div>
+          </Card>
+          <Card style={{ margin:0, textAlign:'center' }}>
+            <div style={{ fontSize:11, color:'#6b8099', fontWeight:700, marginBottom:4 }}>SEÇÃO MAIS ATIVA</div>
+            <div style={{ fontSize:20, fontWeight:900, color:'#1a3a5c' }}>{secaoMais ? secaoMais.secao : '—'}</div>
+            <div style={{ fontSize:12, color:'#6b8099' }}>{secaoMais ? `${secaoMais.total} folgas` : ''}</div>
+          </Card>
+        </div>
+      )}
+
+      {/* Gráfico por dia */}
+      <Card>
+        <h4 style={{ fontSize:13, fontWeight:800, color:'#1a3a5c', marginBottom:14 }}>Folgas aprovadas por dia da semana</h4>
+        {aprovadas.length === 0
+          ? <p style={{ color:'#aab', fontSize:13 }}>Nenhuma folga aprovada ainda.</p>
+          : <ResponsiveContainer width="100%" height={200}>
+              <BarChart data={porDia} margin={{ top:5, right:10, left:-20, bottom:5 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                <XAxis dataKey="dia" tick={{ fontSize:11 }} />
+                <YAxis tick={{ fontSize:11 }} allowDecimals={false} />
+                <Tooltip />
+                <Legend />
+                <Bar dataKey="Folgas" fill="#0D47A1" radius={[4,4,0,0]} />
+                <Bar dataKey="Concessões" fill="#6A1B9A" radius={[4,4,0,0]} />
+              </BarChart>
+            </ResponsiveContainer>
+        }
+      </Card>
+
+      {/* Gráfico por seção */}
+      <Card>
+        <h4 style={{ fontSize:13, fontWeight:800, color:'#1a3a5c', marginBottom:14 }}>Folgas aprovadas por seção</h4>
+        {porSecao.length === 0
+          ? <p style={{ color:'#aab', fontSize:13 }}>Nenhuma folga aprovada ainda.</p>
+          : <>
+              <ResponsiveContainer width="100%" height={220}>
+                <PieChart>
+                  <Pie data={porSecao} dataKey="total" nameKey="secao" cx="50%" cy="50%" outerRadius={80} label={({ secao, total }) => `${secao}: ${total}`} labelLine={false} fontSize={10}>
+                    {porSecao.map((_, i) => <Cell key={i} fill={CORES_GRAFICO[i % CORES_GRAFICO.length]} />)}
+                  </Pie>
+                  <Tooltip formatter={(v, n) => [v, n]} />
+                </PieChart>
+              </ResponsiveContainer>
+              <div style={{ display:'flex', flexWrap:'wrap', gap:6, marginTop:8 }}>
+                {porSecao.map((s, i) => (
+                  <span key={s.secao} style={{ background:CORES_GRAFICO[i % CORES_GRAFICO.length], color:'#fff', borderRadius:6, padding:'2px 8px', fontSize:11, fontWeight:700 }}>{s.secao}: {s.total}</span>
+                ))}
+              </div>
+            </>
+        }
+      </Card>
+    </div>
+  );
+}
+
 function CalendarioFolgas({ solicitacoes }) {
   const aprovadas = solicitacoes.filter(s => s.status === 'aprovado');
   const [filtroSecao, setFiltroSecao] = useState('todas');
-
   const filtradas = filtroSecao === 'todas' ? aprovadas : aprovadas.filter(s => s.secao === filtroSecao);
 
   return (
@@ -113,12 +222,10 @@ function CalendarioFolgas({ solicitacoes }) {
           {SECOES.map(s => <option key={s}>{s}</option>)}
         </select>
       </div>
-
       <div style={{ display:'flex', gap:6, marginBottom:8 }}>
         <span style={{ background:'#E3F2FD', color:'#0D47A1', borderRadius:6, padding:'3px 10px', fontSize:12, fontWeight:700 }}>🌙 Folga</span>
         <span style={{ background:'#F3E5F5', color:'#6A1B9A', borderRadius:6, padding:'3px 10px', fontSize:12, fontWeight:700 }}>🎖️ Concessão</span>
       </div>
-
       <div style={{ overflowX:'auto' }}>
         <table style={{ width:'100%', borderCollapse:'collapse', minWidth:600 }}>
           <thead>
@@ -137,19 +244,13 @@ function CalendarioFolgas({ solicitacoes }) {
                     {dodia.length === 0
                       ? <span style={{ color:'#ccc', fontSize:11 }}>—</span>
                       : dodia.map(s => (
-                        <div key={s.id} style={{
-                          background: s.motivo === 'Concessão' ? '#F3E5F5' : '#E3F2FD',
-                          color: s.motivo === 'Concessão' ? '#6A1B9A' : '#0D47A1',
-                          borderRadius:6, padding:'4px 6px', marginBottom:4, fontSize:11, fontWeight:700
-                        }}>
+                        <div key={s.id} style={{ background: s.motivo === 'Concessão' ? '#F3E5F5' : '#E3F2FD', color: s.motivo === 'Concessão' ? '#6A1B9A' : '#0D47A1', borderRadius:6, padding:'4px 6px', marginBottom:4, fontSize:11, fontWeight:700 }}>
                           <div>{s.policial_nome.split(' ').slice(0,2).join(' ')}</div>
                           <div style={{ fontSize:10, opacity:0.8 }}>{s.secao}</div>
                         </div>
                       ))
                     }
-                    {dodia.length > 0 && (
-                      <div style={{ fontSize:10, color:'#6b8099', marginTop:2, textAlign:'right' }}>{dodia.length} folga{dodia.length > 1 ? 's' : ''}</div>
-                    )}
+                    {dodia.length > 0 && <div style={{ fontSize:10, color:'#6b8099', marginTop:2, textAlign:'right' }}>{dodia.length} folga{dodia.length > 1 ? 's' : ''}</div>}
                   </td>
                 );
               })}
@@ -157,10 +258,7 @@ function CalendarioFolgas({ solicitacoes }) {
           </tbody>
         </table>
       </div>
-
-      {aprovadas.length === 0 && (
-        <p style={{ color:'#aab', fontSize:13, textAlign:'center', marginTop:20 }}>Nenhuma folga aprovada ainda.</p>
-      )}
+      {aprovadas.length === 0 && <p style={{ color:'#aab', fontSize:13, textAlign:'center', marginTop:20 }}>Nenhuma folga aprovada ainda.</p>}
     </div>
   );
 }
@@ -479,9 +577,10 @@ function TelaGestor({ gestorLogado }) {
 
   const ABAS = [
     { id:'solicitacoes', label:'📋 Solicitações' },
-    { id:'calendario', label:'📅 Calendário' },
-    { id:'efetivo', label:'👮 Efetivo' },
-    { id:'gestores', label:'🗝️ Gestores' },
+    { id:'calendario',   label:'📅 Calendário' },
+    { id:'estatisticas', label:'📈 Estatísticas' },
+    { id:'efetivo',      label:'👮 Efetivo' },
+    { id:'gestores',     label:'🗝️ Gestores' },
   ];
 
   if (loading) return <Spinner />;
@@ -493,7 +592,7 @@ function TelaGestor({ gestorLogado }) {
           .map(s => <div key={s.l} style={{ background:'#fff', borderRadius:10, padding:'12px 8px', boxShadow:'0 2px 8px #00000012', textAlign:'center' }}><div style={{ fontSize:24, fontWeight:900, color:s.c }}>{s.v}</div><div style={{ fontSize:11, color:'#6b8099', fontWeight:700 }}>{s.l}</div></div>)}
       </div>
       <div style={{ display:'flex', gap:6, marginBottom:18, flexWrap:'wrap' }}>
-        {ABAS.map(a => <button key={a.id} onClick={() => setAba(a.id)} style={{ padding:'8px 16px', borderRadius:8, fontWeight:700, cursor:'pointer', background:aba===a.id?'#1a3a5c':'#f0f4f8', color:aba===a.id?'#fff':'#2d4a63', border:'none', fontSize:13 }}>{a.label}</button>)}
+        {ABAS.map(a => <button key={a.id} onClick={() => setAba(a.id)} style={{ padding:'8px 14px', borderRadius:8, fontWeight:700, cursor:'pointer', background:aba===a.id?'#1a3a5c':'#f0f4f8', color:aba===a.id?'#fff':'#2d4a63', border:'none', fontSize:12 }}>{a.label}</button>)}
       </div>
 
       {aba === 'solicitacoes' && (
@@ -553,11 +652,8 @@ function TelaGestor({ gestorLogado }) {
         </>
       )}
 
-      {aba === 'calendario' && (
-        <Card>
-          <CalendarioFolgas solicitacoes={solicitacoes} />
-        </Card>
-      )}
+      {aba === 'calendario' && <Card><CalendarioFolgas solicitacoes={solicitacoes} /></Card>}
+      {aba === 'estatisticas' && <Dashboard solicitacoes={solicitacoes} />}
 
       {aba === 'efetivo' && (
         <>
