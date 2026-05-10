@@ -12,7 +12,6 @@ const EMAILJS_PUBLIC_KEY = 'VmM8b5g2hP9fKqsm-';
 const DIAS = ['Segunda','Terça','Quarta','Quinta','Sexta','Sábado','Domingo'];
 const SECOES = ['P1','P3','P4','P5','Conferência','Tesouraria','Secretaria','Almoxarifado','SMT','SMB','Rancho','Ordenança','AJD','PCSV','Ed. Física','Técnica','Obra','Faxina','Gabinete Médico','Gabinete Odontológico'];
 const MOTIVOS = ['Folga','Concessão'];
-const SIT_SANITARIA = ['Apto A','Apto B','Apto C'];
 const SIT_SANITARIA_LTS = ['Apto A','Apto B','Apto C','LTS'];
 const SITUACOES = ['Pronto','Férias','LE','LTSPF','LTS','LP','Núpcias','Luto'];
 const RESTRICOES = ['Sem restrição','SP','CD','CRD','CHR'];
