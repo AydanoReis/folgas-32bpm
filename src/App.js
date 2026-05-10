@@ -1,7 +1,11 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from './supabaseClient';
+import emailjs from '@emailjs/browser';
 
-// ── CONSTANTES ────────────────────────────────────────────────────────────────
+const EMAILJS_SERVICE_ID = 'service_97rq307';
+const EMAILJS_TEMPLATE_ID = 'template_y0wm9hp';
+const EMAILJS_PUBLIC_KEY = 'VmM8b5g2hP9fKqsm-';
+
 const DIAS = ['Segunda','Terça','Quarta','Quinta','Sexta','Sábado','Domingo'];
 const SECOES = ['P1','P3','P4','P5','Conferência','Tesouraria','Secretaria','Almoxarifado','SMT','SMB','Rancho','Ordenança','AJD','PCSV','Ed. Física','Técnica','Obra','Faxina'];
 const MOTIVOS = ['Folga','Concessão'];
@@ -11,7 +15,6 @@ const STATUS_COLORS = {
   recusado:  { bg:'#FFEBEE', text:'#B71C1C', border:'#EF9A9A' },
 };
 
-// ── ESTILOS BASE ──────────────────────────────────────────────────────────────
 const inp = { width:'100%', padding:'10px 12px', borderRadius:8, border:'1.5px solid #d0dce8', fontSize:14, color:'#1a3a5c', background:'#f8fafc', boxSizing:'border-box', outline:'none' };
 const lbl = { display:'block', fontSize:11, fontWeight:800, color:'#4a6580', marginBottom:5, textTransform:'uppercase', letterSpacing:0.5 };
 const btnPrimary = { display:'block', width:'100%', padding:'12px', background:'linear-gradient(135deg,#0d2340,#1e4d7b)', color:'#fff', border:'none', borderRadius:8, fontWeight:800, fontSize:14, cursor:'pointer', marginTop:12 };
@@ -34,11 +37,11 @@ function Spinner() {
   return <div style={{ textAlign:'center', padding:40, color:'#6b8099', fontSize:15 }}>⏳ Carregando...</div>;
 }
 
-// ── TELA POLICIAL ─────────────────────────────────────────────────────────────
-function TelaSolicitacao({ usuario, onSair }) {
+function TelaSolicitacao({ usuario }) {
   const [dia, setDia] = useState(null);
   const [semana, setSemana] = useState('');
   const [motivo, setMotivo] = useState('');
+  const [email, setEmail] = useState('');
   const [minhas, setMinhas] = useState([]);
   const [loading, setLoading] = useState(true);
   const [enviando, setEnviando] = useState(false);
@@ -46,11 +49,7 @@ function TelaSolicitacao({ usuario, onSair }) {
 
   const carregarMinhas = useCallback(async () => {
     setLoading(true);
-    const { data } = await supabase
-      .from('solicitacoes')
-      .select('*')
-      .eq('policial_id', usuario.id)
-      .order('created_at', { ascending: false });
+    const { data } = await supabase.from('solicitacoes').select('*').eq('policial_id', usuario.id).order('created_at', { ascending: false });
     setMinhas(data || []);
     setLoading(false);
   }, [usuario.id]);
@@ -58,25 +57,19 @@ function TelaSolicitacao({ usuario, onSair }) {
   useEffect(() => { carregarMinhas(); }, [carregarMinhas]);
 
   async function enviar() {
-    if (!dia || !semana || !motivo) {
-      setMsg({ tipo:'erro', texto:'Selecione o tipo, o dia e a semana.' });
-      return;
-    }
+    if (!dia || !semana || !motivo) { setMsg({ tipo:'erro', texto:'Selecione o tipo, o dia e a semana.' }); return; }
+    if (!email || !email.includes('@')) { setMsg({ tipo:'erro', texto:'Informe um email válido para receber a confirmação.' }); return; }
     setEnviando(true);
     const { error } = await supabase.from('solicitacoes').insert({
-      policial_id: usuario.id,
-      policial_nome: usuario.nome,
-      matricula: usuario.matricula,
-      patente: usuario.patente,
-      secao: usuario.secao || '—',
-      dia, semana, motivo,
-      status: 'pendente',
+      policial_id: usuario.id, policial_nome: usuario.nome, matricula: usuario.matricula,
+      patente: usuario.patente, secao: usuario.secao || '—', dia, semana, motivo,
+      status: 'pendente', email_policial: email,
     });
     setEnviando(false);
     if (error) { setMsg({ tipo:'erro', texto:'Erro ao enviar. Tente novamente.' }); return; }
-    setDia(null); setSemana(''); setMotivo('');
-    setMsg({ tipo:'ok', texto:'Solicitação enviada! Aguarde aprovação.' });
-    setTimeout(() => setMsg(null), 3500);
+    setDia(null); setSemana(''); setMotivo(''); setEmail('');
+    setMsg({ tipo:'ok', texto:'Solicitação enviada! Você receberá um email quando for aprovada ou recusada.' });
+    setTimeout(() => setMsg(null), 4000);
     carregarMinhas();
   }
 
@@ -88,10 +81,8 @@ function TelaSolicitacao({ usuario, onSair }) {
         <div style={{ background:'#f0f6ff', borderRadius:8, padding:'10px 14px', marginBottom:16, display:'flex', gap:10, flexWrap:'wrap', alignItems:'center' }}>
           <span style={{ fontWeight:800, color:'#1a3a5c' }}>{usuario.patente} {usuario.nome}</span>
           <span style={{ color:'#6b8099', fontSize:13 }}>Mat.: {usuario.matricula}</span>
-          {usuario.secao
-            ? <span style={{ background:'#e8f0fe', color:'#3d5a9e', borderRadius:6, padding:'2px 9px', fontSize:12, fontWeight:700 }}>{usuario.secao}</span>
-            : <span style={{ background:'#fff3cd', color:'#856404', borderRadius:6, padding:'2px 9px', fontSize:12, fontWeight:700 }}>Seção não definida</span>
-          }
+          {usuario.secao ? <span style={{ background:'#e8f0fe', color:'#3d5a9e', borderRadius:6, padding:'2px 9px', fontSize:12, fontWeight:700 }}>{usuario.secao}</span>
+            : <span style={{ background:'#fff3cd', color:'#856404', borderRadius:6, padding:'2px 9px', fontSize:12, fontWeight:700 }}>Seção não definida</span>}
         </div>
 
         <label style={lbl}>Tipo de solicitação *</label>
@@ -102,9 +93,7 @@ function TelaSolicitacao({ usuario, onSair }) {
               background: motivo === m ? (m === 'Folga' ? '#0D47A1' : '#6A1B9A') : '#f0f4f8',
               color: motivo === m ? '#fff' : '#2d4a63',
               border: motivo === m ? `2px solid ${m === 'Folga' ? '#0D47A1' : '#6A1B9A'}` : '2px solid transparent',
-            }}>
-              {m === 'Folga' ? '🌙 Folga' : '🎖️ Concessão'}
-            </button>
+            }}>{m === 'Folga' ? '🌙 Folga' : '🎖️ Concessão'}</button>
           ))}
         </div>
 
@@ -113,15 +102,17 @@ function TelaSolicitacao({ usuario, onSair }) {
           {DIAS.map(d => (
             <button key={d} onClick={() => setDia(d)} style={{
               padding:'7px 11px', borderRadius:8, fontWeight:700, fontSize:13, cursor:'pointer',
-              background: dia === d ? '#1a3a5c' : '#f0f4f8',
-              color: dia === d ? '#fff' : '#2d4a63',
+              background: dia === d ? '#1a3a5c' : '#f0f4f8', color: dia === d ? '#fff' : '#2d4a63',
               border: dia === d ? '2px solid #1a3a5c' : '2px solid transparent',
             }}>{d}</button>
           ))}
         </div>
 
         <label style={lbl}>Semana de referência *</label>
-        <input type="week" value={semana} onChange={e => setSemana(e.target.value)} style={{ ...inp, marginBottom:6 }} />
+        <input type="week" value={semana} onChange={e => setSemana(e.target.value)} style={{ ...inp, marginBottom:14 }} />
+
+        <label style={lbl}>Seu email para receber confirmação *</label>
+        <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="seu.email@gmail.com" style={{ ...inp, marginBottom:6 }} />
 
         {msg && <div style={{ padding:'10px 14px', borderRadius:8, marginTop:10, fontWeight:600, background:msg.tipo==='ok'?'#E8F5E9':'#FFEBEE', color:msg.tipo==='ok'?'#1B5E20':'#B71C1C' }}>{msg.texto}</div>}
         <button onClick={enviar} disabled={enviando} style={{ ...btnPrimary, opacity:enviando?0.7:1 }}>{enviando ? 'Enviando...' : 'Enviar Solicitação'}</button>
@@ -148,7 +139,6 @@ function TelaSolicitacao({ usuario, onSair }) {
   );
 }
 
-// ── TELA GESTOR ───────────────────────────────────────────────────────────────
 function TelaGestor({ gestorLogado }) {
   const [aba, setAba] = useState('solicitacoes');
   const [solicitacoes, setSolicitacoes] = useState([]);
@@ -160,20 +150,14 @@ function TelaGestor({ gestorLogado }) {
   const [filtroDia, setFiltroDia] = useState('todos');
   const [filtroMotivo, setFiltroMotivo] = useState('todos');
   const [busca, setBusca] = useState('');
-
-  // Novo policial
   const [novoNome, setNovoNome] = useState('');
   const [novaMatricula, setNovaMatricula] = useState('');
   const [novaPatente, setNovaPatente] = useState('3º SGT PM');
   const [novaSecao, setNovaSecao] = useState('');
-
-  // Senha
   const [senhaAtual, setSenhaAtual] = useState('');
   const [novaSenha, setNovaSenha] = useState('');
   const [confirmaSenha, setConfirmaSenha] = useState('');
   const [msgSenha, setMsgSenha] = useState(null);
-
-  // Novo gestor
   const [novoGestorNome, setNovoGestorNome] = useState('');
   const [novoGestorMatricula, setNovoGestorMatricula] = useState('');
   const [novoGestorSenha, setNovoGestorSenha] = useState('');
@@ -197,12 +181,26 @@ function TelaGestor({ gestorLogado }) {
   async function mudarStatus(id, status) {
     await supabase.from('solicitacoes').update({ status }).eq('id', id);
     setSolicitacoes(prev => prev.map(s => s.id === id ? { ...s, status } : s));
+    const sol = solicitacoes.find(s => s.id === id);
+    if (sol && sol.email_policial) {
+      emailjs.init(EMAILJS_PUBLIC_KEY);
+      emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, {
+        email: sol.email_policial,
+        nome: sol.policial_nome,
+        motivo: sol.motivo,
+        dia: sol.dia,
+        semana: sol.semana,
+        status: status === 'aprovado' ? '✅ APROVADA' : '❌ RECUSADA',
+        secao: sol.secao,
+        matricula: sol.matricula,
+      });
+    }
   }
 
   async function adicionarPolicial() {
     if (!novoNome.trim() || !novaMatricula.trim() || !novaSecao) return;
     const { data, error } = await supabase.from('policiais').insert({ nome: novoNome.toUpperCase(), matricula: novaMatricula, patente: novaPatente, secao: novaSecao }).select().single();
-    if (!error && data) { setPoliciais(prev => [...prev, data].sort((a,b) => a.nome.localeCompare(b.nome))); }
+    if (!error && data) setPoliciais(prev => [...prev, data].sort((a,b) => a.nome.localeCompare(b.nome)));
     setNovoNome(''); setNovaMatricula(''); setNovaPatente('3º SGT PM'); setNovaSecao('');
   }
 
@@ -238,7 +236,7 @@ function TelaGestor({ gestorLogado }) {
       setMsgGestor({ tipo:'erro', texto:'Já existe um gestor com essa matrícula.' }); return;
     }
     const { data, error } = await supabase.from('gestores').insert({ nome: novoGestorNome.toUpperCase(), matricula: novoGestorMatricula, senha: novoGestorSenha, principal: false }).select().single();
-    if (error) { setMsgGestor({ tipo:'erro', texto:'Erro ao cadastrar. Tente novamente.' }); return; }
+    if (error) { setMsgGestor({ tipo:'erro', texto:'Erro ao cadastrar.' }); return; }
     setGestores(prev => [...prev, data]);
     setNovoGestorNome(''); setNovoGestorMatricula(''); setNovoGestorSenha('');
     setMsgGestor({ tipo:'ok', texto:'Gestor cadastrado com sucesso!' });
@@ -270,8 +268,8 @@ function TelaGestor({ gestorLogado }) {
 
   const ABAS = [
     { id:'solicitacoes', label:'📋 Solicitações' },
-    { id:'efetivo',      label:'👮 Efetivo' },
-    { id:'gestores',     label:'🗝️ Gestores' },
+    { id:'efetivo', label:'👮 Efetivo' },
+    { id:'gestores', label:'🗝️ Gestores' },
   ];
 
   if (loading) return <Spinner />;
@@ -287,7 +285,6 @@ function TelaGestor({ gestorLogado }) {
         {ABAS.map(a => <button key={a.id} onClick={() => setAba(a.id)} style={{ padding:'8px 16px', borderRadius:8, fontWeight:700, cursor:'pointer', background:aba===a.id?'#1a3a5c':'#f0f4f8', color:aba===a.id?'#fff':'#2d4a63', border:'none', fontSize:13 }}>{a.label}</button>)}
       </div>
 
-      {/* SOLICITAÇÕES */}
       {aba === 'solicitacoes' && (
         <>
           <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8, marginBottom:14 }}>
@@ -324,7 +321,8 @@ function TelaGestor({ gestorLogado }) {
                   <span style={{ background:'#e8f0fe', color:'#3d5a9e', borderRadius:6, padding:'2px 8px', fontSize:12, fontWeight:700 }}>{s.secao}</span>
                   <span style={{ color:'#2d4a63', fontSize:13 }}>📅 <strong>{s.dia}</strong> — {s.semana}</span>
                 </div>
-                <p style={{ color:'#bbb', fontSize:12, marginTop:6 }}>{new Date(s.created_at).toLocaleDateString('pt-BR')}</p>
+                {s.email_policial && <p style={{ color:'#aab', fontSize:12, marginTop:4 }}>📧 {s.email_policial}</p>}
+                <p style={{ color:'#bbb', fontSize:12, marginTop:4 }}>{new Date(s.created_at).toLocaleDateString('pt-BR')}</p>
                 {s.status === 'pendente' && (
                   <div style={{ display:'flex', gap:8, marginTop:10 }}>
                     <button onClick={() => mudarStatus(s.id,'aprovado')} style={{ ...btnSm, background:'#1B5E20', color:'#fff' }}>✔ Aprovar</button>
@@ -337,7 +335,6 @@ function TelaGestor({ gestorLogado }) {
         </>
       )}
 
-      {/* EFETIVO */}
       {aba === 'efetivo' && (
         <>
           <Card>
@@ -381,7 +378,6 @@ function TelaGestor({ gestorLogado }) {
         </>
       )}
 
-      {/* GESTORES */}
       {aba === 'gestores' && (
         <>
           <Card>
@@ -396,10 +392,8 @@ function TelaGestor({ gestorLogado }) {
             {msgSenha && <div style={{ padding:'10px 14px', borderRadius:8, fontWeight:600, marginBottom:6, background:msgSenha.tipo==='ok'?'#E8F5E9':'#FFEBEE', color:msgSenha.tipo==='ok'?'#1B5E20':'#B71C1C' }}>{msgSenha.texto}</div>}
             <button onClick={alterarMinhaSenha} style={btnPrimary}>Salvar Nova Senha</button>
           </Card>
-
           <Card>
             <h3 style={{ fontSize:14, fontWeight:800, color:'#1a3a5c', marginBottom:4 }}>➕ Cadastrar Novo Gestor</h3>
-            <p style={{ color:'#6b8099', fontSize:13, marginBottom:14 }}>Adicione outros gestores com acesso ao painel.</p>
             <label style={lbl}>Nome / Patente *</label>
             <input value={novoGestorNome} onChange={e => setNovoGestorNome(e.target.value)} placeholder="Ex.: 1º SGT SILVA" style={{ ...inp, marginBottom:10 }} />
             <label style={lbl}>Matrícula *</label>
@@ -409,7 +403,6 @@ function TelaGestor({ gestorLogado }) {
             {msgGestor && <div style={{ padding:'10px 14px', borderRadius:8, fontWeight:600, marginBottom:6, background:msgGestor.tipo==='ok'?'#E8F5E9':'#FFEBEE', color:msgGestor.tipo==='ok'?'#1B5E20':'#B71C1C' }}>{msgGestor.texto}</div>}
             <button onClick={adicionarGestor} style={btnPrimary}>Cadastrar Gestor</button>
           </Card>
-
           <h3 style={{ fontSize:14, fontWeight:800, color:'#1a3a5c', margin:'20px 0 10px' }}>Gestores Cadastrados</h3>
           {gestores.map(g => (
             <Card key={g.id} style={{ padding:'12px 16px' }}>
@@ -431,7 +424,6 @@ function TelaGestor({ gestorLogado }) {
   );
 }
 
-// ── APP PRINCIPAL ─────────────────────────────────────────────────────────────
 export default function App() {
   const [modo, setModo] = useState('login');
   const [usuarioSel, setUsuarioSel] = useState(null);
@@ -509,7 +501,7 @@ export default function App() {
             </div>
           </>
         )}
-        {modo === 'policial' && usuarioSel && <TelaSolicitacao usuario={usuarioSel} onSair={sair} />}
+        {modo === 'policial' && usuarioSel && <TelaSolicitacao usuario={usuarioSel} />}
         {modo === 'gestor' && gestorLogado && <TelaGestor gestorLogado={gestorLogado} />}
       </div>
     </div>
