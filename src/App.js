@@ -130,8 +130,10 @@ function TelaSolicitacao({ usuario }) {
               </div>
               <Badge status={s.status} />
             </div>
-            <p style={{ color:'#bbb', fontSize:12, marginTop:6 }}>Enviado em {new Date(s.created_at).toLocaleDateString('pt-BR')}</p>
-          </Card>
+<p style={{ color:'#bbb', fontSize:12, marginTop:6 }}>Enviado em {new Date(s.created_at).toLocaleDateString('pt-BR')}</p>
+{s.status === 'pendente' && (
+  <button onClick={() => cancelarSolicitacao(s.id)} style={{ ...btnSm, background:'#FFEBEE', color:'#B71C1C', marginTop:8 }}>✕ Cancelar solicitação</button>
+)}          </Card>
         ))
       }
     </div>
