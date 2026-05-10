@@ -12,6 +12,13 @@ const EMAILJS_PUBLIC_KEY = 'VmM8b5g2hP9fKqsm-';
 const DIAS = ['Segunda','Terça','Quarta','Quinta','Sexta','Sábado','Domingo'];
 const SECOES = ['P1','P3','P4','P5','Conferência','Tesouraria','Secretaria','Almoxarifado','SMT','SMB','Rancho','Ordenança','AJD','PCSV','Ed. Física','Técnica','Obra','Faxina'];
 const MOTIVOS = ['Folga','Concessão'];
+const SIT_SANITARIA = ['Apto A','Apto B','Apto C'];
+const SITUACOES = ['Pronto','Férias','LE','LTSPF','LTS','LP','Núpcias','Luto'];
+const RESTRICOES = ['Sem restrição','SP','CD','CRD'];
+
+const COR_SS = { 'Apto A':'#1565C0', 'Apto B':'#F9A825', 'Apto C':'#B71C1C' };
+const EMOJI_SS = { 'Apto A':'🔵', 'Apto B':'🟡', 'Apto C':'🔴' };
+
 const STATUS_COLORS = {
   pendente: { bg:'#FFF8E1', text:'#7B5800', border:'#FFD54F' },
   aprovado:  { bg:'#E8F5E9', text:'#1B5E20', border:'#A5D6A7' },
@@ -36,6 +43,13 @@ function MotivoBadge({ motivo }) {
     ? { bg:'#F3E5F5', text:'#6A1B9A', border:'#CE93D8' }
     : { bg:'#E3F2FD', text:'#0D47A1', border:'#90CAF9' };
   return <span style={{ background:cor.bg, color:cor.text, border:`1px solid ${cor.border}`, padding:'3px 10px', borderRadius:20, fontSize:11, fontWeight:800 }}>{motivo}</span>;
+}
+function SSBadge({ ss }) {
+  return <span style={{ background: COR_SS[ss] || '#888', color:'#fff', borderRadius:6, padding:'2px 8px', fontSize:11, fontWeight:800 }}>{EMOJI_SS[ss]} {ss}</span>;
+}
+function SituacaoBadge({ situacao }) {
+  const cor = situacao === 'Pronto' ? { bg:'#E8F5E9', text:'#1B5E20' } : { bg:'#FFEBEE', text:'#B71C1C' };
+  return <span style={{ background:cor.bg, color:cor.text, borderRadius:6, padding:'2px 8px', fontSize:11, fontWeight:800 }}>{situacao}</span>;
 }
 function Spinner() {
   return <div style={{ textAlign:'center', padding:40, color:'#6b8099', fontSize:15 }}>⏳ Carregando...</div>;
@@ -100,7 +114,7 @@ function gerarPDF(solicitacoes) {
   doc.save(`relatorio-folgas-32bpm-${new Date().toLocaleDateString('pt-BR').replace(/\//g,'-')}.pdf`);
 }
 
-function Dashboard({ solicitacoes }) {
+function Dashboard({ solicitacoes, policiais }) {
   const aprovadas = solicitacoes.filter(s => s.status === 'aprovado');
   const total = solicitacoes.length;
   const totalAprovadas = aprovadas.length;
@@ -109,28 +123,34 @@ function Dashboard({ solicitacoes }) {
   const totalFolgas = aprovadas.filter(s => s.motivo === 'Folga').length;
   const totalConcessoes = aprovadas.filter(s => s.motivo === 'Concessão').length;
 
-  // Dados por dia
   const porDia = DIAS.map(dia => ({
     dia: dia.substring(0, 3),
     Folgas: aprovadas.filter(s => s.dia === dia && s.motivo === 'Folga').length,
     Concessões: aprovadas.filter(s => s.dia === dia && s.motivo === 'Concessão').length,
   }));
 
-  // Dados por seção
   const porSecao = SECOES
     .map(secao => ({ secao, total: aprovadas.filter(s => s.secao === secao).length }))
     .filter(s => s.total > 0)
     .sort((a, b) => b.total - a.total);
 
-  // Dia mais solicitado
   const diaMais = porDia.reduce((a, b) => (a.Folgas + a.Concessões) >= (b.Folgas + b.Concessões) ? a : b, porDia[0]);
   const secaoMais = porSecao[0];
+
+  // Situação sanitária do efetivo
+  const ssData = SIT_SANITARIA.map(ss => ({
+    ss, total: policiais.filter(p => (p.sit_sanitaria || 'Apto A') === ss).length
+  }));
+
+  // Situação do efetivo
+  const sitData = SITUACOES.map(s => ({
+    name: s, value: policiais.filter(p => (p.situacao || 'Pronto') === s).length
+  })).filter(s => s.value > 0);
 
   return (
     <div>
       <h3 style={{ fontSize:15, fontWeight:800, color:'#1a3a5c', marginBottom:16 }}>📈 Dashboard de Estatísticas</h3>
 
-      {/* Cards de resumo */}
       <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:10, marginBottom:20 }}>
         {[
           { l:'Total de solicitações', v:total, c:'#1a3a5c' },
@@ -147,9 +167,35 @@ function Dashboard({ solicitacoes }) {
         ))}
       </div>
 
-      {/* Destaques */}
+      {/* Situação Sanitária do Efetivo */}
+      <Card>
+        <h4 style={{ fontSize:13, fontWeight:800, color:'#1a3a5c', marginBottom:14 }}>Situação Sanitária do Efetivo</h4>
+        <div style={{ display:'flex', gap:12, flexWrap:'wrap' }}>
+          {ssData.map(s => (
+            <div key={s.ss} style={{ flex:1, minWidth:100, background: COR_SS[s.ss] + '18', borderRadius:10, padding:'14px 10px', textAlign:'center', border:`2px solid ${COR_SS[s.ss]}` }}>
+              <div style={{ fontSize:24 }}>{EMOJI_SS[s.ss]}</div>
+              <div style={{ fontSize:22, fontWeight:900, color: COR_SS[s.ss] }}>{s.total}</div>
+              <div style={{ fontSize:12, color:'#6b8099', fontWeight:700 }}>{s.ss}</div>
+            </div>
+          ))}
+        </div>
+      </Card>
+
+      {/* Situação do Efetivo */}
+      <Card>
+        <h4 style={{ fontSize:13, fontWeight:800, color:'#1a3a5c', marginBottom:14 }}>Situação do Efetivo</h4>
+        <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
+          {sitData.map(s => (
+            <div key={s.name} style={{ background: s.name === 'Pronto' ? '#E8F5E9' : '#FFEBEE', borderRadius:8, padding:'8px 14px', textAlign:'center' }}>
+              <div style={{ fontSize:18, fontWeight:900, color: s.name === 'Pronto' ? '#1B5E20' : '#B71C1C' }}>{s.value}</div>
+              <div style={{ fontSize:11, color:'#6b8099', fontWeight:700 }}>{s.name}</div>
+            </div>
+          ))}
+        </div>
+      </Card>
+
       {aprovadas.length > 0 && (
-        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, marginBottom:20 }}>
+        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, marginBottom:10 }}>
           <Card style={{ margin:0, textAlign:'center' }}>
             <div style={{ fontSize:11, color:'#6b8099', fontWeight:700, marginBottom:4 }}>DIA MAIS SOLICITADO</div>
             <div style={{ fontSize:20, fontWeight:900, color:'#1a3a5c' }}>{diaMais.dia}</div>
@@ -163,7 +209,6 @@ function Dashboard({ solicitacoes }) {
         </div>
       )}
 
-      {/* Gráfico por dia */}
       <Card>
         <h4 style={{ fontSize:13, fontWeight:800, color:'#1a3a5c', marginBottom:14 }}>Folgas aprovadas por dia da semana</h4>
         {aprovadas.length === 0
@@ -182,7 +227,6 @@ function Dashboard({ solicitacoes }) {
         }
       </Card>
 
-      {/* Gráfico por seção */}
       <Card>
         <h4 style={{ fontSize:13, fontWeight:800, color:'#1a3a5c', marginBottom:14 }}>Folgas aprovadas por seção</h4>
         {porSecao.length === 0
@@ -193,7 +237,7 @@ function Dashboard({ solicitacoes }) {
                   <Pie data={porSecao} dataKey="total" nameKey="secao" cx="50%" cy="50%" outerRadius={80} label={({ secao, total }) => `${secao}: ${total}`} labelLine={false} fontSize={10}>
                     {porSecao.map((_, i) => <Cell key={i} fill={CORES_GRAFICO[i % CORES_GRAFICO.length]} />)}
                   </Pie>
-                  <Tooltip formatter={(v, n) => [v, n]} />
+                  <Tooltip />
                 </PieChart>
               </ResponsiveContainer>
               <div style={{ display:'flex', flexWrap:'wrap', gap:6, marginTop:8 }}>
@@ -229,11 +273,7 @@ function CalendarioFolgas({ solicitacoes }) {
       <div style={{ overflowX:'auto' }}>
         <table style={{ width:'100%', borderCollapse:'collapse', minWidth:600 }}>
           <thead>
-            <tr>
-              {DIAS.map(d => (
-                <th key={d} style={{ background:'#1a3a5c', color:'#fff', padding:'10px 6px', fontSize:12, fontWeight:800, textAlign:'center', border:'1px solid #0d2340' }}>{d}</th>
-              ))}
-            </tr>
+            <tr>{DIAS.map(d => <th key={d} style={{ background:'#1a3a5c', color:'#fff', padding:'10px 6px', fontSize:12, fontWeight:800, textAlign:'center', border:'1px solid #0d2340' }}>{d}</th>)}</tr>
           </thead>
           <tbody>
             <tr>
@@ -241,8 +281,7 @@ function CalendarioFolgas({ solicitacoes }) {
                 const dodia = filtradas.filter(s => s.dia === dia);
                 return (
                   <td key={dia} style={{ verticalAlign:'top', padding:6, border:'1px solid #d0dce8', background:'#f8fafc', minWidth:80 }}>
-                    {dodia.length === 0
-                      ? <span style={{ color:'#ccc', fontSize:11 }}>—</span>
+                    {dodia.length === 0 ? <span style={{ color:'#ccc', fontSize:11 }}>—</span>
                       : dodia.map(s => (
                         <div key={s.id} style={{ background: s.motivo === 'Concessão' ? '#F3E5F5' : '#E3F2FD', color: s.motivo === 'Concessão' ? '#6A1B9A' : '#0D47A1', borderRadius:6, padding:'4px 6px', marginBottom:4, fontSize:11, fontWeight:700 }}>
                           <div>{s.policial_nome.split(' ').slice(0,2).join(' ')}</div>
@@ -318,10 +357,10 @@ function LoginPolicial({ onLogin }) {
       <h2 style={{ color:'#1a3a5c', fontWeight:800, fontSize:15, marginBottom:4 }}>Sou Policial</h2>
       <p style={{ color:'#6b8099', fontSize:12, marginBottom:14 }}>Selecione seu nome e digite sua senha</p>
       <label style={lbl}>Buscar pelo nome</label>
-      <input value={buscaLogin} onChange={e => setBuscaLogin(e.target.value)} placeholder="Digite seu nome..." style={{ ...inp, marginBottom:8 }} />
+      <input value={buscaLogin} onChange={e => { setBuscaLogin(e.target.value); setPolicialSel(null); }} placeholder="Digite seu nome..." style={{ ...inp, marginBottom:8 }} />
       <label style={lbl}>Selecione seu nome</label>
       {carregando ? <p style={{ color:'#aab', fontSize:13 }}>Carregando...</p> :
-        <select onChange={e => { const p = policiais.find(p => p.id === Number(e.target.value)); setPolicialSel(p || null); setErro(''); }} defaultValue="" style={{ ...inp, marginBottom:10 }}>
+        <select onChange={e => { const p = policiais.find(p => p.id === Number(e.target.value)); setPolicialSel(p || null); setErro(''); }} value={policialSel?.id || ''} style={{ ...inp, marginBottom:10 }}>
           <option value="" disabled>— Selecionar —</option>
           {policiaisFiltrados.map(p => <option key={p.id} value={p.id}>{p.patente} {p.nome}</option>)}
         </select>
@@ -354,7 +393,10 @@ function TelaSolicitacao({ usuario }) {
 
   useEffect(() => { carregarMinhas(); }, [carregarMinhas]);
 
+  const naoProto = usuario.situacao && usuario.situacao !== 'Pronto';
+
   async function enviar() {
+    if (naoProto) return;
     if (!dia || !semana || !motivo) { setMsg({ tipo:'erro', texto:'Selecione o tipo, o dia e a data.' }); return; }
     if (!email || !email.includes('@')) { setMsg({ tipo:'erro', texto:'Informe um email válido.' }); return; }
     setEnviando(true);
@@ -385,37 +427,51 @@ function TelaSolicitacao({ usuario }) {
         <div style={{ background:'#f0f6ff', borderRadius:8, padding:'10px 14px', marginBottom:16, display:'flex', gap:10, flexWrap:'wrap', alignItems:'center' }}>
           <span style={{ fontWeight:800, color:'#1a3a5c' }}>{usuario.patente} {usuario.nome}</span>
           <span style={{ color:'#6b8099', fontSize:13 }}>Mat.: {usuario.matricula}</span>
-          {usuario.secao ? <span style={{ background:'#e8f0fe', color:'#3d5a9e', borderRadius:6, padding:'2px 9px', fontSize:12, fontWeight:700 }}>{usuario.secao}</span>
-            : <span style={{ background:'#fff3cd', color:'#856404', borderRadius:6, padding:'2px 9px', fontSize:12, fontWeight:700 }}>Seção não definida</span>}
+          {usuario.secao && <span style={{ background:'#e8f0fe', color:'#3d5a9e', borderRadius:6, padding:'2px 9px', fontSize:12, fontWeight:700 }}>{usuario.secao}</span>}
+          <SSBadge ss={usuario.sit_sanitaria || 'Apto A'} />
+          <SituacaoBadge situacao={usuario.situacao || 'Pronto'} />
+          {usuario.restricao && usuario.restricao !== 'Sem restrição' && (
+            <span style={{ background:'#FFF3E0', color:'#E65100', borderRadius:6, padding:'2px 8px', fontSize:11, fontWeight:800 }}>{usuario.restricao}</span>
+          )}
         </div>
-        <label style={lbl}>Tipo de solicitação *</label>
-        <div style={{ display:'flex', gap:10, marginBottom:16 }}>
-          {MOTIVOS.map(m => (
-            <button key={m} onClick={() => setMotivo(m)} style={{
-              flex:1, padding:'14px 10px', borderRadius:10, fontWeight:800, fontSize:15, cursor:'pointer',
-              background: motivo === m ? (m === 'Folga' ? '#0D47A1' : '#6A1B9A') : '#f0f4f8',
-              color: motivo === m ? '#fff' : '#2d4a63',
-              border: motivo === m ? `2px solid ${m === 'Folga' ? '#0D47A1' : '#6A1B9A'}` : '2px solid transparent',
-            }}>{m === 'Folga' ? '🌙 Folga' : '🎖️ Concessão'}</button>
-          ))}
-        </div>
-        <label style={lbl}>Dia da semana *</label>
-        <div style={{ display:'flex', gap:6, flexWrap:'wrap', marginBottom:16 }}>
-          {DIAS.map(d => (
-            <button key={d} onClick={() => setDia(d)} style={{
-              padding:'7px 11px', borderRadius:8, fontWeight:700, fontSize:13, cursor:'pointer',
-              background: dia === d ? '#1a3a5c' : '#f0f4f8', color: dia === d ? '#fff' : '#2d4a63',
-              border: dia === d ? '2px solid #1a3a5c' : '2px solid transparent',
-            }}>{d}</button>
-          ))}
-        </div>
-        <label style={lbl}>Data de referência *</label>
-        <input type="date" value={semana} onChange={e => setSemana(e.target.value)} style={{ ...inp, marginBottom:14 }} />
-        <label style={lbl}>Seu email para receber confirmação *</label>
-        <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="seu.email@gmail.com" style={{ ...inp, marginBottom:6 }} />
-        {msg && <div style={{ padding:'10px 14px', borderRadius:8, marginTop:10, fontWeight:600, background:msg.tipo==='ok'?'#E8F5E9':'#FFEBEE', color:msg.tipo==='ok'?'#1B5E20':'#B71C1C' }}>{msg.texto}</div>}
-        <button onClick={enviar} disabled={enviando} style={{ ...btnPrimary, opacity:enviando?0.7:1 }}>{enviando ? 'Enviando...' : 'Enviar Solicitação'}</button>
+
+        {naoProto ? (
+          <div style={{ background:'#FFEBEE', borderRadius:8, padding:'14px', textAlign:'center', color:'#B71C1C', fontWeight:700 }}>
+            ⚠️ Você está classificado como <strong>{usuario.situacao}</strong> e não pode solicitar folga no momento.
+          </div>
+        ) : (
+          <>
+            <label style={lbl}>Tipo de solicitação *</label>
+            <div style={{ display:'flex', gap:10, marginBottom:16 }}>
+              {MOTIVOS.map(m => (
+                <button key={m} onClick={() => setMotivo(m)} style={{
+                  flex:1, padding:'14px 10px', borderRadius:10, fontWeight:800, fontSize:15, cursor:'pointer',
+                  background: motivo === m ? (m === 'Folga' ? '#0D47A1' : '#6A1B9A') : '#f0f4f8',
+                  color: motivo === m ? '#fff' : '#2d4a63',
+                  border: motivo === m ? `2px solid ${m === 'Folga' ? '#0D47A1' : '#6A1B9A'}` : '2px solid transparent',
+                }}>{m === 'Folga' ? '🌙 Folga' : '🎖️ Concessão'}</button>
+              ))}
+            </div>
+            <label style={lbl}>Dia da semana *</label>
+            <div style={{ display:'flex', gap:6, flexWrap:'wrap', marginBottom:16 }}>
+              {DIAS.map(d => (
+                <button key={d} onClick={() => setDia(d)} style={{
+                  padding:'7px 11px', borderRadius:8, fontWeight:700, fontSize:13, cursor:'pointer',
+                  background: dia === d ? '#1a3a5c' : '#f0f4f8', color: dia === d ? '#fff' : '#2d4a63',
+                  border: dia === d ? '2px solid #1a3a5c' : '2px solid transparent',
+                }}>{d}</button>
+              ))}
+            </div>
+            <label style={lbl}>Data de referência *</label>
+            <input type="date" value={semana} onChange={e => setSemana(e.target.value)} style={{ ...inp, marginBottom:14 }} />
+            <label style={lbl}>Seu email para receber confirmação *</label>
+            <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="seu.email@gmail.com" style={{ ...inp, marginBottom:6 }} />
+            {msg && <div style={{ padding:'10px 14px', borderRadius:8, marginTop:10, fontWeight:600, background:msg.tipo==='ok'?'#E8F5E9':'#FFEBEE', color:msg.tipo==='ok'?'#1B5E20':'#B71C1C' }}>{msg.texto}</div>}
+            <button onClick={enviar} disabled={enviando} style={{ ...btnPrimary, opacity:enviando?0.7:1 }}>{enviando ? 'Enviando...' : 'Enviar Solicitação'}</button>
+          </>
+        )}
       </Card>
+
       <h3 style={{ fontSize:15, fontWeight:800, color:'#1a3a5c', margin:'22px 0 10px' }}>Minhas Solicitações</h3>
       {loading ? <Spinner /> : minhas.length === 0
         ? <p style={{ color:'#aab', fontSize:13 }}>Nenhuma solicitação registrada.</p>
@@ -506,9 +562,17 @@ function TelaGestor({ gestorLogado }) {
     alert('Senha resetada! O policial precisará criar uma nova senha no próximo acesso.');
   }
 
+  async function atualizarPolicial(id, campo, valor) {
+    await supabase.from('policiais').update({ [campo]: valor }).eq('id', id);
+    setPoliciais(prev => prev.map(p => p.id === id ? { ...p, [campo]: valor } : p));
+  }
+
   async function adicionarPolicial() {
     if (!novoNome.trim() || !novaMatricula.trim() || !novaSecao) return;
-    const { data, error } = await supabase.from('policiais').insert({ nome: novoNome.toUpperCase(), matricula: novaMatricula, patente: novaPatente, secao: novaSecao, senha: '' }).select().single();
+    const { data, error } = await supabase.from('policiais').insert({
+      nome: novoNome.toUpperCase(), matricula: novaMatricula, patente: novaPatente,
+      secao: novaSecao, senha: '', sit_sanitaria: 'Apto A', situacao: 'Pronto', restricao: 'Sem restrição'
+    }).select().single();
     if (!error && data) setPoliciais(prev => [...prev, data].sort((a,b) => a.nome.localeCompare(b.nome)));
     setNovoNome(''); setNovaMatricula(''); setNovaPatente('3º SGT PM'); setNovaSecao('');
   }
@@ -519,11 +583,6 @@ function TelaGestor({ gestorLogado }) {
     await supabase.from('policiais').delete().eq('id', id);
     setPoliciais(prev => prev.filter(p => p.id !== id));
     setSolicitacoes(prev => prev.filter(s => s.policial_id !== id));
-  }
-
-  async function editarSecao(id, secao) {
-    await supabase.from('policiais').update({ secao }).eq('id', id);
-    setPoliciais(prev => prev.map(p => p.id === id ? { ...p, secao } : p));
   }
 
   async function alterarMinhaSenha() {
@@ -653,7 +712,7 @@ function TelaGestor({ gestorLogado }) {
       )}
 
       {aba === 'calendario' && <Card><CalendarioFolgas solicitacoes={solicitacoes} /></Card>}
-      {aba === 'estatisticas' && <Dashboard solicitacoes={solicitacoes} />}
+      {aba === 'estatisticas' && <Dashboard solicitacoes={solicitacoes} policiais={policiais} />}
 
       {aba === 'efetivo' && (
         <>
@@ -676,19 +735,49 @@ function TelaGestor({ gestorLogado }) {
             </div>
             <button onClick={adicionarPolicial} style={{ ...btnPrimary, marginTop:12 }}>Adicionar ao Efetivo</button>
           </Card>
+
           <input value={busca} onChange={e => setBusca(e.target.value)} placeholder="🔍 Buscar por nome ou matrícula..." style={{ ...inp, marginBottom:10 }} />
           <p style={{ color:'#6b8099', fontSize:12, marginBottom:10 }}>{policiaisfiltrados.length} policial(is)</p>
+
           {policiaisfiltrados.map(p => (
             <Card key={p.id} style={{ padding:'12px 16px' }}>
               <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', gap:10, flexWrap:'wrap' }}>
                 <div style={{ flex:1 }}>
                   <div style={{ fontWeight:800, color:'#1a3a5c', fontSize:13 }}>{p.patente} {p.nome}</div>
                   <div style={{ color:'#6b8099', fontSize:12, marginTop:2 }}>Mat. {p.matricula}</div>
-                  <div style={{ display:'flex', gap:8, marginTop:8, flexWrap:'wrap', alignItems:'center' }}>
-                    <select value={p.secao || ''} onChange={e => editarSecao(p.id, e.target.value)} style={{ ...inp, fontSize:12, padding:'6px 10px', width:'auto', minWidth:180 }}>
-                      <option value="">— Seção não definida —</option>
-                      {SECOES.map(s => <option key={s}>{s}</option>)}
-                    </select>
+                  <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:6, marginTop:8 }}>
+                    <div>
+                      <label style={{ ...lbl, fontSize:10 }}>Seção</label>
+                      <select value={p.secao || ''} onChange={e => atualizarPolicial(p.id,'secao',e.target.value)} style={{ ...inp, fontSize:12, padding:'6px 8px' }}>
+                        <option value="">— Não definida —</option>
+                        {SECOES.map(s => <option key={s}>{s}</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <label style={{ ...lbl, fontSize:10 }}>Sit. Sanitária</label>
+                      <select value={p.sit_sanitaria || 'Apto A'} onChange={e => atualizarPolicial(p.id,'sit_sanitaria',e.target.value)} style={{ ...inp, fontSize:12, padding:'6px 8px' }}>
+                        {SIT_SANITARIA.map(s => <option key={s}>{s}</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <label style={{ ...lbl, fontSize:10 }}>Situação</label>
+                      <select value={p.situacao || 'Pronto'} onChange={e => atualizarPolicial(p.id,'situacao',e.target.value)} style={{ ...inp, fontSize:12, padding:'6px 8px' }}>
+                        {SITUACOES.map(s => <option key={s}>{s}</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <label style={{ ...lbl, fontSize:10 }}>Restrições</label>
+                      <select value={p.restricao || 'Sem restrição'} onChange={e => atualizarPolicial(p.id,'restricao',e.target.value)} style={{ ...inp, fontSize:12, padding:'6px 8px' }}>
+                        {RESTRICOES.map(s => <option key={s}>{s}</option>)}
+                      </select>
+                    </div>
+                  </div>
+                  <div style={{ marginTop:8, display:'flex', gap:6, flexWrap:'wrap', alignItems:'center' }}>
+                    <SSBadge ss={p.sit_sanitaria || 'Apto A'} />
+                    <SituacaoBadge situacao={p.situacao || 'Pronto'} />
+                    {p.restricao && p.restricao !== 'Sem restrição' && (
+                      <span style={{ background:'#FFF3E0', color:'#E65100', borderRadius:6, padding:'2px 8px', fontSize:11, fontWeight:800 }}>{p.restricao}</span>
+                    )}
                     <button onClick={() => resetarSenhaPolicial(p.id, p.nome)} style={{ ...btnSm, background:'#FFF8E1', color:'#7B5800' }}>🔑 Resetar senha</button>
                   </div>
                 </div>
