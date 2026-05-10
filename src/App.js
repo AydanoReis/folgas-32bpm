@@ -466,7 +466,7 @@ export default function App() {
     <div style={{ minHeight:'100vh', background:'#eef2f7', fontFamily:"'Segoe UI',Tahoma,sans-serif" }}>
       <div style={{ background:'linear-gradient(135deg,#0d2340 0%,#1a3a5c 60%,#1e4d7b 100%)', padding:'16px 24px', display:'flex', alignItems:'center', justifyContent:'space-between', boxShadow:'0 4px 20px #00000040' }}>
         <div style={{ display:'flex', alignItems:'center', gap:12 }}>
-          <span style={{ fontSize:26 }}>🛡️</span>
+          <img src="/logo.jpeg" alt="32 BPM" style={{ height:42, width:42, objectFit:'contain' }} />
           <div>
             <div style={{ color:'#fff', fontWeight:900, fontSize:17, letterSpacing:0.5 }}>32º BPM — Controle de Folgas</div>
             <div style={{ color:'#8db4d8', fontSize:11 }}>PCSV · Expediente Semanal</div>
