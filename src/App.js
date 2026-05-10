@@ -1118,8 +1118,26 @@ function TelaGestor({ gestorLogado }) {
           </Card>
           <Card>
             <h3 style={{ fontSize:14, fontWeight:800, color:'#1a3a5c', marginBottom:4 }}>➕ Cadastrar Novo Gestor</h3>
-            <label style={lbl}>Nome / Patente *</label>
-            <input value={novoGestorNome} onChange={e => setNovoGestorNome(e.target.value)} placeholder="Ex.: 1º SGT SILVA" style={{ ...inp, marginBottom:10 }} />
+<input value={busca} onChange={e => setBusca(e.target.value)} placeholder="🔍 Buscar por nome ou matrícula..." style={{ ...inp, marginBottom:10 }} />
+<div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8, marginBottom:10 }}>
+  <select value={filtroEfSeção} onChange={e => setFiltroEfSeção(e.target.value)} style={inp}>
+    <option value="todas">Todas as seções</option>
+    {SECOES.map(s => <option key={s}>{s}</option>)}
+  </select>
+  <select value={filtroEfSit} onChange={e => setFiltroEfSit(e.target.value)} style={inp}>
+    <option value="todas">Todas as situações</option>
+    {SITUACOES.map(s => <option key={s}>{s}</option>)}
+  </select>
+  <select value={filtroEfSS} onChange={e => setFiltroEfSS(e.target.value)} style={inp}>
+    <option value="todas">Toda sit. sanitária</option>
+    {SIT_SANITARIA_LTS.map(s => <option key={s}>{s}</option>)}
+  </select>
+  <select value={filtroEfRest} onChange={e => setFiltroEfRest(e.target.value)} style={inp}>
+    <option value="todas">Todas as restrições</option>
+    {RESTRICOES.map(s => <option key={s}>{s}</option>)}
+  </select>
+</div>
+              <input value={novoGestorNome} onChange={e => setNovoGestorNome(e.target.value)} placeholder="Ex.: 1º SGT SILVA" style={{ ...inp, marginBottom:10 }} />
             <label style={lbl}>Matrícula *</label>
             <input value={novoGestorMatricula} onChange={e => setNovoGestorMatricula(e.target.value)} placeholder="Ex.: 80231" style={{ ...inp, marginBottom:10 }} />
             <label style={lbl}>Senha de acesso *</label>
