@@ -13,10 +13,11 @@ const DIAS = ['Segunda','Terça','Quarta','Quinta','Sexta','Sábado','Domingo'];
 const SECOES = ['P1','P3','P4','P5','Conferência','Tesouraria','Secretaria','Almoxarifado','SMT','SMB','Rancho','Ordenança','AJD','PCSV','Ed. Física','Técnica','Obra','Faxina','Gabinete Médico','Gabinete Odontológico'];
 const MOTIVOS = ['Folga','Concessão'];
 const SIT_SANITARIA = ['Apto A','Apto B','Apto C'];
+const SIT_SANITARIA_LTS = ['Apto A','Apto B','Apto C','LTS'];
 const SITUACOES = ['Pronto','Férias','LE','LTSPF','LTS','LP','Núpcias','Luto'];
 const RESTRICOES = ['Sem restrição','SP','CD','CRD','CHR'];
-const COR_SS = { 'Apto A':'#1565C0', 'Apto B':'#F9A825', 'Apto C':'#B71C1C' };
-const EMOJI_SS = { 'Apto A':'🔵', 'Apto B':'🟡', 'Apto C':'🔴' };
+const COR_SS = { 'Apto A':'#1565C0', 'Apto B':'#F9A825', 'Apto C':'#B71C1C', 'LTS':'#6A1B9A' };
+const EMOJI_SS = { 'Apto A':'🔵', 'Apto B':'🟡', 'Apto C':'🔴', 'LTS':'🟣' };
 const STATUS_COLORS = {
   pendente: { bg:'#FFF8E1', text:'#7B5800', border:'#FFD54F' },
   aprovado:  { bg:'#E8F5E9', text:'#1B5E20', border:'#A5D6A7' },
@@ -47,8 +48,11 @@ function diasParaRetorno(fimStr) {
   const hoje = new Date();
   hoje.setHours(0,0,0,0);
   const fim = new Date(fimStr + 'T00:00:00');
-  const diff = Math.ceil((fim - hoje) / (1000*60*60*24));
-  return diff;
+  return Math.ceil((fim - hoje) / (1000*60*60*24));
+}
+
+function temRestricao(p) {
+  return p.restricao && p.restricao !== 'Sem restrição';
 }
 
 function Card({ children, style }) {
@@ -62,8 +66,16 @@ function MotivoBadge({ motivo }) {
   const cor = motivo === 'Concessão' ? { bg:'#F3E5F5', text:'#6A1B9A', border:'#CE93D8' } : { bg:'#E3F2FD', text:'#0D47A1', border:'#90CAF9' };
   return <span style={{ background:cor.bg, color:cor.text, border:`1px solid ${cor.border}`, padding:'3px 10px', borderRadius:20, fontSize:11, fontWeight:800 }}>{motivo}</span>;
 }
-function SSBadge({ ss }) {
-  return <span style={{ background:COR_SS[ss]||'#888', color:'#fff', borderRadius:6, padding:'2px 8px', fontSize:11, fontWeight:800 }}>{EMOJI_SS[ss]} {ss}</span>;
+function SSBadge({ p }) {
+  const ss = p.sit_sanitaria || 'Apto A';
+  const cor = COR_SS[ss] || '#888';
+  const emoji = EMOJI_SS[ss] || '⚪';
+  const comRestricao = temRestricao(p) && ss === 'Apto A';
+  return (
+    <span style={{ background: comRestricao ? '#E65100' : cor, color:'#fff', borderRadius:6, padding:'2px 8px', fontSize:11, fontWeight:800 }}>
+      {comRestricao ? '🟠' : emoji} {comRestricao ? `Apto A (${p.restricao})` : ss}
+    </span>
+  );
 }
 function SituacaoBadge({ situacao }) {
   const cor = situacao === 'Pronto' ? { bg:'#E8F5E9', text:'#1B5E20' } : { bg:'#FFEBEE', text:'#B71C1C' };
@@ -73,112 +85,287 @@ function Spinner() {
   return <div style={{ textAlign:'center', padding:40, color:'#6b8099', fontSize:15 }}>⏳ Carregando...</div>;
 }
 
-function gerarPDF(solicitacoes, policiais) {
+function gerarPDF(solicitacoes, policiais, semanaAtual) {
   const aprovadas = solicitacoes.filter(s => s.status === 'aprovado');
+  const pendentes = solicitacoes.filter(s => s.status === 'pendente');
+  const recusadas = solicitacoes.filter(s => s.status === 'recusado');
+  const folgas = aprovadas.filter(s => s.motivo === 'Folga');
+  const concessoes = aprovadas.filter(s => s.motivo === 'Concessão');
+
+  const fimSemana = new Date(semanaAtual);
+  fimSemana.setDate(fimSemana.getDate() + 6);
+  const periodoStr = `${semanaAtual.toLocaleDateString('pt-BR')} a ${fimSemana.toLocaleDateString('pt-BR')}`;
+  const hoje = new Date().toLocaleDateString('pt-BR');
+
+  // Dia mais ativo
+  const contPorDia = DIAS.map(dia => ({ dia, count: aprovadas.filter(s => s.dia === dia).length }));
+  const diaMaisAtivo = contPorDia.reduce((a,b) => a.count >= b.count ? a : b, contPorDia[0]);
+  // Seção mais impactada
+  const contPorSecao = SECOES.map(secao => ({ secao, count: aprovadas.filter(s => s.secao === secao).length })).filter(s => s.count > 0).sort((a,b) => b.count - a.count);
+  const secaoMais = contPorSecao[0];
+  // Status operacional
+  const statusOp = pendentes.length === 0 ? 'NORMAL' : pendentes.length <= 3 ? 'ATENÇÃO' : 'CRÍTICO';
+  const corStatusOp = statusOp === 'NORMAL' ? [27,94,32] : statusOp === 'ATENÇÃO' ? [123,88,0] : [183,28,28];
+
   const doc = new jsPDF();
   const pageW = doc.internal.pageSize.getWidth();
+  const pageH = doc.internal.pageSize.getHeight();
+
+  // ── PÁGINA 1: CAPA EXECUTIVA ──────────────────────────────────────────────
+  // Cabeçalho sólido
   doc.setFillColor(13, 35, 64);
-  doc.rect(0, 0, pageW, 28, 'F');
+  doc.rect(0, 0, pageW, 55, 'F');
+
   doc.setTextColor(255, 255, 255);
-  doc.setFontSize(14);
-  doc.setFont('helvetica', 'bold');
-  doc.text('32º BPM — Controle de Folgas', pageW / 2, 12, { align: 'center' });
-  doc.setFontSize(10);
+  doc.setFontSize(11);
   doc.setFont('helvetica', 'normal');
-  doc.text(`PCSV · Expediente Semanal · Gerado em ${new Date().toLocaleDateString('pt-BR')}`, pageW / 2, 21, { align: 'center' });
-  let y = 35;
-  doc.setTextColor(0, 0, 0);
-  if (aprovadas.length > 0) {
+  doc.text('POLÍCIA MILITAR DO ESTADO DO RIO DE JANEIRO', pageW/2, 14, { align:'center' });
+  doc.setFontSize(18);
+  doc.setFont('helvetica', 'bold');
+  doc.text('32º BATALHÃO DE POLÍCIA MILITAR', pageW/2, 25, { align:'center' });
+  doc.setFontSize(13);
+  doc.setFont('helvetica', 'normal');
+  doc.text('CONTROLE SEMANAL DE FOLGAS — PCSV', pageW/2, 35, { align:'center' });
+  doc.setFontSize(10);
+  doc.text(`Período: ${periodoStr}   |   Emitido: ${hoje}`, pageW/2, 44, { align:'center' });
+  doc.text('Responsável: PCSV / Expediente Semanal', pageW/2, 51, { align:'center' });
+
+  // 4 Cards de indicadores
+  let y = 65;
+  const cards = [
+    { label:'Solicitações', valor:solicitacoes.length, cor:[13,35,64] },
+    { label:'Aprovadas', valor:aprovadas.length, cor:[27,94,32] },
+    { label:'Pendentes', valor:pendentes.length, cor:[123,88,0] },
+    { label:'Recusadas', valor:recusadas.length, cor:[183,28,28] },
+  ];
+  const cardW = (pageW - 20 - 9) / 4;
+  cards.forEach((c, i) => {
+    const x = 10 + i * (cardW + 3);
+    doc.setFillColor(...c.cor);
+    doc.rect(x, y, cardW, 22, 'F');
+    doc.setTextColor(255,255,255);
+    doc.setFontSize(20);
+    doc.setFont('helvetica', 'bold');
+    doc.text(String(c.valor), x + cardW/2, y + 13, { align:'center' });
+    doc.setFontSize(8);
+    doc.setFont('helvetica', 'normal');
+    doc.text(c.label.toUpperCase(), x + cardW/2, y + 19, { align:'center' });
+  });
+
+  // Resumo executivo
+  y += 30;
+  doc.setFillColor(240, 244, 248);
+  doc.rect(10, y, pageW-20, 48, 'F');
+  doc.setDrawColor(200,210,220);
+  doc.rect(10, y, pageW-20, 48, 'S');
+
+  doc.setTextColor(13,35,64);
+  doc.setFontSize(11);
+  doc.setFont('helvetica', 'bold');
+  doc.text('RESUMO EXECUTIVO', 16, y+8);
+
+  doc.setFontSize(9);
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(40,40,40);
+  const resumoItens = [
+    `• Dia com maior concentração: ${diaMaisAtivo.count > 0 ? `${diaMaisAtivo.dia}-feira (${diaMaisAtivo.count} folga${diaMaisAtivo.count>1?'s':''})` : 'Nenhum'}`,
+    `• Seção mais impactada: ${secaoMais ? `${secaoMais.secao} (${secaoMais.count} folga${secaoMais.count>1?'s':''})` : 'Nenhuma'}`,
+    `• Total de folgas regulares: ${folgas.length}`,
+    `• Total de concessões: ${concessoes.length}`,
+  ];
+  resumoItens.forEach((item, i) => {
+    doc.text(item, 16, y + 16 + i*7);
+  });
+
+  // Status operacional
+  doc.setFillColor(...corStatusOp);
+  doc.rect(pageW-70, y+6, 55, 14, 'F');
+  doc.setTextColor(255,255,255);
+  doc.setFontSize(10);
+  doc.setFont('helvetica', 'bold');
+  doc.text('SITUAÇÃO OPERACIONAL', pageW-42.5, y+11, { align:'center' });
+  doc.setFontSize(12);
+  doc.text(statusOp, pageW-42.5, y+18, { align:'center' });
+
+  // Rodapé página 1
+  doc.setTextColor(120,130,140);
+  doc.setFontSize(8);
+  doc.setFont('helvetica', 'normal');
+  doc.text('32º BPM — Sistema Interno de Controle de Folgas', pageW/2, pageH-8, { align:'center' });
+  doc.text('Página 1', pageW-12, pageH-8, { align:'right' });
+
+  // ── PÁGINA 2: QUADRO OPERACIONAL ─────────────────────────────────────────
+  doc.addPage();
+
+  doc.setFillColor(13,35,64);
+  doc.rect(0,0,pageW,16,'F');
+  doc.setTextColor(255,255,255);
+  doc.setFontSize(11);
+  doc.setFont('helvetica','bold');
+  doc.text('QUADRO OPERACIONAL DETALHADO', pageW/2, 10, { align:'center' });
+
+  y = 22;
+
+  if (aprovadas.length === 0) {
+    doc.setTextColor(100,100,100);
+    doc.setFontSize(11);
+    doc.setFont('helvetica','normal');
+    doc.text('Nenhuma folga aprovada neste período.', pageW/2, y+10, { align:'center' });
+  } else {
     DIAS.forEach(dia => {
       const dodia = aprovadas.filter(s => s.dia === dia);
-      if (dodia.length === 0) return;
-      const porSecao = {};
-      dodia.forEach(s => { if (!porSecao[s.secao]) porSecao[s.secao] = []; porSecao[s.secao].push(s); });
+
       if (y > 250) { doc.addPage(); y = 20; }
-      doc.setFillColor(30, 77, 123);
-      doc.rect(10, y, pageW - 20, 8, 'F');
-      doc.setTextColor(255, 255, 255);
-      doc.setFontSize(11);
-      doc.setFont('helvetica', 'bold');
-      doc.text(dia.toUpperCase() + '-FEIRA', 14, y + 5.5);
-      y += 10;
-      doc.setTextColor(0, 0, 0);
-      doc.setFont('helvetica', 'normal');
-      doc.setFontSize(9);
-      Object.entries(porSecao).forEach(([secao, pols]) => {
-        if (y > 270) { doc.addPage(); y = 20; }
-        const nomes = pols.map(p => `${p.patente} ${p.policial_nome} (${p.motivo})`).join(', ');
-        doc.setFont('helvetica', 'bold');
-        doc.text(`${secao}:`, 14, y);
-        doc.setFont('helvetica', 'normal');
-        const linhas = doc.splitTextToSize(nomes, pageW - 50);
-        doc.text(linhas, 40, y);
-        y += linhas.length * 5 + 2;
-      });
-      y += 4;
+
+      // Bloco do dia
+      if (dodia.length === 0) {
+        doc.setFillColor(230,235,240);
+        doc.rect(10, y, pageW-20, 10, 'F');
+        doc.setTextColor(100,110,120);
+        doc.setFontSize(9);
+        doc.setFont('helvetica','bold');
+        doc.text(`${dia.toUpperCase()}-FEIRA`, 14, y+6.5);
+        doc.setFont('helvetica','normal');
+        doc.text('Sem registros', pageW-14, y+6.5, { align:'right' });
+        y += 13;
+      } else {
+        doc.setFillColor(30,77,123);
+        doc.rect(10, y, pageW-20, 10, 'F');
+        doc.setTextColor(255,255,255);
+        doc.setFontSize(10);
+        doc.setFont('helvetica','bold');
+        doc.text(`${dia.toUpperCase()}-FEIRA`, 14, y+6.5);
+        doc.text(`${dodia.length} solicitação${dodia.length>1?'s':''}`, pageW-14, y+6.5, { align:'right' });
+        y += 12;
+
+        const tableBody = dodia.map(s => [
+          s.secao && s.secao !== '—' ? s.secao : 'Não vinculada',
+          `${s.patente} ${s.policial_nome}`,
+          s.motivo === 'Folga' ? 'Folga' : 'Concessão',
+        ]);
+
+        doc.autoTable({
+          startY: y,
+          head: [['Seção', 'Policial', 'Tipo']],
+          body: tableBody,
+          theme: 'grid',
+          headStyles: { fillColor:[50,100,150], textColor:255, fontStyle:'bold', fontSize:8 },
+          bodyStyles: { fontSize:8 },
+          columnStyles: { 0:{ cellWidth:35 }, 2:{ cellWidth:25, halign:'center' } },
+          alternateRowStyles: { fillColor:[245,248,252] },
+          margin: { left:10, right:10 },
+        });
+        y = doc.lastAutoTable.finalY + 6;
+      }
     });
-    if (y > 200) { doc.addPage(); y = 20; }
-    doc.setFillColor(13, 35, 64);
-    doc.rect(10, y, pageW - 20, 8, 'F');
-    doc.setTextColor(255, 255, 255);
-    doc.setFontSize(11);
-    doc.setFont('helvetica', 'bold');
-    doc.text('RESUMO DE FOLGAS POR SEÇÃO E DIA', 14, y + 5.5);
-    y += 12;
-    const todasSecoes = [...new Set(aprovadas.map(s => s.secao))].sort();
-    const head = [['Seção', ...DIAS.map(d => d.substring(0,3))]];
-    const body = todasSecoes.map(secao => [secao, ...DIAS.map(dia => { const count = aprovadas.filter(s => s.secao===secao&&s.dia===dia).length; return count>0?String(count):'-'; })]);
-    doc.autoTable({ startY:y, head, body, theme:'grid', headStyles:{ fillColor:[30,77,123], textColor:255, fontStyle:'bold', fontSize:8 }, bodyStyles:{ fontSize:8 }, columnStyles:{ 0:{ fontStyle:'bold' } }, margin:{ left:10, right:10 } });
-    y = doc.lastAutoTable.finalY + 10;
   }
+
+  // Rodapé página 2
+  doc.setTextColor(120,130,140);
+  doc.setFontSize(8);
+  doc.setFont('helvetica','normal');
+  doc.text('32º BPM — Sistema Interno de Controle de Folgas', pageW/2, pageH-8, { align:'center' });
+  doc.text('Página 2', pageW-12, pageH-8, { align:'right' });
+
+  // ── PÁGINA 3: ESTATÍSTICAS E MATRIZ ──────────────────────────────────────
+  doc.addPage();
+
+  doc.setFillColor(13,35,64);
+  doc.rect(0,0,pageW,16,'F');
+  doc.setTextColor(255,255,255);
+  doc.setFontSize(11);
+  doc.setFont('helvetica','bold');
+  doc.text('ESTATÍSTICAS E MATRIZ DE DISTRIBUIÇÃO', pageW/2, 10, { align:'center' });
+
+  y = 22;
+
+  // Situação sanitária
+  doc.setFillColor(50,100,150);
+  doc.rect(10,y,pageW-20,8,'F');
+  doc.setTextColor(255,255,255);
+  doc.setFontSize(9);
+  doc.setFont('helvetica','bold');
+  doc.text('SITUAÇÃO SANITÁRIA DO EFETIVO', 14, y+5.5);
+  y += 10;
+
   if (policiais && policiais.length > 0) {
-    doc.addPage(); y = 20;
-    doc.setFillColor(13, 35, 64);
-    doc.rect(0, 0, pageW, 18, 'F');
-    doc.setTextColor(255, 255, 255);
-    doc.setFontSize(13);
-    doc.setFont('helvetica', 'bold');
-    doc.text('DASHBOARD DO EFETIVO', pageW / 2, 12, { align: 'center' });
-    y = 28;
-    doc.setTextColor(0, 0, 0);
-    doc.setFillColor(30, 77, 123);
-    doc.rect(10, y, pageW-20, 8, 'F');
-    doc.setTextColor(255,255,255);
-    doc.setFontSize(10);
-    doc.setFont('helvetica','bold');
-    doc.text('SITUAÇÃO SANITÁRIA DO EFETIVO', 14, y+5.5);
-    y += 12;
-    doc.setTextColor(0,0,0);
-    doc.autoTable({ startY:y, head:[['Situação Sanitária','Total']], body:SIT_SANITARIA.map(ss=>[ss,String(policiais.filter(p=>(p.sit_sanitaria||'Apto A')===ss).length)]), theme:'grid', headStyles:{ fillColor:[30,77,123], textColor:255, fontStyle:'bold', fontSize:9 }, bodyStyles:{ fontSize:9 }, margin:{ left:10, right:10 } });
-    y = doc.lastAutoTable.finalY + 8;
-    doc.setFillColor(30,77,123);
+    const aptoAComRestricao = policiais.filter(p => (p.sit_sanitaria||'Apto A') === 'Apto A' && temRestricao(p)).length;
+    const aptoASemRestricao = policiais.filter(p => (p.sit_sanitaria||'Apto A') === 'Apto A' && !temRestricao(p)).length;
+    const ssRows = [
+      ['Apto A (sem restrição)', String(aptoASemRestricao)],
+      ['Apto A (com restrição)', String(aptoAComRestricao)],
+      ...['Apto B','Apto C','LTS'].map(ss => [ss, String(policiais.filter(p => (p.sit_sanitaria||'Apto A') === ss).length)]),
+    ];
+    doc.autoTable({ startY:y, head:[['Situação Sanitária','Total']], body:ssRows, theme:'grid', headStyles:{ fillColor:[50,100,150], textColor:255, fontStyle:'bold', fontSize:8 }, bodyStyles:{ fontSize:8 }, alternateRowStyles:{ fillColor:[245,248,252] }, margin:{ left:10, right:10 } });
+    y = doc.lastAutoTable.finalY + 6;
+
+    // Situação do efetivo
+    doc.setFillColor(50,100,150);
     doc.rect(10,y,pageW-20,8,'F');
     doc.setTextColor(255,255,255);
-    doc.setFontSize(10);
+    doc.setFontSize(9);
     doc.setFont('helvetica','bold');
     doc.text('SITUAÇÃO DO EFETIVO', 14, y+5.5);
-    y += 12;
-    doc.setTextColor(0,0,0);
-    doc.autoTable({ startY:y, head:[['Situação','Total']], body:SITUACOES.map(s=>[s,String(policiais.filter(p=>(p.situacao||'Pronto')===s).length)]), theme:'grid', headStyles:{ fillColor:[30,77,123], textColor:255, fontStyle:'bold', fontSize:9 }, bodyStyles:{ fontSize:9 }, margin:{ left:10, right:10 } });
-    y = doc.lastAutoTable.finalY + 8;
-    const emFerias = policiais.filter(p => p.situacao === 'Férias' && p.ferias_fim);
-    if (emFerias.length > 0) {
-      doc.setFillColor(230,81,0); doc.rect(10,y,pageW-20,8,'F');
-      doc.setTextColor(255,255,255); doc.setFontSize(10); doc.setFont('helvetica','bold');
-      doc.text('POLICIAIS EM FÉRIAS', 14, y+5.5); y += 12; doc.setTextColor(0,0,0);
-      doc.autoTable({ startY:y, head:[['Nome','Matrícula','Início','Fim','Dias restantes']], body:emFerias.map(p=>[`${p.patente} ${p.nome}`,p.matricula,p.ferias_inicio||'—',p.ferias_fim||'—',diasParaRetorno(p.ferias_fim)!==null?`${diasParaRetorno(p.ferias_fim)} dias`:'—']), theme:'grid', headStyles:{ fillColor:[230,81,0], textColor:255, fontStyle:'bold', fontSize:8 }, bodyStyles:{ fontSize:8 }, margin:{ left:10, right:10 } });
-      y = doc.lastAutoTable.finalY + 8;
-    }
-    const semSecao = policiais.filter(p => !p.secao || p.secao === '');
-    if (semSecao.length > 0) {
-      if (y > 220) { doc.addPage(); y = 20; }
-      doc.setFillColor(183,28,28); doc.rect(10,y,pageW-20,8,'F');
-      doc.setTextColor(255,255,255); doc.setFontSize(10); doc.setFont('helvetica','bold');
-      doc.text(`POLICIAIS SEM SEÇÃO DEFINIDA (${semSecao.length})`, 14, y+5.5); y += 12; doc.setTextColor(0,0,0);
-      doc.autoTable({ startY:y, head:[['Patente','Nome','Matrícula']], body:semSecao.map(p=>[p.patente,p.nome,p.matricula]), theme:'grid', headStyles:{ fillColor:[183,28,28], textColor:255, fontStyle:'bold', fontSize:9 }, bodyStyles:{ fontSize:9 }, margin:{ left:10, right:10 } });
-    }
+    y += 10;
+    const sitRows = SITUACOES.map(s => [s, String(policiais.filter(p => (p.situacao||'Pronto') === s).length)]);
+    doc.autoTable({ startY:y, head:[['Situação','Total']], body:sitRows, theme:'grid', headStyles:{ fillColor:[50,100,150], textColor:255, fontStyle:'bold', fontSize:8 }, bodyStyles:{ fontSize:8 }, alternateRowStyles:{ fillColor:[245,248,252] }, margin:{ left:10, right:10 } });
+    y = doc.lastAutoTable.finalY + 6;
   }
-  doc.save(`relatorio-folgas-32bpm-${new Date().toLocaleDateString('pt-BR').replace(/\//g,'-')}.pdf`);
+
+  // Matriz de distribuição
+  if (aprovadas.length > 0) {
+    if (y > 180) { doc.addPage(); y = 20; }
+    doc.setFillColor(50,100,150);
+    doc.rect(10,y,pageW-20,8,'F');
+    doc.setTextColor(255,255,255);
+    doc.setFontSize(9);
+    doc.setFont('helvetica','bold');
+    doc.text('MATRIZ DE DISTRIBUIÇÃO POR SEÇÃO E DIA', 14, y+5.5);
+    y += 10;
+
+    const secoesComFolga = [...new Set(aprovadas.map(s => s.secao))].sort();
+    const headMatriz = [['Seção', ...DIAS.map(d => d.substring(0,3)), 'Total']];
+    const bodyMatriz = secoesComFolga.map(secao => {
+      const porDia = DIAS.map(dia => {
+        const count = aprovadas.filter(s => s.secao === secao && s.dia === dia).length;
+        return count > 0 ? String(count) : '—';
+      });
+      const total = aprovadas.filter(s => s.secao === secao).length;
+      return [secao, ...porDia, String(total)];
+    });
+    // Linha de totais
+    const totalPorDia = DIAS.map(dia => {
+      const count = aprovadas.filter(s => s.dia === dia).length;
+      return count > 0 ? String(count) : '—';
+    });
+    bodyMatriz.push(['TOTAL', ...totalPorDia, String(aprovadas.length)]);
+
+    doc.autoTable({
+      startY: y,
+      head: headMatriz,
+      body: bodyMatriz,
+      theme: 'grid',
+      headStyles: { fillColor:[13,35,64], textColor:255, fontStyle:'bold', fontSize:7 },
+      bodyStyles: { fontSize:7 },
+      alternateRowStyles: { fillColor:[245,248,252] },
+      didParseCell: (data) => {
+        if (data.row.index === bodyMatriz.length - 1) {
+          data.cell.styles.fontStyle = 'bold';
+          data.cell.styles.fillColor = [220,228,236];
+        }
+      },
+      margin: { left:10, right:10 },
+    });
+  }
+
+  // Rodapé página 3
+  doc.setTextColor(120,130,140);
+  doc.setFontSize(8);
+  doc.setFont('helvetica','normal');
+  doc.text('32º BPM — Sistema Interno de Controle de Folgas', pageW/2, pageH-8, { align:'center' });
+  doc.text('Página 3', pageW-12, pageH-8, { align:'right' });
+
+  doc.save(`relatorio-32bpm-${periodoStr.replace(/\//g,'-').replace(/ /g,'')}.pdf`);
 }
 
 function Dashboard({ solicitacoes, policiais, onAtualizarPolicial, onRemoverPolicial }) {
@@ -196,11 +383,21 @@ function Dashboard({ solicitacoes, policiais, onAtualizarPolicial, onRemoverPoli
   const mediaDia = totalPorDia.reduce((a,b)=>a+b,0) / 7;
   const diaCritico = porDia.find(d => (d.Folgas+d.Concessões) === maxDia && maxDia > 0);
   const desbalanceado = maxDia > 0 && (maxDia - Math.min(...totalPorDia.filter(v=>v>0))) >= 3;
-  const ssData = SIT_SANITARIA.map(ss => ({ ss, total:policiais.filter(p=>(p.sit_sanitaria||'Apto A')===ss).length }));
-  const sitData = SITUACOES.map(s => ({ name:s, value:policiais.filter(p=>(p.situacao||'Pronto')===s).length })).filter(s=>s.value>0);
   const semSecao = policiais.filter(p => !p.secao || p.secao === '');
   const retornosProximos = policiais.filter(p => p.situacao === 'Férias' && p.ferias_fim && diasParaRetorno(p.ferias_fim) !== null && diasParaRetorno(p.ferias_fim) <= 3 && diasParaRetorno(p.ferias_fim) >= 0);
   const emFerias = policiais.filter(p => p.situacao === 'Férias' && p.ferias_fim);
+
+  // SS com destaque para Apto A com restrição
+  const aptoAComRestricao = policiais.filter(p => (p.sit_sanitaria||'Apto A') === 'Apto A' && temRestricao(p));
+  const aptoASemRestricao = policiais.filter(p => (p.sit_sanitaria||'Apto A') === 'Apto A' && !temRestricao(p));
+  const ssCards = [
+    { label:'Apto A', total: aptoASemRestricao.length, cor:'#1565C0', emoji:'🔵' },
+    ...(aptoAComRestricao.length > 0 ? [{ label:'Apto A c/ Restrição', total: aptoAComRestricao.length, cor:'#E65100', emoji:'🟠' }] : []),
+    { label:'Apto B', total: policiais.filter(p=>(p.sit_sanitaria||'Apto A')==='Apto B').length, cor:'#F9A825', emoji:'🟡' },
+    { label:'Apto C', total: policiais.filter(p=>(p.sit_sanitaria||'Apto A')==='Apto C').length, cor:'#B71C1C', emoji:'🔴' },
+    { label:'LTS', total: policiais.filter(p=>(p.sit_sanitaria||'Apto A')==='LTS').length, cor:'#6A1B9A', emoji:'🟣' },
+  ];
+  const sitData = SITUACOES.map(s => ({ name:s, value:policiais.filter(p=>(p.situacao||'Pronto')===s).length })).filter(s=>s.value>0);
 
   return (
     <div>
@@ -242,28 +439,10 @@ function Dashboard({ solicitacoes, policiais, onAtualizarPolicial, onRemoverPoli
         <Card>
           <h4 style={{ fontSize:13, fontWeight:800, color:'#1a3a5c', marginBottom:12 }}>🔍 Insights Automáticos</h4>
           <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
-            {diaCritico && (
-              <div style={{ background:'#FFEBEE', borderRadius:8, padding:'8px 12px', display:'flex', gap:8, alignItems:'center' }}>
-                <span style={{ fontSize:16 }}>🔴</span>
-                <span style={{ fontSize:13, color:'#B71C1C', fontWeight:700 }}>Dia crítico: <strong>{diaCritico.dia}</strong> com {diaCritico.Folgas+diaCritico.Concessões} folgas ({Math.round(((diaCritico.Folgas+diaCritico.Concessões)/totalAprovadas)*100)}% do total)</span>
-              </div>
-            )}
-            {desbalanceado && (
-              <div style={{ background:'#FFF8E1', borderRadius:8, padding:'8px 12px', display:'flex', gap:8, alignItems:'center' }}>
-                <span style={{ fontSize:16 }}>⚠️</span>
-                <span style={{ fontSize:13, color:'#7B5800', fontWeight:700 }}>Desbalanceamento detectado: distribuição irregular entre os dias da semana</span>
-              </div>
-            )}
-            {porSecao.length > 0 && (
-              <div style={{ background:'#E8F5E9', borderRadius:8, padding:'8px 12px', display:'flex', gap:8, alignItems:'center' }}>
-                <span style={{ fontSize:16 }}>📊</span>
-                <span style={{ fontSize:13, color:'#1B5E20', fontWeight:700 }}>Seção mais ativa: <strong>{porSecao[0].secao}</strong> ({Math.round((porSecao[0].total/totalAprovadas)*100)}% das folgas)</span>
-              </div>
-            )}
-            <div style={{ background:'#E3F2FD', borderRadius:8, padding:'8px 12px', display:'flex', gap:8, alignItems:'center' }}>
-              <span style={{ fontSize:16 }}>📈</span>
-              <span style={{ fontSize:13, color:'#0D47A1', fontWeight:700 }}>Média de {mediaDia.toFixed(1)} folgas por dia da semana</span>
-            </div>
+            {diaCritico && <div style={{ background:'#FFEBEE', borderRadius:8, padding:'8px 12px', display:'flex', gap:8, alignItems:'center' }}><span style={{ fontSize:16 }}>🔴</span><span style={{ fontSize:13, color:'#B71C1C', fontWeight:700 }}>Dia crítico: <strong>{diaCritico.dia}</strong> com {diaCritico.Folgas+diaCritico.Concessões} folgas ({Math.round(((diaCritico.Folgas+diaCritico.Concessões)/totalAprovadas)*100)}% do total)</span></div>}
+            {desbalanceado && <div style={{ background:'#FFF8E1', borderRadius:8, padding:'8px 12px', display:'flex', gap:8, alignItems:'center' }}><span style={{ fontSize:16 }}>⚠️</span><span style={{ fontSize:13, color:'#7B5800', fontWeight:700 }}>Desbalanceamento detectado: distribuição irregular entre os dias da semana</span></div>}
+            {porSecao.length > 0 && <div style={{ background:'#E8F5E9', borderRadius:8, padding:'8px 12px', display:'flex', gap:8, alignItems:'center' }}><span style={{ fontSize:16 }}>📊</span><span style={{ fontSize:13, color:'#1B5E20', fontWeight:700 }}>Seção mais ativa: <strong>{porSecao[0].secao}</strong> ({Math.round((porSecao[0].total/totalAprovadas)*100)}% das folgas)</span></div>}
+            <div style={{ background:'#E3F2FD', borderRadius:8, padding:'8px 12px', display:'flex', gap:8, alignItems:'center' }}><span style={{ fontSize:16 }}>📈</span><span style={{ fontSize:13, color:'#0D47A1', fontWeight:700 }}>Média de {mediaDia.toFixed(1)} folgas por dia da semana</span></div>
           </div>
         </Card>
       )}
@@ -294,12 +473,12 @@ function Dashboard({ solicitacoes, policiais, onAtualizarPolicial, onRemoverPoli
 
       <Card>
         <h4 style={{ fontSize:13, fontWeight:800, color:'#1a3a5c', marginBottom:14 }}>Situação Sanitária do Efetivo</h4>
-        <div style={{ display:'flex', gap:12, flexWrap:'wrap' }}>
-          {ssData.map(s => (
-            <div key={s.ss} style={{ flex:1, minWidth:100, background:COR_SS[s.ss]+'18', borderRadius:10, padding:'14px 10px', textAlign:'center', border:`2px solid ${COR_SS[s.ss]}` }}>
-              <div style={{ fontSize:24 }}>{EMOJI_SS[s.ss]}</div>
-              <div style={{ fontSize:22, fontWeight:900, color:COR_SS[s.ss] }}>{s.total}</div>
-              <div style={{ fontSize:12, color:'#6b8099', fontWeight:700 }}>{s.ss}</div>
+        <div style={{ display:'flex', gap:10, flexWrap:'wrap' }}>
+          {ssCards.map(s => (
+            <div key={s.label} style={{ flex:1, minWidth:90, background:s.cor+'18', borderRadius:10, padding:'12px 8px', textAlign:'center', border:`2px solid ${s.cor}` }}>
+              <div style={{ fontSize:22 }}>{s.emoji}</div>
+              <div style={{ fontSize:20, fontWeight:900, color:s.cor }}>{s.total}</div>
+              <div style={{ fontSize:10, color:'#6b8099', fontWeight:700 }}>{s.label}</div>
             </div>
           ))}
         </div>
@@ -385,7 +564,7 @@ function CalendarioFolgas({ solicitacoes }) {
                       : dodia.map(s => (
                         <div key={s.id} style={{ background:s.motivo==='Concessão'?'#F3E5F5':'#E3F2FD', color:s.motivo==='Concessão'?'#6A1B9A':'#0D47A1', borderRadius:6, padding:'4px 6px', marginBottom:4, fontSize:11, fontWeight:700 }}>
                           <div>{s.policial_nome.split(' ').slice(0,2).join(' ')}</div>
-                          <div style={{ fontSize:10, opacity:0.8 }}>{s.secao}</div>
+                          <div style={{ fontSize:10, opacity:0.8 }}>{s.secao && s.secao !== '—' ? s.secao : 'Não vinculada'}</div>
                         </div>
                       ))
                     }
@@ -523,7 +702,7 @@ function TelaSolicitacao({ usuario }) {
           <span style={{ fontWeight:800, color:'#1a3a5c' }}>{usuario.patente} {usuario.nome}</span>
           <span style={{ color:'#6b8099', fontSize:13 }}>Mat.: {usuario.matricula}</span>
           {usuario.secao && <span style={{ background:'#e8f0fe', color:'#3d5a9e', borderRadius:6, padding:'2px 9px', fontSize:12, fontWeight:700 }}>{usuario.secao}</span>}
-          <SSBadge ss={usuario.sit_sanitaria||'Apto A'} />
+          <SSBadge p={usuario} />
           <SituacaoBadge situacao={usuario.situacao||'Pronto'} />
           {usuario.restricao && usuario.restricao !== 'Sem restrição' && <span style={{ background:'#FFF3E0', color:'#E65100', borderRadius:6, padding:'2px 8px', fontSize:11, fontWeight:800 }}>{usuario.restricao}</span>}
         </div>
@@ -757,7 +936,7 @@ function TelaGestor({ gestorLogado }) {
             <span style={{ fontWeight:800, color:'#1a3a5c', fontSize:13 }}>📅 {formatarSemana(semanaAtual)}</span>
             <button onClick={proximaSemana} style={{ ...btnSm, background:'#f0f4f8', color:'#1a3a5c' }}>Próxima →</button>
           </div>
-          <button onClick={() => gerarPDF(solicitacoesSemana, policiais)} style={{ ...btnPrimary, marginTop:0, marginBottom:14, background:'linear-gradient(135deg,#1B5E20,#2E7D32)' }}>📄 Gerar Relatório PDF</button>
+          <button onClick={() => gerarPDF(solicitacoesSemana, policiais, semanaAtual)} style={{ ...btnPrimary, marginTop:0, marginBottom:14, background:'#1B5E20' }}>📄 Gerar Relatório PDF</button>
           <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8, marginBottom:14 }}>
             <select value={filtroStatus} onChange={e => setFiltroStatus(e.target.value)} style={inp}>
               <option value="todos">Todos os status</option>
@@ -789,7 +968,7 @@ function TelaGestor({ gestorLogado }) {
                 </div>
                 <div style={{ display:'flex', gap:8, flexWrap:'wrap', marginTop:8, alignItems:'center' }}>
                   <MotivoBadge motivo={s.motivo} />
-                  <span style={{ background:'#e8f0fe', color:'#3d5a9e', borderRadius:6, padding:'2px 8px', fontSize:12, fontWeight:700 }}>{s.secao}</span>
+                  <span style={{ background:'#e8f0fe', color:'#3d5a9e', borderRadius:6, padding:'2px 8px', fontSize:12, fontWeight:700 }}>{s.secao && s.secao !== '—' ? s.secao : 'Não vinculada'}</span>
                   <span style={{ color:'#2d4a63', fontSize:13 }}>📅 <strong>{s.dia}</strong> — {s.semana}</span>
                 </div>
                 {s.email_policial && <p style={{ color:'#aab', fontSize:12, marginTop:4 }}>📧 {s.email_policial}</p>}
@@ -857,7 +1036,7 @@ function TelaGestor({ gestorLogado }) {
                     </div>
                     <div><label style={{ ...lbl, fontSize:10 }}>Sit. Sanitária</label>
                       <select value={p.sit_sanitaria||'Apto A'} onChange={e => atualizarPolicial(p.id,'sit_sanitaria',e.target.value)} style={{ ...inp, fontSize:12, padding:'6px 8px' }}>
-                        {SIT_SANITARIA.map(s => <option key={s}>{s}</option>)}
+                        {SIT_SANITARIA_LTS.map(s => <option key={s}>{s}</option>)}
                       </select>
                     </div>
                     <div><label style={{ ...lbl, fontSize:10 }}>Situação</label>
@@ -871,6 +1050,8 @@ function TelaGestor({ gestorLogado }) {
                       </select>
                     </div>
                   </div>
+
+                  {/* Campos de férias */}
                   {p.situacao === 'Férias' && (
                     <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:6, marginTop:8, background:'#FFF8E1', borderRadius:8, padding:'10px' }}>
                       <div><label style={{ ...lbl, fontSize:10 }}>Início das Férias</label>
@@ -888,8 +1069,28 @@ function TelaGestor({ gestorLogado }) {
                       )}
                     </div>
                   )}
+
+                  {/* Campos de LTS na sit. sanitária */}
+                  {p.sit_sanitaria === 'LTS' && (
+                    <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:6, marginTop:8, background:'#F3E5F5', borderRadius:8, padding:'10px' }}>
+                      <div><label style={{ ...lbl, fontSize:10 }}>Início do LTS</label>
+                        <input type="date" value={p.ferias_inicio||''} onChange={e => atualizarPolicial(p.id,'ferias_inicio',e.target.value)} style={{ ...inp, fontSize:12, padding:'6px 8px' }} />
+                      </div>
+                      <div><label style={{ ...lbl, fontSize:10 }}>Fim do LTS</label>
+                        <input type="date" value={p.ferias_fim||''} onChange={e => atualizarPolicial(p.id,'ferias_fim',e.target.value)} style={{ ...inp, fontSize:12, padding:'6px 8px' }} />
+                      </div>
+                      {p.ferias_fim && diasParaRetorno(p.ferias_fim) !== null && (
+                        <div style={{ gridColumn:'1/-1' }}>
+                          <span style={{ background:diasParaRetorno(p.ferias_fim)<=3?'#6A1B9A':'#1B5E20', color:'#fff', borderRadius:6, padding:'2px 10px', fontSize:12, fontWeight:800 }}>
+                            {diasParaRetorno(p.ferias_fim)===0?'Retorna hoje!':diasParaRetorno(p.ferias_fim)<0?'LTS vencido!':diasParaRetorno(p.ferias_fim)<=3?`⚠️ Retorna em ${diasParaRetorno(p.ferias_fim)} dias`:`Retorna em ${diasParaRetorno(p.ferias_fim)} dias`}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
                   <div style={{ marginTop:8, display:'flex', gap:6, flexWrap:'wrap', alignItems:'center' }}>
-                    <SSBadge ss={p.sit_sanitaria||'Apto A'} />
+                    <SSBadge p={p} />
                     <SituacaoBadge situacao={p.situacao||'Pronto'} />
                     {p.restricao && p.restricao !== 'Sem restrição' && <span style={{ background:'#FFF3E0', color:'#E65100', borderRadius:6, padding:'2px 8px', fontSize:11, fontWeight:800 }}>{p.restricao}</span>}
                     <button onClick={() => resetarSenhaPolicial(p.id, p.nome)} style={{ ...btnSm, background:'#FFF8E1', color:'#7B5800' }}>🔑 Resetar senha</button>
