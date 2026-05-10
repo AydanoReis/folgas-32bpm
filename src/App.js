@@ -163,35 +163,25 @@ function gerarPDF(solicitacoes, policiais) {
     y = doc.lastAutoTable.finalY + 8;
     const emFerias = policiais.filter(p => p.situacao === 'Férias' && p.ferias_fim);
     if (emFerias.length > 0) {
-      doc.setFillColor(230,81,0);
-      doc.rect(10,y,pageW-20,8,'F');
-      doc.setTextColor(255,255,255);
-      doc.setFontSize(10);
-      doc.setFont('helvetica','bold');
-      doc.text('POLICIAIS EM FÉRIAS', 14, y+5.5);
-      y += 12;
-      doc.setTextColor(0,0,0);
+      doc.setFillColor(230,81,0); doc.rect(10,y,pageW-20,8,'F');
+      doc.setTextColor(255,255,255); doc.setFontSize(10); doc.setFont('helvetica','bold');
+      doc.text('POLICIAIS EM FÉRIAS', 14, y+5.5); y += 12; doc.setTextColor(0,0,0);
       doc.autoTable({ startY:y, head:[['Nome','Matrícula','Início','Fim','Dias restantes']], body:emFerias.map(p=>[`${p.patente} ${p.nome}`,p.matricula,p.ferias_inicio||'—',p.ferias_fim||'—',diasParaRetorno(p.ferias_fim)!==null?`${diasParaRetorno(p.ferias_fim)} dias`:'—']), theme:'grid', headStyles:{ fillColor:[230,81,0], textColor:255, fontStyle:'bold', fontSize:8 }, bodyStyles:{ fontSize:8 }, margin:{ left:10, right:10 } });
       y = doc.lastAutoTable.finalY + 8;
     }
     const semSecao = policiais.filter(p => !p.secao || p.secao === '');
     if (semSecao.length > 0) {
       if (y > 220) { doc.addPage(); y = 20; }
-      doc.setFillColor(183,28,28);
-      doc.rect(10,y,pageW-20,8,'F');
-      doc.setTextColor(255,255,255);
-      doc.setFontSize(10);
-      doc.setFont('helvetica','bold');
-      doc.text(`POLICIAIS SEM SEÇÃO DEFINIDA (${semSecao.length})`, 14, y+5.5);
-      y += 12;
-      doc.setTextColor(0,0,0);
+      doc.setFillColor(183,28,28); doc.rect(10,y,pageW-20,8,'F');
+      doc.setTextColor(255,255,255); doc.setFontSize(10); doc.setFont('helvetica','bold');
+      doc.text(`POLICIAIS SEM SEÇÃO DEFINIDA (${semSecao.length})`, 14, y+5.5); y += 12; doc.setTextColor(0,0,0);
       doc.autoTable({ startY:y, head:[['Patente','Nome','Matrícula']], body:semSecao.map(p=>[p.patente,p.nome,p.matricula]), theme:'grid', headStyles:{ fillColor:[183,28,28], textColor:255, fontStyle:'bold', fontSize:9 }, bodyStyles:{ fontSize:9 }, margin:{ left:10, right:10 } });
     }
   }
   doc.save(`relatorio-folgas-32bpm-${new Date().toLocaleDateString('pt-BR').replace(/\//g,'-')}.pdf`);
 }
 
-function Dashboard({ solicitacoes, policiais }) {
+function Dashboard({ solicitacoes, policiais, onAtualizarPolicial, onRemoverPolicial }) {
   const aprovadas = solicitacoes.filter(s => s.status === 'aprovado');
   const total = solicitacoes.length;
   const totalAprovadas = aprovadas.length;
@@ -216,7 +206,6 @@ function Dashboard({ solicitacoes, policiais }) {
     <div>
       <h3 style={{ fontSize:15, fontWeight:800, color:'#1a3a5c', marginBottom:16 }}>📈 Dashboard de Estatísticas</h3>
 
-      {/* Alertas */}
       {retornosProximos.length > 0 && (
         <div style={{ background:'#FFF3E0', border:'2px solid #FFB74D', borderRadius:10, padding:'12px 16px', marginBottom:14 }}>
           <div style={{ fontWeight:800, color:'#E65100', fontSize:13, marginBottom:8 }}>⏰ Férias encerrando em até 3 dias:</div>
@@ -225,9 +214,7 @@ function Dashboard({ solicitacoes, policiais }) {
             return (
               <div key={p.id} style={{ display:'flex', gap:8, alignItems:'center', marginBottom:4 }}>
                 <span style={{ fontWeight:700, color:'#1a3a5c', fontSize:12 }}>{p.patente} {p.nome}</span>
-                <span style={{ background: dias===0?'#B71C1C':dias<=1?'#E65100':'#F9A825', color:'#fff', borderRadius:6, padding:'1px 8px', fontSize:11, fontWeight:800 }}>
-                  {dias===0?'Retorna hoje!':dias===1?'Retorna amanhã!':`${dias} dias`}
-                </span>
+                <span style={{ background:dias===0?'#B71C1C':dias<=1?'#E65100':'#F9A825', color:'#fff', borderRadius:6, padding:'1px 8px', fontSize:11, fontWeight:800 }}>{dias===0?'Retorna hoje!':dias===1?'Retorna amanhã!':`${dias} dias`}</span>
                 <span style={{ color:'#6b8099', fontSize:11 }}>Fim: {new Date(p.ferias_fim+'T00:00:00').toLocaleDateString('pt-BR')}</span>
               </div>
             );
@@ -238,13 +225,19 @@ function Dashboard({ solicitacoes, policiais }) {
       {semSecao.length > 0 && (
         <div style={{ background:'#FFEBEE', border:'2px solid #EF9A9A', borderRadius:10, padding:'12px 16px', marginBottom:14 }}>
           <div style={{ fontWeight:800, color:'#B71C1C', fontSize:13, marginBottom:8 }}>⚠️ {semSecao.length} policial(is) sem seção definida:</div>
-          <div style={{ display:'flex', flexWrap:'wrap', gap:6 }}>
-            {semSecao.map(p => <span key={p.id} style={{ background:'#fff', color:'#B71C1C', borderRadius:6, padding:'2px 8px', fontSize:11, fontWeight:700, border:'1px solid #EF9A9A' }}>{p.patente} {p.nome}</span>)}
-          </div>
+          {semSecao.map(p => (
+            <div key={p.id} style={{ display:'flex', gap:8, alignItems:'center', flexWrap:'wrap', marginBottom:6, background:'#fff', borderRadius:8, padding:'6px 10px', border:'1px solid #EF9A9A' }}>
+              <span style={{ fontWeight:700, color:'#B71C1C', fontSize:12, flex:1 }}>{p.patente} {p.nome}</span>
+              <select defaultValue="" onChange={e => { if(e.target.value) onAtualizarPolicial(p.id,'secao',e.target.value); }} style={{ fontSize:12, padding:'4px 6px', borderRadius:6, border:'1px solid #d0dce8', color:'#1a3a5c', background:'#f8fafc' }}>
+                <option value="" disabled>— Atribuir seção —</option>
+                {SECOES.map(s => <option key={s}>{s}</option>)}
+              </select>
+              <button onClick={() => onRemoverPolicial(p.id)} style={{ background:'#FFEBEE', color:'#B71C1C', border:'none', borderRadius:6, padding:'4px 8px', fontSize:12, fontWeight:700, cursor:'pointer' }}>🗑️</button>
+            </div>
+          ))}
         </div>
       )}
 
-      {/* Insights */}
       {aprovadas.length > 0 && (
         <Card>
           <h4 style={{ fontSize:13, fontWeight:800, color:'#1a3a5c', marginBottom:12 }}>🔍 Insights Automáticos</h4>
@@ -264,7 +257,7 @@ function Dashboard({ solicitacoes, policiais }) {
             {porSecao.length > 0 && (
               <div style={{ background:'#E8F5E9', borderRadius:8, padding:'8px 12px', display:'flex', gap:8, alignItems:'center' }}>
                 <span style={{ fontSize:16 }}>📊</span>
-                <span style={{ fontSize:13, color:'#1B5E20', fontWeight:700 }}>Seção mais ativa: <strong>{porSecao[0].secao}</strong> ({Math.round((porSecao[0].total/totalAprovadas)*100)}% das folgas aprovadas)</span>
+                <span style={{ fontSize:13, color:'#1B5E20', fontWeight:700 }}>Seção mais ativa: <strong>{porSecao[0].secao}</strong> ({Math.round((porSecao[0].total/totalAprovadas)*100)}% das folgas)</span>
               </div>
             )}
             <div style={{ background:'#E3F2FD', borderRadius:8, padding:'8px 12px', display:'flex', gap:8, alignItems:'center' }}>
@@ -275,7 +268,6 @@ function Dashboard({ solicitacoes, policiais }) {
         </Card>
       )}
 
-      {/* Férias em andamento */}
       {emFerias.length > 0 && (
         <Card>
           <h4 style={{ fontSize:13, fontWeight:800, color:'#1a3a5c', marginBottom:12 }}>🏖️ Policiais em Férias</h4>
@@ -285,9 +277,9 @@ function Dashboard({ solicitacoes, policiais }) {
               <div key={p.id} style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'6px 0', borderBottom:'1px solid #f0f4f8', flexWrap:'wrap', gap:6 }}>
                 <span style={{ fontWeight:700, color:'#1a3a5c', fontSize:13 }}>{p.patente} {p.nome}</span>
                 <div style={{ display:'flex', gap:6, alignItems:'center' }}>
-                  <span style={{ color:'#6b8099', fontSize:12 }}>{p.ferias_inicio ? new Date(p.ferias_inicio+'T00:00:00').toLocaleDateString('pt-BR') : '—'} → {p.ferias_fim ? new Date(p.ferias_fim+'T00:00:00').toLocaleDateString('pt-BR') : '—'}</span>
-                  {dias !== null && dias >= 0 && <span style={{ background:dias<=3?'#B71C1C':'#1B5E20', color:'#fff', borderRadius:6, padding:'1px 8px', fontSize:11, fontWeight:800 }}>{dias===0?'Retorna hoje!':dias===1?'1 dia':`${dias} dias`}</span>}
-                  {dias !== null && dias < 0 && <span style={{ background:'#7B5800', color:'#fff', borderRadius:6, padding:'1px 8px', fontSize:11, fontWeight:800 }}>Vencido</span>}
+                  <span style={{ color:'#6b8099', fontSize:12 }}>{p.ferias_inicio?new Date(p.ferias_inicio+'T00:00:00').toLocaleDateString('pt-BR'):'—'} → {p.ferias_fim?new Date(p.ferias_fim+'T00:00:00').toLocaleDateString('pt-BR'):'—'}</span>
+                  {dias!==null&&dias>=0&&<span style={{ background:dias<=3?'#B71C1C':'#1B5E20', color:'#fff', borderRadius:6, padding:'1px 8px', fontSize:11, fontWeight:800 }}>{dias===0?'Retorna hoje!':dias===1?'1 dia':`${dias} dias`}</span>}
+                  {dias!==null&&dias<0&&<span style={{ background:'#7B5800', color:'#fff', borderRadius:6, padding:'1px 8px', fontSize:11, fontWeight:800 }}>Vencido</span>}
                 </div>
               </div>
             );
@@ -679,19 +671,19 @@ function TelaGestor({ gestorLogado }) {
     setPoliciais(prev => prev.map(p => p.id === id ? { ...p, [campo]:valor } : p));
   }
 
-  async function adicionarPolicial() {
-    if (!novoNome.trim() || !novaMatricula.trim() || !novaSecao) return;
-    const { data, error } = await supabase.from('policiais').insert({ nome:novoNome.toUpperCase(), matricula:novaMatricula, patente:novaPatente, secao:novaSecao, senha:'', sit_sanitaria:'Apto A', situacao:'Pronto', restricao:'Sem restrição' }).select().single();
-    if (!error && data) setPoliciais(prev => [...prev, data].sort((a,b) => a.nome.localeCompare(b.nome)));
-    setNovoNome(''); setNovaMatricula(''); setNovaPatente('3º SGT PM'); setNovaSecao('');
-  }
-
   async function removerPolicial(id) {
     if (!window.confirm('Confirmar remoção?')) return;
     await supabase.from('solicitacoes').delete().eq('policial_id', id);
     await supabase.from('policiais').delete().eq('id', id);
     setPoliciais(prev => prev.filter(p => p.id !== id));
     setSolicitacoes(prev => prev.filter(s => s.policial_id !== id));
+  }
+
+  async function adicionarPolicial() {
+    if (!novoNome.trim() || !novaMatricula.trim() || !novaSecao) return;
+    const { data, error } = await supabase.from('policiais').insert({ nome:novoNome.toUpperCase(), matricula:novaMatricula, patente:novaPatente, secao:novaSecao, senha:'', sit_sanitaria:'Apto A', situacao:'Pronto', restricao:'Sem restrição' }).select().single();
+    if (!error && data) setPoliciais(prev => [...prev, data].sort((a,b) => a.nome.localeCompare(b.nome)));
+    setNovoNome(''); setNovaMatricula(''); setNovaPatente('3º SGT PM'); setNovaSecao('');
   }
 
   async function alterarMinhaSenha() {
@@ -734,7 +726,6 @@ function TelaGestor({ gestorLogado }) {
 
   return (
     <div>
-      {/* Alerta de retorno de férias no topo */}
       {retornosProximos.length > 0 && (
         <div style={{ background:'#FFF3E0', border:'2px solid #FFB74D', borderRadius:10, padding:'12px 16px', marginBottom:14 }}>
           <div style={{ fontWeight:800, color:'#E65100', fontSize:13, marginBottom:8 }}>⏰ Férias encerrando em até 3 dias:</div>
@@ -818,7 +809,7 @@ function TelaGestor({ gestorLogado }) {
       )}
 
       {aba === 'calendario' && <Card><CalendarioFolgas solicitacoes={solicitacoes} /></Card>}
-      {aba === 'estatisticas' && <Dashboard solicitacoes={solicitacoes} policiais={policiais} />}
+      {aba === 'estatisticas' && <Dashboard solicitacoes={solicitacoes} policiais={policiais} onAtualizarPolicial={atualizarPolicial} onRemoverPolicial={removerPolicial} />}
 
       {aba === 'efetivo' && (
         <>
@@ -880,8 +871,7 @@ function TelaGestor({ gestorLogado }) {
                       </select>
                     </div>
                   </div>
-                  {/* Campos de férias */}
-                  {(p.situacao === 'Férias') && (
+                  {p.situacao === 'Férias' && (
                     <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:6, marginTop:8, background:'#FFF8E1', borderRadius:8, padding:'10px' }}>
                       <div><label style={{ ...lbl, fontSize:10 }}>Início das Férias</label>
                         <input type="date" value={p.ferias_inicio||''} onChange={e => atualizarPolicial(p.id,'ferias_inicio',e.target.value)} style={{ ...inp, fontSize:12, padding:'6px 8px' }} />
