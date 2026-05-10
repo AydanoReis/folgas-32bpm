@@ -447,6 +447,9 @@ function TelaGestor({ gestorLogado }) {
                 {s.status === 'recusado' && (
                   <button onClick={() => excluirSolicitacao(s.id)} style={{ ...btnSm, background:'#FFEBEE', color:'#B71C1C', marginTop:8 }}>🗑️ Excluir</button>
                 )}
+                  {s.status === 'aprovado' && (
+  <button onClick={() => mudarStatus(s.id,'pendente')} style={{ ...btnSm, background:'#FFF8E1', color:'#7B5800', marginTop:8 }}>↩️ Revogar aprovação</button>
+)}
               </Card>
             ))
           }
