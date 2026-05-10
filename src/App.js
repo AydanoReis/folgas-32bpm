@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from './supabaseClient';
 import emailjs from '@emailjs/browser';
+import jsPDF from 'jspdf';
+import 'jspdf-autotable';
 
 const EMAILJS_SERVICE_ID = 'service_97rq307';
 const EMAILJS_TEMPLATE_ID = 'template_y0wm9hp';
@@ -35,6 +37,101 @@ function MotivoBadge({ motivo }) {
 }
 function Spinner() {
   return <div style={{ textAlign:'center', padding:40, color:'#6b8099', fontSize:15 }}>⏳ Carregando...</div>;
+}
+
+function gerarPDF(solicitacoes) {
+  const aprovadas = solicitacoes.filter(s => s.status === 'aprovado');
+  if (aprovadas.length === 0) { alert('Nenhuma folga aprovada para gerar relatório.'); return; }
+
+  const doc = new jsPDF();
+  const pageW = doc.internal.pageSize.getWidth();
+
+  // Cabeçalho
+  doc.setFillColor(13, 35, 64);
+  doc.rect(0, 0, pageW, 28, 'F');
+  doc.setTextColor(255, 255, 255);
+  doc.setFontSize(14);
+  doc.setFont('helvetica', 'bold');
+  doc.text('32º BPM — Controle de Folgas', pageW / 2, 12, { align: 'center' });
+  doc.setFontSize(10);
+  doc.setFont('helvetica', 'normal');
+  doc.text(`PCSV · Expediente Semanal · Gerado em ${new Date().toLocaleDateString('pt-BR')}`, pageW / 2, 21, { align: 'center' });
+
+  let y = 35;
+  doc.setTextColor(0, 0, 0);
+
+  // Por dia da semana
+  DIAS.forEach(dia => {
+    const dodia = aprovadas.filter(s => s.dia === dia);
+    if (dodia.length === 0) return;
+
+    // Agrupa por seção
+    const porSecao = {};
+    dodia.forEach(s => {
+      if (!porSecao[s.secao]) porSecao[s.secao] = [];
+      porSecao[s.secao].push(s);
+    });
+
+    if (y > 250) { doc.addPage(); y = 20; }
+
+    doc.setFillColor(30, 77, 123);
+    doc.rect(10, y, pageW - 20, 8, 'F');
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(11);
+    doc.setFont('helvetica', 'bold');
+    doc.text(dia.toUpperCase() + '-FEIRA', 14, y + 5.5);
+    y += 10;
+
+    doc.setTextColor(0, 0, 0);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(9);
+
+    Object.entries(porSecao).forEach(([secao, pols]) => {
+      if (y > 270) { doc.addPage(); y = 20; }
+      const nomes = pols.map(p => `${p.patente} ${p.policial_nome} (${p.motivo})`).join(', ');
+      doc.setFont('helvetica', 'bold');
+      doc.text(`${secao}:`, 14, y);
+      doc.setFont('helvetica', 'normal');
+      const linhas = doc.splitTextToSize(nomes, pageW - 50);
+      doc.text(linhas, 40, y);
+      y += linhas.length * 5 + 2;
+    });
+
+    y += 4;
+  });
+
+  // Resumo por seção e dia
+  if (y > 200) { doc.addPage(); y = 20; }
+
+  doc.setFillColor(13, 35, 64);
+  doc.rect(10, y, pageW - 20, 8, 'F');
+  doc.setTextColor(255, 255, 255);
+  doc.setFontSize(11);
+  doc.setFont('helvetica', 'bold');
+  doc.text('RESUMO GERAL POR SEÇÃO E DIA', 14, y + 5.5);
+  y += 12;
+
+  const todasSecoes = [...new Set(aprovadas.map(s => s.secao))].sort();
+  const head = [['Seção', ...DIAS.map(d => d.substring(0,3))]];
+  const body = todasSecoes.map(secao => {
+    return [secao, ...DIAS.map(dia => {
+      const count = aprovadas.filter(s => s.secao === secao && s.dia === dia).length;
+      return count > 0 ? String(count) : '-';
+    })];
+  });
+
+  doc.autoTable({
+    startY: y,
+    head,
+    body,
+    theme: 'grid',
+    headStyles: { fillColor: [30, 77, 123], textColor: 255, fontStyle: 'bold', fontSize: 8 },
+    bodyStyles: { fontSize: 8 },
+    columnStyles: { 0: { fontStyle: 'bold' } },
+    margin: { left: 10, right: 10 },
+  });
+
+  doc.save(`relatorio-folgas-32bpm-${new Date().toLocaleDateString('pt-BR').replace(/\//g,'-')}.pdf`);
 }
 
 function TelaSolicitacao({ usuario }) {
@@ -302,6 +399,9 @@ function TelaGestor({ gestorLogado }) {
 
       {aba === 'solicitacoes' && (
         <>
+          <button onClick={() => gerarPDF(solicitacoes)} style={{ ...btnPrimary, marginTop:0, marginBottom:14, background:'linear-gradient(135deg,#1B5E20,#2E7D32)' }}>
+            📄 Gerar Relatório PDF
+          </button>
           <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8, marginBottom:14 }}>
             <select value={filtroStatus} onChange={e => setFiltroStatus(e.target.value)} style={inp}>
               <option value="todos">Todos os status</option>
