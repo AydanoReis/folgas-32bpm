@@ -98,44 +98,49 @@ function gerarPDF(solicitacoes) {
   doc.save(`relatorio-folgas-32bpm-${new Date().toLocaleDateString('pt-BR').replace(/\//g,'-')}.pdf`);
 }
 
-// ── TELA LOGIN POLICIAL ───────────────────────────────────────────────────────
 function LoginPolicial({ onLogin }) {
-  const [matricula, setMatricula] = useState('');
+  const [policiais, setPoliciais] = useState([]);
+  const [buscaLogin, setBuscaLogin] = useState('');
+  const [policialSel, setPolicialSel] = useState(null);
   const [senha, setSenha] = useState('');
   const [erro, setErro] = useState('');
-  const [modo, setModo] = useState('login'); // login | cadastrar
+  const [modo, setModo] = useState('login');
   const [novaSenha, setNovaSenha] = useState('');
   const [confirmarSenha, setConfirmarSenha] = useState('');
-  const [policial, setPolicial] = useState(null);
-  const [buscando, setBuscando] = useState(false);
+  const [carregando, setCarregando] = useState(true);
+
+  useEffect(() => {
+    supabase.from('policiais').select('*').order('nome')
+      .then(({ data }) => { setPoliciais(data || []); setCarregando(false); });
+  }, []);
+
+  const policiaisFiltrados = policiais.filter(p =>
+    p.nome.toLowerCase().includes(buscaLogin.toLowerCase()) || p.matricula.includes(buscaLogin)
+  );
 
   async function entrar() {
-    if (!matricula || !senha) { setErro('Preencha matrícula e senha.'); return; }
-    setBuscando(true);
-    const { data } = await supabase.from('policiais').select('*').eq('matricula', matricula).single();
-    setBuscando(false);
-    if (!data) { setErro('Matrícula não encontrada.'); return; }
-    if (!data.senha) {
-      setPolicial(data);
+    if (!policialSel) { setErro('Selecione seu nome.'); return; }
+    if (!senha) { setErro('Digite sua senha.'); return; }
+    if (!policialSel.senha) {
       setModo('cadastrar');
       return;
     }
-    if (data.senha !== senha) { setErro('Senha incorreta.'); return; }
-    onLogin(data);
+    if (policialSel.senha !== senha) { setErro('Senha incorreta.'); return; }
+    onLogin(policialSel);
   }
 
   async function cadastrarSenha() {
     if (novaSenha.length !== 4 || isNaN(novaSenha)) { setErro('A senha deve ter exatamente 4 números.'); return; }
     if (novaSenha !== confirmarSenha) { setErro('As senhas não coincidem.'); return; }
-    await supabase.from('policiais').update({ senha: novaSenha }).eq('id', policial.id);
-    onLogin({ ...policial, senha: novaSenha });
+    await supabase.from('policiais').update({ senha: novaSenha }).eq('id', policialSel.id);
+    onLogin({ ...policialSel, senha: novaSenha });
   }
 
   if (modo === 'cadastrar') return (
     <div style={{ background:'#fff', borderRadius:14, padding:22, boxShadow:'0 4px 20px #00000012' }}>
       <div style={{ fontSize:30, marginBottom:10 }}>🔐</div>
       <h2 style={{ color:'#1a3a5c', fontWeight:800, fontSize:15, marginBottom:4 }}>Primeiro acesso</h2>
-      <p style={{ color:'#6b8099', fontSize:12, marginBottom:16 }}>Olá, <strong>{policial.nome}</strong>! Cadastre uma senha de 4 números para acessar o sistema.</p>
+      <p style={{ color:'#6b8099', fontSize:12, marginBottom:16 }}>Olá, <strong>{policialSel.nome}</strong>! Cadastre uma senha de 4 números.</p>
       <label style={lbl}>Nova senha (4 números)</label>
       <input type="password" maxLength={4} value={novaSenha} onChange={e=>setNovaSenha(e.target.value)} placeholder="••••" style={{ ...inp, marginBottom:10 }} />
       <label style={lbl}>Confirmar senha</label>
@@ -149,14 +154,21 @@ function LoginPolicial({ onLogin }) {
     <div style={{ background:'#fff', borderRadius:14, padding:22, boxShadow:'0 4px 20px #00000012' }}>
       <div style={{ fontSize:30, marginBottom:10 }}>👮</div>
       <h2 style={{ color:'#1a3a5c', fontWeight:800, fontSize:15, marginBottom:4 }}>Sou Policial</h2>
-      <p style={{ color:'#6b8099', fontSize:12, marginBottom:14 }}>Digite sua matrícula e senha para entrar</p>
-      <label style={lbl}>Matrícula</label>
-      <input value={matricula} onChange={e=>setMatricula(e.target.value)} placeholder="Ex.: 75708" style={{ ...inp, marginBottom:10 }} />
+      <p style={{ color:'#6b8099', fontSize:12, marginBottom:14 }}>Selecione seu nome e digite sua senha</p>
+      <label style={lbl}>Buscar pelo nome</label>
+      <input value={buscaLogin} onChange={e => setBuscaLogin(e.target.value)} placeholder="Digite seu nome..." style={{ ...inp, marginBottom:8 }} />
+      <label style={lbl}>Selecione seu nome</label>
+      {carregando ? <p style={{ color:'#aab', fontSize:13 }}>Carregando...</p> :
+        <select onChange={e => { const p = policiais.find(p => p.id === Number(e.target.value)); setPolicialSel(p || null); setErro(''); }} defaultValue="" style={{ ...inp, marginBottom:10 }}>
+          <option value="" disabled>— Selecionar —</option>
+          {policiaisFiltrados.map(p => <option key={p.id} value={p.id}>{p.patente} {p.nome}</option>)}
+        </select>
+      }
       <label style={lbl}>Senha (4 números)</label>
-      <input type="password" maxLength={4} value={senha} onChange={e=>setSenha(e.target.value)} onKeyDown={e=>e.key==='Enter'&&entrar()} placeholder="••••" style={{ ...inp, marginBottom:6 }} />
+      <input type="password" maxLength={4} value={senha} onChange={e => setSenha(e.target.value)} onKeyDown={e => e.key==='Enter'&&entrar()} placeholder="••••" style={{ ...inp, marginBottom:6 }} />
       {erro && <p style={{ color:'#B71C1C', fontSize:12, marginBottom:6 }}>{erro}</p>}
-      <button onClick={entrar} disabled={buscando} style={{ ...btnPrimary, opacity:buscando?0.7:1 }}>{buscando?'Verificando...':'Entrar'}</button>
-      <p style={{ color:'#aab', fontSize:11, marginTop:8, textAlign:'center' }}>Primeiro acesso? Digite sua matrícula e qualquer senha — o sistema vai pedir para cadastrar.</p>
+      <button onClick={entrar} style={btnPrimary}>Entrar</button>
+      <p style={{ color:'#aab', fontSize:11, marginTop:8, textAlign:'center' }}>Primeiro acesso? Selecione seu nome e clique em Entrar — o sistema vai pedir para cadastrar sua senha.</p>
     </div>
   );
 }
@@ -327,9 +339,9 @@ function TelaGestor({ gestorLogado }) {
   }
 
   async function resetarSenhaPolicial(id, nome) {
-    if (!window.confirm(`Resetar a senha de ${nome}? O policial precisará criar uma nova senha no próximo acesso.`)) return;
+    if (!window.confirm(`Resetar a senha de ${nome}?`)) return;
     await supabase.from('policiais').update({ senha: '' }).eq('id', id);
-    alert('Senha resetada com sucesso!');
+    alert('Senha resetada! O policial precisará criar uma nova senha no próximo acesso.');
   }
 
   async function adicionarPolicial() {
