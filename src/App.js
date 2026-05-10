@@ -43,10 +43,6 @@ function formatarSemana(inicio) {
   fim.setDate(fim.getDate() + 6);
   return `${inicio.toLocaleDateString('pt-BR')} a ${fim.toLocaleDateString('pt-BR')}`;
 }
-function semanaParaISO(inicio) {
-  return inicio.toISOString().split('T')[0].substring(0,7);
-}
-
 function Card({ children, style }) {
   return <div style={{ background:'#fff', borderRadius:12, padding:'16px 18px', boxShadow:'0 2px 12px #00000012', marginBottom:10, ...style }}>{children}</div>;
 }
