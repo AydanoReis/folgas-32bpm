@@ -109,8 +109,7 @@ function TelaSolicitacao({ usuario }) {
         </div>
 
         <label style={lbl}>Semana de referência *</label>
-        <input type="week" value={semana} onChange={e => setSemana(e.target.value)} style={{ ...inp, marginBottom:14 }} />
-
+<input type="date" value={semana} onChange={e => setSemana(e.target.value)} style={{ ...inp, marginBottom:14 }} />
         <label style={lbl}>Seu email para receber confirmação *</label>
         <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="seu.email@gmail.com" style={{ ...inp, marginBottom:6 }} />
 
