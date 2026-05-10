@@ -42,6 +42,14 @@ function formatarSemana(inicio) {
   fim.setDate(fim.getDate() + 6);
   return `${inicio.toLocaleDateString('pt-BR')} a ${fim.toLocaleDateString('pt-BR')}`;
 }
+function diasParaRetorno(fimStr) {
+  if (!fimStr) return null;
+  const hoje = new Date();
+  hoje.setHours(0,0,0,0);
+  const fim = new Date(fimStr + 'T00:00:00');
+  const diff = Math.ceil((fim - hoje) / (1000*60*60*24));
+  return diff;
+}
 
 function Card({ children, style }) {
   return <div style={{ background:'#fff', borderRadius:12, padding:'16px 18px', boxShadow:'0 2px 12px #00000012', marginBottom:10, ...style }}>{children}</div>;
@@ -69,8 +77,6 @@ function gerarPDF(solicitacoes, policiais) {
   const aprovadas = solicitacoes.filter(s => s.status === 'aprovado');
   const doc = new jsPDF();
   const pageW = doc.internal.pageSize.getWidth();
-
-  // Cabeçalho
   doc.setFillColor(13, 35, 64);
   doc.rect(0, 0, pageW, 28, 'F');
   doc.setTextColor(255, 255, 255);
@@ -80,11 +86,8 @@ function gerarPDF(solicitacoes, policiais) {
   doc.setFontSize(10);
   doc.setFont('helvetica', 'normal');
   doc.text(`PCSV · Expediente Semanal · Gerado em ${new Date().toLocaleDateString('pt-BR')}`, pageW / 2, 21, { align: 'center' });
-
   let y = 35;
   doc.setTextColor(0, 0, 0);
-
-  // Folgas por dia
   if (aprovadas.length > 0) {
     DIAS.forEach(dia => {
       const dodia = aprovadas.filter(s => s.dia === dia);
@@ -114,8 +117,6 @@ function gerarPDF(solicitacoes, policiais) {
       });
       y += 4;
     });
-
-    // Resumo por seção e dia
     if (y > 200) { doc.addPage(); y = 20; }
     doc.setFillColor(13, 35, 64);
     doc.rect(10, y, pageW - 20, 8, 'F');
@@ -126,17 +127,12 @@ function gerarPDF(solicitacoes, policiais) {
     y += 12;
     const todasSecoes = [...new Set(aprovadas.map(s => s.secao))].sort();
     const head = [['Seção', ...DIAS.map(d => d.substring(0,3))]];
-    const body = todasSecoes.map(secao => [secao, ...DIAS.map(dia => { const count = aprovadas.filter(s => s.secao === secao && s.dia === dia).length; return count > 0 ? String(count) : '-'; })]);
-    doc.autoTable({ startY: y, head, body, theme:'grid', headStyles:{ fillColor:[30,77,123], textColor:255, fontStyle:'bold', fontSize:8 }, bodyStyles:{ fontSize:8 }, columnStyles:{ 0:{ fontStyle:'bold' } }, margin:{ left:10, right:10 } });
+    const body = todasSecoes.map(secao => [secao, ...DIAS.map(dia => { const count = aprovadas.filter(s => s.secao===secao&&s.dia===dia).length; return count>0?String(count):'-'; })]);
+    doc.autoTable({ startY:y, head, body, theme:'grid', headStyles:{ fillColor:[30,77,123], textColor:255, fontStyle:'bold', fontSize:8 }, bodyStyles:{ fontSize:8 }, columnStyles:{ 0:{ fontStyle:'bold' } }, margin:{ left:10, right:10 } });
     y = doc.lastAutoTable.finalY + 10;
   }
-
   if (policiais && policiais.length > 0) {
-    // Nova página para o dashboard
-    doc.addPage();
-    y = 20;
-
-    // Título dashboard
+    doc.addPage(); y = 20;
     doc.setFillColor(13, 35, 64);
     doc.rect(0, 0, pageW, 18, 'F');
     doc.setTextColor(255, 255, 255);
@@ -145,83 +141,53 @@ function gerarPDF(solicitacoes, policiais) {
     doc.text('DASHBOARD DO EFETIVO', pageW / 2, 12, { align: 'center' });
     y = 28;
     doc.setTextColor(0, 0, 0);
-
-    // Situação Sanitária
     doc.setFillColor(30, 77, 123);
-    doc.rect(10, y, pageW - 20, 8, 'F');
-    doc.setTextColor(255, 255, 255);
+    doc.rect(10, y, pageW-20, 8, 'F');
+    doc.setTextColor(255,255,255);
     doc.setFontSize(10);
-    doc.setFont('helvetica', 'bold');
-    doc.text('SITUAÇÃO SANITÁRIA DO EFETIVO', 14, y + 5.5);
+    doc.setFont('helvetica','bold');
+    doc.text('SITUAÇÃO SANITÁRIA DO EFETIVO', 14, y+5.5);
     y += 12;
-    doc.setTextColor(0, 0, 0);
-    const ssRows = SIT_SANITARIA.map(ss => [ss, String(policiais.filter(p => (p.sit_sanitaria||'Apto A') === ss).length)]);
-    doc.autoTable({ startY: y, head:[['Situação Sanitária','Total']], body: ssRows, theme:'grid', headStyles:{ fillColor:[30,77,123], textColor:255, fontStyle:'bold', fontSize:9 }, bodyStyles:{ fontSize:9 }, margin:{ left:10, right:10 } });
+    doc.setTextColor(0,0,0);
+    doc.autoTable({ startY:y, head:[['Situação Sanitária','Total']], body:SIT_SANITARIA.map(ss=>[ss,String(policiais.filter(p=>(p.sit_sanitaria||'Apto A')===ss).length)]), theme:'grid', headStyles:{ fillColor:[30,77,123], textColor:255, fontStyle:'bold', fontSize:9 }, bodyStyles:{ fontSize:9 }, margin:{ left:10, right:10 } });
     y = doc.lastAutoTable.finalY + 8;
-
-    // Situação do Efetivo
-    doc.setFillColor(30, 77, 123);
-    doc.rect(10, y, pageW - 20, 8, 'F');
-    doc.setTextColor(255, 255, 255);
+    doc.setFillColor(30,77,123);
+    doc.rect(10,y,pageW-20,8,'F');
+    doc.setTextColor(255,255,255);
     doc.setFontSize(10);
-    doc.setFont('helvetica', 'bold');
-    doc.text('SITUAÇÃO DO EFETIVO', 14, y + 5.5);
+    doc.setFont('helvetica','bold');
+    doc.text('SITUAÇÃO DO EFETIVO', 14, y+5.5);
     y += 12;
-    doc.setTextColor(0, 0, 0);
-    const sitRows = SITUACOES.map(s => [s, String(policiais.filter(p => (p.situacao||'Pronto') === s).length)]);
-    doc.autoTable({ startY: y, head:[['Situação','Total']], body: sitRows, theme:'grid', headStyles:{ fillColor:[30,77,123], textColor:255, fontStyle:'bold', fontSize:9 }, bodyStyles:{ fontSize:9 }, margin:{ left:10, right:10 } });
+    doc.setTextColor(0,0,0);
+    doc.autoTable({ startY:y, head:[['Situação','Total']], body:SITUACOES.map(s=>[s,String(policiais.filter(p=>(p.situacao||'Pronto')===s).length)]), theme:'grid', headStyles:{ fillColor:[30,77,123], textColor:255, fontStyle:'bold', fontSize:9 }, bodyStyles:{ fontSize:9 }, margin:{ left:10, right:10 } });
     y = doc.lastAutoTable.finalY + 8;
-
-    // Restrições
-    doc.setFillColor(30, 77, 123);
-    doc.rect(10, y, pageW - 20, 8, 'F');
-    doc.setTextColor(255, 255, 255);
-    doc.setFontSize(10);
-    doc.setFont('helvetica', 'bold');
-    doc.text('RESTRIÇÕES DO EFETIVO', 14, y + 5.5);
-    y += 12;
-    doc.setTextColor(0, 0, 0);
-    const restRows = RESTRICOES.map(r => [r, String(policiais.filter(p => (p.restricao||'Sem restrição') === r).length)]);
-    doc.autoTable({ startY: y, head:[['Restrição','Total']], body: restRows, theme:'grid', headStyles:{ fillColor:[30,77,123], textColor:255, fontStyle:'bold', fontSize:9 }, bodyStyles:{ fontSize:9 }, margin:{ left:10, right:10 } });
-    y = doc.lastAutoTable.finalY + 8;
-
-    // Policiais sem seção
+    const emFerias = policiais.filter(p => p.situacao === 'Férias' && p.ferias_fim);
+    if (emFerias.length > 0) {
+      doc.setFillColor(230,81,0);
+      doc.rect(10,y,pageW-20,8,'F');
+      doc.setTextColor(255,255,255);
+      doc.setFontSize(10);
+      doc.setFont('helvetica','bold');
+      doc.text('POLICIAIS EM FÉRIAS', 14, y+5.5);
+      y += 12;
+      doc.setTextColor(0,0,0);
+      doc.autoTable({ startY:y, head:[['Nome','Matrícula','Início','Fim','Dias restantes']], body:emFerias.map(p=>[`${p.patente} ${p.nome}`,p.matricula,p.ferias_inicio||'—',p.ferias_fim||'—',diasParaRetorno(p.ferias_fim)!==null?`${diasParaRetorno(p.ferias_fim)} dias`:'—']), theme:'grid', headStyles:{ fillColor:[230,81,0], textColor:255, fontStyle:'bold', fontSize:8 }, bodyStyles:{ fontSize:8 }, margin:{ left:10, right:10 } });
+      y = doc.lastAutoTable.finalY + 8;
+    }
     const semSecao = policiais.filter(p => !p.secao || p.secao === '');
     if (semSecao.length > 0) {
       if (y > 220) { doc.addPage(); y = 20; }
-      doc.setFillColor(183, 28, 28);
-      doc.rect(10, y, pageW - 20, 8, 'F');
-      doc.setTextColor(255, 255, 255);
+      doc.setFillColor(183,28,28);
+      doc.rect(10,y,pageW-20,8,'F');
+      doc.setTextColor(255,255,255);
       doc.setFontSize(10);
-      doc.setFont('helvetica', 'bold');
-      doc.text(`POLICIAIS SEM SEÇÃO DEFINIDA (${semSecao.length})`, 14, y + 5.5);
+      doc.setFont('helvetica','bold');
+      doc.text(`POLICIAIS SEM SEÇÃO DEFINIDA (${semSecao.length})`, 14, y+5.5);
       y += 12;
-      doc.setTextColor(0, 0, 0);
-      const semSecaoRows = semSecao.map(p => [p.patente, p.nome, p.matricula]);
-      doc.autoTable({ startY: y, head:[['Patente','Nome','Matrícula']], body: semSecaoRows, theme:'grid', headStyles:{ fillColor:[183,28,28], textColor:255, fontStyle:'bold', fontSize:9 }, bodyStyles:{ fontSize:9 }, margin:{ left:10, right:10 } });
-      y = doc.lastAutoTable.finalY + 8;
-    }
-
-    // Folgas aprovadas por dia
-    if (aprovadas.length > 0) {
-      if (y > 220) { doc.addPage(); y = 20; }
-      doc.setFillColor(30, 77, 123);
-      doc.rect(10, y, pageW - 20, 8, 'F');
-      doc.setTextColor(255, 255, 255);
-      doc.setFontSize(10);
-      doc.setFont('helvetica', 'bold');
-      doc.text('FOLGAS APROVADAS POR DIA DA SEMANA', 14, y + 5.5);
-      y += 12;
-      doc.setTextColor(0, 0, 0);
-      const diaRows = DIAS.map(dia => {
-        const folgas = aprovadas.filter(s => s.dia === dia && s.motivo === 'Folga').length;
-        const concessoes = aprovadas.filter(s => s.dia === dia && s.motivo === 'Concessão').length;
-        return [dia, String(folgas), String(concessoes), String(folgas + concessoes)];
-      });
-      doc.autoTable({ startY: y, head:[['Dia','Folgas','Concessões','Total']], body: diaRows, theme:'grid', headStyles:{ fillColor:[30,77,123], textColor:255, fontStyle:'bold', fontSize:9 }, bodyStyles:{ fontSize:9 }, margin:{ left:10, right:10 } });
+      doc.setTextColor(0,0,0);
+      doc.autoTable({ startY:y, head:[['Patente','Nome','Matrícula']], body:semSecao.map(p=>[p.patente,p.nome,p.matricula]), theme:'grid', headStyles:{ fillColor:[183,28,28], textColor:255, fontStyle:'bold', fontSize:9 }, bodyStyles:{ fontSize:9 }, margin:{ left:10, right:10 } });
     }
   }
-
   doc.save(`relatorio-folgas-32bpm-${new Date().toLocaleDateString('pt-BR').replace(/\//g,'-')}.pdf`);
 }
 
@@ -233,25 +199,100 @@ function Dashboard({ solicitacoes, policiais }) {
   const totalRecusadas = solicitacoes.filter(s => s.status === 'recusado').length;
   const totalFolgas = aprovadas.filter(s => s.motivo === 'Folga').length;
   const totalConcessoes = aprovadas.filter(s => s.motivo === 'Concessão').length;
-  const porDia = DIAS.map(dia => ({ dia:dia.substring(0,3), Folgas:aprovadas.filter(s => s.dia===dia&&s.motivo==='Folga').length, Concessões:aprovadas.filter(s => s.dia===dia&&s.motivo==='Concessão').length }));
-  const porSecao = SECOES.map(secao => ({ secao, total:aprovadas.filter(s => s.secao===secao).length })).filter(s => s.total>0).sort((a,b) => b.total-a.total);
-  const diaMais = porDia.reduce((a,b) => (a.Folgas+a.Concessões)>=(b.Folgas+b.Concessões)?a:b, porDia[0]);
-  const secaoMais = porSecao[0];
-  const ssData = SIT_SANITARIA.map(ss => ({ ss, total:policiais.filter(p => (p.sit_sanitaria||'Apto A')===ss).length }));
-  const sitData = SITUACOES.map(s => ({ name:s, value:policiais.filter(p => (p.situacao||'Pronto')===s).length })).filter(s => s.value>0);
+  const porDia = DIAS.map(dia => ({ dia:dia.substring(0,3), Folgas:aprovadas.filter(s=>s.dia===dia&&s.motivo==='Folga').length, Concessões:aprovadas.filter(s=>s.dia===dia&&s.motivo==='Concessão').length }));
+  const porSecao = SECOES.map(secao => ({ secao, total:aprovadas.filter(s=>s.secao===secao).length })).filter(s=>s.total>0).sort((a,b)=>b.total-a.total);
+  const totalPorDia = porDia.map(d => d.Folgas + d.Concessões);
+  const maxDia = Math.max(...totalPorDia);
+  const mediaDia = totalPorDia.reduce((a,b)=>a+b,0) / 7;
+  const diaCritico = porDia.find(d => (d.Folgas+d.Concessões) === maxDia && maxDia > 0);
+  const desbalanceado = maxDia > 0 && (maxDia - Math.min(...totalPorDia.filter(v=>v>0))) >= 3;
+  const ssData = SIT_SANITARIA.map(ss => ({ ss, total:policiais.filter(p=>(p.sit_sanitaria||'Apto A')===ss).length }));
+  const sitData = SITUACOES.map(s => ({ name:s, value:policiais.filter(p=>(p.situacao||'Pronto')===s).length })).filter(s=>s.value>0);
   const semSecao = policiais.filter(p => !p.secao || p.secao === '');
+  const retornosProximos = policiais.filter(p => p.situacao === 'Férias' && p.ferias_fim && diasParaRetorno(p.ferias_fim) !== null && diasParaRetorno(p.ferias_fim) <= 3 && diasParaRetorno(p.ferias_fim) >= 0);
+  const emFerias = policiais.filter(p => p.situacao === 'Férias' && p.ferias_fim);
 
   return (
     <div>
       <h3 style={{ fontSize:15, fontWeight:800, color:'#1a3a5c', marginBottom:16 }}>📈 Dashboard de Estatísticas</h3>
 
+      {/* Alertas */}
+      {retornosProximos.length > 0 && (
+        <div style={{ background:'#FFF3E0', border:'2px solid #FFB74D', borderRadius:10, padding:'12px 16px', marginBottom:14 }}>
+          <div style={{ fontWeight:800, color:'#E65100', fontSize:13, marginBottom:8 }}>⏰ Férias encerrando em até 3 dias:</div>
+          {retornosProximos.map(p => {
+            const dias = diasParaRetorno(p.ferias_fim);
+            return (
+              <div key={p.id} style={{ display:'flex', gap:8, alignItems:'center', marginBottom:4 }}>
+                <span style={{ fontWeight:700, color:'#1a3a5c', fontSize:12 }}>{p.patente} {p.nome}</span>
+                <span style={{ background: dias===0?'#B71C1C':dias<=1?'#E65100':'#F9A825', color:'#fff', borderRadius:6, padding:'1px 8px', fontSize:11, fontWeight:800 }}>
+                  {dias===0?'Retorna hoje!':dias===1?'Retorna amanhã!':`${dias} dias`}
+                </span>
+                <span style={{ color:'#6b8099', fontSize:11 }}>Fim: {new Date(p.ferias_fim+'T00:00:00').toLocaleDateString('pt-BR')}</span>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
       {semSecao.length > 0 && (
-        <div style={{ background:'#FFEBEE', border:'2px solid #EF9A9A', borderRadius:10, padding:'12px 16px', marginBottom:16 }}>
+        <div style={{ background:'#FFEBEE', border:'2px solid #EF9A9A', borderRadius:10, padding:'12px 16px', marginBottom:14 }}>
           <div style={{ fontWeight:800, color:'#B71C1C', fontSize:13, marginBottom:8 }}>⚠️ {semSecao.length} policial(is) sem seção definida:</div>
           <div style={{ display:'flex', flexWrap:'wrap', gap:6 }}>
             {semSecao.map(p => <span key={p.id} style={{ background:'#fff', color:'#B71C1C', borderRadius:6, padding:'2px 8px', fontSize:11, fontWeight:700, border:'1px solid #EF9A9A' }}>{p.patente} {p.nome}</span>)}
           </div>
         </div>
+      )}
+
+      {/* Insights */}
+      {aprovadas.length > 0 && (
+        <Card>
+          <h4 style={{ fontSize:13, fontWeight:800, color:'#1a3a5c', marginBottom:12 }}>🔍 Insights Automáticos</h4>
+          <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+            {diaCritico && (
+              <div style={{ background:'#FFEBEE', borderRadius:8, padding:'8px 12px', display:'flex', gap:8, alignItems:'center' }}>
+                <span style={{ fontSize:16 }}>🔴</span>
+                <span style={{ fontSize:13, color:'#B71C1C', fontWeight:700 }}>Dia crítico: <strong>{diaCritico.dia}</strong> com {diaCritico.Folgas+diaCritico.Concessões} folgas ({Math.round(((diaCritico.Folgas+diaCritico.Concessões)/totalAprovadas)*100)}% do total)</span>
+              </div>
+            )}
+            {desbalanceado && (
+              <div style={{ background:'#FFF8E1', borderRadius:8, padding:'8px 12px', display:'flex', gap:8, alignItems:'center' }}>
+                <span style={{ fontSize:16 }}>⚠️</span>
+                <span style={{ fontSize:13, color:'#7B5800', fontWeight:700 }}>Desbalanceamento detectado: distribuição irregular entre os dias da semana</span>
+              </div>
+            )}
+            {porSecao.length > 0 && (
+              <div style={{ background:'#E8F5E9', borderRadius:8, padding:'8px 12px', display:'flex', gap:8, alignItems:'center' }}>
+                <span style={{ fontSize:16 }}>📊</span>
+                <span style={{ fontSize:13, color:'#1B5E20', fontWeight:700 }}>Seção mais ativa: <strong>{porSecao[0].secao}</strong> ({Math.round((porSecao[0].total/totalAprovadas)*100)}% das folgas aprovadas)</span>
+              </div>
+            )}
+            <div style={{ background:'#E3F2FD', borderRadius:8, padding:'8px 12px', display:'flex', gap:8, alignItems:'center' }}>
+              <span style={{ fontSize:16 }}>📈</span>
+              <span style={{ fontSize:13, color:'#0D47A1', fontWeight:700 }}>Média de {mediaDia.toFixed(1)} folgas por dia da semana</span>
+            </div>
+          </div>
+        </Card>
+      )}
+
+      {/* Férias em andamento */}
+      {emFerias.length > 0 && (
+        <Card>
+          <h4 style={{ fontSize:13, fontWeight:800, color:'#1a3a5c', marginBottom:12 }}>🏖️ Policiais em Férias</h4>
+          {emFerias.map(p => {
+            const dias = diasParaRetorno(p.ferias_fim);
+            return (
+              <div key={p.id} style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'6px 0', borderBottom:'1px solid #f0f4f8', flexWrap:'wrap', gap:6 }}>
+                <span style={{ fontWeight:700, color:'#1a3a5c', fontSize:13 }}>{p.patente} {p.nome}</span>
+                <div style={{ display:'flex', gap:6, alignItems:'center' }}>
+                  <span style={{ color:'#6b8099', fontSize:12 }}>{p.ferias_inicio ? new Date(p.ferias_inicio+'T00:00:00').toLocaleDateString('pt-BR') : '—'} → {p.ferias_fim ? new Date(p.ferias_fim+'T00:00:00').toLocaleDateString('pt-BR') : '—'}</span>
+                  {dias !== null && dias >= 0 && <span style={{ background:dias<=3?'#B71C1C':'#1B5E20', color:'#fff', borderRadius:6, padding:'1px 8px', fontSize:11, fontWeight:800 }}>{dias===0?'Retorna hoje!':dias===1?'1 dia':`${dias} dias`}</span>}
+                  {dias !== null && dias < 0 && <span style={{ background:'#7B5800', color:'#fff', borderRadius:6, padding:'1px 8px', fontSize:11, fontWeight:800 }}>Vencido</span>}
+                </div>
+              </div>
+            );
+          })}
+        </Card>
       )}
 
       <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:10, marginBottom:20 }}>
@@ -284,21 +325,6 @@ function Dashboard({ solicitacoes, policiais }) {
         </div>
       </Card>
 
-      {aprovadas.length > 0 && (
-        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, marginBottom:10 }}>
-          <Card style={{ margin:0, textAlign:'center' }}>
-            <div style={{ fontSize:11, color:'#6b8099', fontWeight:700, marginBottom:4 }}>DIA MAIS SOLICITADO</div>
-            <div style={{ fontSize:20, fontWeight:900, color:'#1a3a5c' }}>{diaMais.dia}</div>
-            <div style={{ fontSize:12, color:'#6b8099' }}>{diaMais.Folgas+diaMais.Concessões} folgas</div>
-          </Card>
-          <Card style={{ margin:0, textAlign:'center' }}>
-            <div style={{ fontSize:11, color:'#6b8099', fontWeight:700, marginBottom:4 }}>SEÇÃO MAIS ATIVA</div>
-            <div style={{ fontSize:20, fontWeight:900, color:'#1a3a5c' }}>{secaoMais?secaoMais.secao:'—'}</div>
-            <div style={{ fontSize:12, color:'#6b8099' }}>{secaoMais?`${secaoMais.total} folgas`:''}</div>
-          </Card>
-        </div>
-      )}
-
       <Card>
         <h4 style={{ fontSize:13, fontWeight:800, color:'#1a3a5c', marginBottom:14 }}>Folgas aprovadas por dia da semana</h4>
         {aprovadas.length === 0 ? <p style={{ color:'#aab', fontSize:13 }}>Nenhuma folga aprovada ainda.</p>
@@ -316,19 +342,19 @@ function Dashboard({ solicitacoes, policiais }) {
       </Card>
 
       <Card>
-        <h4 style={{ fontSize:13, fontWeight:800, color:'#1a3a5c', marginBottom:14 }}>Folgas aprovadas por seção</h4>
+        <h4 style={{ fontSize:13, fontWeight:800, color:'#1a3a5c', marginBottom:14 }}>Distribuição por seção (%)</h4>
         {porSecao.length === 0 ? <p style={{ color:'#aab', fontSize:13 }}>Nenhuma folga aprovada ainda.</p>
           : <>
               <ResponsiveContainer width="100%" height={220}>
                 <PieChart>
-                  <Pie data={porSecao} dataKey="total" nameKey="secao" cx="50%" cy="50%" outerRadius={80} label={({ secao, total }) => `${secao}: ${total}`} labelLine={false} fontSize={10}>
+                  <Pie data={porSecao} dataKey="total" nameKey="secao" cx="50%" cy="50%" outerRadius={80} label={({ secao, total }) => `${secao} ${Math.round((total/totalAprovadas)*100)}%`} labelLine={false} fontSize={9}>
                     {porSecao.map((_,i) => <Cell key={i} fill={CORES_GRAFICO[i%CORES_GRAFICO.length]} />)}
                   </Pie>
-                  <Tooltip />
+                  <Tooltip formatter={(v,n) => [`${v} folgas (${Math.round((v/totalAprovadas)*100)}%)`, n]} />
                 </PieChart>
               </ResponsiveContainer>
               <div style={{ display:'flex', flexWrap:'wrap', gap:6, marginTop:8 }}>
-                {porSecao.map((s,i) => <span key={s.secao} style={{ background:CORES_GRAFICO[i%CORES_GRAFICO.length], color:'#fff', borderRadius:6, padding:'2px 8px', fontSize:11, fontWeight:700 }}>{s.secao}: {s.total}</span>)}
+                {porSecao.map((s,i) => <span key={s.secao} style={{ background:CORES_GRAFICO[i%CORES_GRAFICO.length], color:'#fff', borderRadius:6, padding:'2px 8px', fontSize:11, fontWeight:700 }}>{s.secao}: {s.total} ({Math.round((s.total/totalAprovadas)*100)}%)</span>)}
               </div>
             </>
         }
@@ -611,6 +637,7 @@ function TelaGestor({ gestorLogado }) {
     .filter(s => filtroMotivo === 'todos' || s.motivo === filtroMotivo);
 
   const semSecao = policiais.filter(p => !p.secao || p.secao === '');
+  const retornosProximos = policiais.filter(p => p.situacao === 'Férias' && p.ferias_fim && diasParaRetorno(p.ferias_fim) !== null && diasParaRetorno(p.ferias_fim) <= 3 && diasParaRetorno(p.ferias_fim) >= 0);
 
   const policiaisfiltrados = policiais.filter(p => {
     const buscaOk = p.nome.toLowerCase().includes(busca.toLowerCase()) || p.matricula.includes(busca);
@@ -707,6 +734,23 @@ function TelaGestor({ gestorLogado }) {
 
   return (
     <div>
+      {/* Alerta de retorno de férias no topo */}
+      {retornosProximos.length > 0 && (
+        <div style={{ background:'#FFF3E0', border:'2px solid #FFB74D', borderRadius:10, padding:'12px 16px', marginBottom:14 }}>
+          <div style={{ fontWeight:800, color:'#E65100', fontSize:13, marginBottom:8 }}>⏰ Férias encerrando em até 3 dias:</div>
+          {retornosProximos.map(p => {
+            const dias = diasParaRetorno(p.ferias_fim);
+            return (
+              <div key={p.id} style={{ display:'flex', gap:8, alignItems:'center', marginBottom:4, flexWrap:'wrap' }}>
+                <span style={{ fontWeight:700, color:'#1a3a5c', fontSize:12 }}>{p.patente} {p.nome}</span>
+                <span style={{ background:dias===0?'#B71C1C':dias<=1?'#E65100':'#F9A825', color:'#fff', borderRadius:6, padding:'1px 8px', fontSize:11, fontWeight:800 }}>{dias===0?'Retorna hoje!':dias===1?'Retorna amanhã!':`${dias} dias`}</span>
+                <span style={{ color:'#6b8099', fontSize:11 }}>Fim: {new Date(p.ferias_fim+'T00:00:00').toLocaleDateString('pt-BR')}</span>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
       <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:10, marginBottom:18 }}>
         {[{l:'Total',v:stats.total,c:'#1a3a5c'},{l:'Pendentes',v:stats.pendentes,c:'#7B5800'},{l:'Aprovadas',v:stats.aprovadas,c:'#1B5E20'},{l:'Recusadas',v:stats.recusadas,c:'#B71C1C'}]
           .map(s => <div key={s.l} style={{ background:'#fff', borderRadius:10, padding:'12px 8px', boxShadow:'0 2px 8px #00000012', textAlign:'center' }}><div style={{ fontSize:24, fontWeight:900, color:s.c }}>{s.v}</div><div style={{ fontSize:11, color:'#6b8099', fontWeight:700 }}>{s.l}</div></div>)}
@@ -781,8 +825,8 @@ function TelaGestor({ gestorLogado }) {
           {semSecao.length > 0 && (
             <div style={{ background:'#FFEBEE', border:'2px solid #EF9A9A', borderRadius:10, padding:'12px 16px', marginBottom:14 }}>
               <div style={{ fontWeight:800, color:'#B71C1C', fontSize:13, marginBottom:6 }}>⚠️ {semSecao.length} policial(is) sem seção definida</div>
-              <button onClick={() => setFiltroBuscaEfetivo(filtroBuscaEfetivo === 'sem_secao' ? 'todos' : 'sem_secao')} style={{ ...btnSm, background:'#B71C1C', color:'#fff' }}>
-                {filtroBuscaEfetivo === 'sem_secao' ? 'Ver todos' : 'Ver só sem seção'}
+              <button onClick={() => setFiltroBuscaEfetivo(filtroBuscaEfetivo==='sem_secao'?'todos':'sem_secao')} style={{ ...btnSm, background:'#B71C1C', color:'#fff' }}>
+                {filtroBuscaEfetivo==='sem_secao'?'Ver todos':'Ver só sem seção'}
               </button>
             </div>
           )}
@@ -808,7 +852,7 @@ function TelaGestor({ gestorLogado }) {
           <input value={busca} onChange={e => setBusca(e.target.value)} placeholder="🔍 Buscar por nome ou matrícula..." style={{ ...inp, marginBottom:10 }} />
           <p style={{ color:'#6b8099', fontSize:12, marginBottom:10 }}>{policiaisfiltrados.length} policial(is)</p>
           {policiaisfiltrados.map(p => (
-            <Card key={p.id} style={{ padding:'12px 16px', border: (!p.secao || p.secao === '') ? '2px solid #EF9A9A' : 'none' }}>
+            <Card key={p.id} style={{ padding:'12px 16px', border:(!p.secao||p.secao==='')?'2px solid #EF9A9A':'none' }}>
               <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', gap:10, flexWrap:'wrap' }}>
                 <div style={{ flex:1 }}>
                   <div style={{ fontWeight:800, color:'#1a3a5c', fontSize:13 }}>{p.patente} {p.nome}</div>
@@ -836,6 +880,24 @@ function TelaGestor({ gestorLogado }) {
                       </select>
                     </div>
                   </div>
+                  {/* Campos de férias */}
+                  {(p.situacao === 'Férias') && (
+                    <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:6, marginTop:8, background:'#FFF8E1', borderRadius:8, padding:'10px' }}>
+                      <div><label style={{ ...lbl, fontSize:10 }}>Início das Férias</label>
+                        <input type="date" value={p.ferias_inicio||''} onChange={e => atualizarPolicial(p.id,'ferias_inicio',e.target.value)} style={{ ...inp, fontSize:12, padding:'6px 8px' }} />
+                      </div>
+                      <div><label style={{ ...lbl, fontSize:10 }}>Fim das Férias</label>
+                        <input type="date" value={p.ferias_fim||''} onChange={e => atualizarPolicial(p.id,'ferias_fim',e.target.value)} style={{ ...inp, fontSize:12, padding:'6px 8px' }} />
+                      </div>
+                      {p.ferias_fim && diasParaRetorno(p.ferias_fim) !== null && (
+                        <div style={{ gridColumn:'1/-1' }}>
+                          <span style={{ background:diasParaRetorno(p.ferias_fim)<=3?'#B71C1C':'#1B5E20', color:'#fff', borderRadius:6, padding:'2px 10px', fontSize:12, fontWeight:800 }}>
+                            {diasParaRetorno(p.ferias_fim)===0?'Retorna hoje!':diasParaRetorno(p.ferias_fim)<0?'Férias vencidas!':diasParaRetorno(p.ferias_fim)<=3?`⚠️ Retorna em ${diasParaRetorno(p.ferias_fim)} dias`:`Retorna em ${diasParaRetorno(p.ferias_fim)} dias`}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  )}
                   <div style={{ marginTop:8, display:'flex', gap:6, flexWrap:'wrap', alignItems:'center' }}>
                     <SSBadge ss={p.sit_sanitaria||'Apto A'} />
                     <SituacaoBadge situacao={p.situacao||'Pronto'} />
