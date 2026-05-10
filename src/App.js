@@ -531,18 +531,26 @@ function LoginPolicial({ onLogin }) {
   const [novaSenha, setNovaSenha] = useState('');
   const [confirmarSenha, setConfirmarSenha] = useState('');
   const [carregando, setCarregando] = useState(true);
+  const [mostrarSugestoes, setMostrarSugestoes] = useState(false);
 
   useEffect(() => {
     supabase.from('policiais').select('*').order('nome')
       .then(({ data }) => { setPoliciais(data || []); setCarregando(false); });
   }, []);
 
-  const policiaisFiltrados = policiais.filter(p =>
-    p.nome.toLowerCase().includes(buscaLogin.toLowerCase()) || p.matricula.includes(buscaLogin)
-  );
+  const policiaisFiltrados = buscaLogin.length >= 2
+    ? policiais.filter(p => p.nome.toLowerCase().includes(buscaLogin.toLowerCase()) || p.matricula.includes(buscaLogin)).slice(0, 8)
+    : [];
+
+  function selecionarPolicial(p) {
+    setPolicialSel(p);
+    setBuscaLogin(p.nome);
+    setMostrarSugestoes(false);
+    setErro('');
+  }
 
   async function entrar() {
-    if (!policialSel) { setErro('Selecione seu nome.'); return; }
+    if (!policialSel) { setErro('Selecione seu nome na lista.'); return; }
     if (!senha) { setErro('Digite sua senha.'); return; }
     if (!policialSel.senha) { setModo('cadastrar'); return; }
     if (policialSel.senha !== senha) { setErro('Senha incorreta.'); return; }
@@ -574,25 +582,52 @@ function LoginPolicial({ onLogin }) {
     <div style={{ background:'#fff', borderRadius:14, padding:22, boxShadow:'0 4px 20px #00000012' }}>
       <div style={{ fontSize:30, marginBottom:10 }}>👮</div>
       <h2 style={{ color:'#1a3a5c', fontWeight:800, fontSize:15, marginBottom:4 }}>Sou Policial</h2>
-      <p style={{ color:'#6b8099', fontSize:12, marginBottom:14 }}>Selecione seu nome e digite sua senha</p>
-      <label style={lbl}>Buscar pelo nome</label>
-      <input value={buscaLogin} onChange={e => { setBuscaLogin(e.target.value); setPolicialSel(null); }} placeholder="Digite seu nome..." style={{ ...inp, marginBottom:8 }} />
-      <label style={lbl}>Selecione seu nome</label>
-      {carregando ? <p style={{ color:'#aab', fontSize:13 }}>Carregando...</p> :
-        <select onChange={e => { const p = policiais.find(p => p.id === Number(e.target.value)); setPolicialSel(p||null); setErro(''); }} value={policialSel?.id||''} style={{ ...inp, marginBottom:10 }}>
-          <option value="" disabled>— Selecionar —</option>
-          {policiaisFiltrados.map(p => <option key={p.id} value={p.id}>{p.patente} {p.nome}</option>)}
-        </select>
-      }
+      <p style={{ color:'#6b8099', fontSize:12, marginBottom:14 }}>Digite seu nome e selecione na lista</p>
+      <label style={lbl}>Buscar pelo nome ou matrícula</label>
+      <div style={{ position:'relative', marginBottom:10 }}>
+        <input
+          value={buscaLogin}
+          onChange={e => { setBuscaLogin(e.target.value); setPolicialSel(null); setMostrarSugestoes(true); }}
+          onFocus={() => setMostrarSugestoes(true)}
+          onBlur={() => setTimeout(() => setMostrarSugestoes(false), 200)}
+          placeholder="Digite seu nome..."
+          style={{ ...inp }}
+          autoComplete="off"
+        />
+        {mostrarSugestoes && policiaisFiltrados.length > 0 && (
+          <div style={{ position:'absolute', top:'100%', left:0, right:0, background:'#fff', border:'1.5px solid #d0dce8', borderRadius:8, boxShadow:'0 4px 16px #00000020', zIndex:100, maxHeight:240, overflowY:'auto' }}>
+            {carregando ? (
+              <div style={{ padding:'10px 14px', color:'#aab', fontSize:13 }}>Carregando...</div>
+            ) : (
+              policiaisFiltrados.map(p => (
+                <div
+                  key={p.id}
+                  onMouseDown={() => selecionarPolicial(p)}
+                  style={{ padding:'10px 14px', cursor:'pointer', borderBottom:'1px solid #f0f4f8', fontSize:13, color:'#1a3a5c', fontWeight: policialSel?.id === p.id ? 800 : 400, background: policialSel?.id === p.id ? '#f0f6ff' : '#fff' }}
+                  onMouseEnter={e => e.currentTarget.style.background='#f0f6ff'}
+                  onMouseLeave={e => e.currentTarget.style.background= policialSel?.id === p.id ? '#f0f6ff' : '#fff'}
+                >
+                  <div>{p.patente} {p.nome}</div>
+                  <div style={{ fontSize:11, color:'#6b8099' }}>Mat. {p.matricula} — {p.secao||'Sem seção'}</div>
+                </div>
+              ))
+            )}
+          </div>
+        )}
+      </div>
+      {policialSel && (
+        <div style={{ background:'#f0f6ff', borderRadius:8, padding:'8px 12px', marginBottom:10, fontSize:12, color:'#1a3a5c', fontWeight:700 }}>
+          ✅ {policialSel.patente} {policialSel.nome} — Mat. {policialSel.matricula}
+        </div>
+      )}
       <label style={lbl}>Senha (4 números)</label>
       <input type="password" maxLength={4} value={senha} onChange={e => setSenha(e.target.value)} onKeyDown={e => e.key==='Enter'&&entrar()} placeholder="••••" style={{ ...inp, marginBottom:6 }} />
       {erro && <p style={{ color:'#B71C1C', fontSize:12, marginBottom:6 }}>{erro}</p>}
       <button onClick={entrar} style={btnPrimary}>Entrar</button>
-      <p style={{ color:'#aab', fontSize:11, marginTop:8, textAlign:'center' }}>Primeiro acesso? Selecione seu nome e clique em Entrar.</p>
+      <p style={{ color:'#aab', fontSize:11, marginTop:8, textAlign:'center' }}>Primeiro acesso? Digite seu nome, selecione e clique em Entrar.</p>
     </div>
   );
 }
-
 function TelaSolicitacao({ usuario }) {
   const [dia, setDia] = useState(null);
   const [semana, setSemana] = useState('');
