@@ -763,6 +763,10 @@ function TelaGestor({ gestorLogado }) {
   const [semanaAtual, setSemanaAtual] = useState(() => getInicioSemana(new Date()));
   const [busca, setBusca] = useState('');
   const [filtroBuscaEfetivo, setFiltroBuscaEfetivo] = useState('todos');
+  const [filtroEfSeção, setFiltroEfSeção] = useState('todas');
+const [filtroEfSit, setFiltroEfSit] = useState('todas');
+const [filtroEfSS, setFiltroEfSS] = useState('todas');
+const [filtroEfRest, setFiltroEfRest] = useState('todas');
   const [novoNome, setNovoNome] = useState('');
   const [novaMatricula, setNovaMatricula] = useState('');
   const [novaPatente, setNovaPatente] = useState('3º SGT PM');
