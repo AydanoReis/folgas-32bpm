@@ -384,7 +384,6 @@ function Dashboard({ solicitacoes, policiais, onAtualizarPolicial, onRemoverPoli
   const desbalanceado = maxDia > 0 && (maxDia - Math.min(...totalPorDia.filter(v=>v>0))) >= 3;
   const semSecao = policiais.filter(p => !p.secao || p.secao === '');
   const retornosProximos = policiais.filter(p => p.situacao === 'Férias' && p.ferias_fim && diasParaRetorno(p.ferias_fim) !== null && diasParaRetorno(p.ferias_fim) <= 3 && diasParaRetorno(p.ferias_fim) >= 0);
-  const emFerias = policiais.filter(p => p.situacao === 'Férias' && p.ferias_fim);
 
   // SS com destaque para Apto A com restrição
   const aptoAComRestricao = policiais.filter(p => (p.sit_sanitaria||'Apto A') === 'Apto A' && temRestricao(p));
