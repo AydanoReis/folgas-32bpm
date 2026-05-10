@@ -660,8 +660,8 @@ function TelaSolicitacao({ usuario }) {
             <div style={{ display:'flex', gap:6, flexWrap:'wrap', marginBottom:16 }}>
               {DIAS.map(d => <button key={d} onClick={() => setDia(d)} style={{ padding:'7px 11px', borderRadius:8, fontWeight:700, fontSize:13, cursor:'pointer', background:dia===d?'#1a3a5c':'#f0f4f8', color:dia===d?'#fff':'#2d4a63', border:dia===d?'2px solid #1a3a5c':'2px solid transparent' }}>{d}</button>)}
             </div>
-            <label style={lbl}>Data de referência *</label>
-            <input type="date" value={semana} onChange={e => setSemana(e.target.value)} style={{ ...inp, marginBottom:14 }} />
+<label style={lbl}>Semana de referência *</label>
+                <input type="date" value={semana} onChange={e => setSemana(e.target.value)} style={{ ...inp, marginBottom:14 }} />
             <label style={lbl}>Seu email *</label>
             <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="seu.email@gmail.com" style={{ ...inp, marginBottom:6 }} />
             {msg && <div style={{ padding:'10px 14px', borderRadius:8, marginTop:10, fontWeight:600, background:msg.tipo==='ok'?'#E8F5E9':'#FFEBEE', color:msg.tipo==='ok'?'#1B5E20':'#B71C1C' }}>{msg.texto}</div>}
