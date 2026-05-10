@@ -1,0 +1,21 @@
+{
+  "name": "32º BPM — Controle de Folgas",
+  "short_name": "Folgas 32BPM",
+  "description": "Sistema de controle de folgas do 32º BPM PCSV",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0d2340",
+  "theme_color": "#1a3a5c",
+  "icons": [
+    {
+      "src": "/logo.jpeg",
+      "sizes": "192x192",
+      "type": "image/jpeg"
+    },
+    {
+      "src": "/logo.jpeg",
+      "sizes": "512x512",
+      "type": "image/jpeg"
+    }
+  ]
+}
