@@ -618,6 +618,18 @@ function TelaSolicitacao({ usuario }) {
     if (naoProto) return;
     if (!dia || !semana || !motivo) { setMsg({ tipo:'erro', texto:'Selecione o tipo, o dia e a data.' }); return; }
     if (!email || !email.includes('@')) { setMsg({ tipo:'erro', texto:'Informe um email válido.' }); return; }
+
+    // Verificar duplicidade
+    const jaExiste = minhas.find(s =>
+      s.semana === semana &&
+      s.motivo === motivo &&
+      s.status !== 'recusado'
+    );
+    if (jaExiste) {
+      setMsg({ tipo:'erro', texto:`Você já possui uma ${motivo} solicitada para esta semana.` });
+      return;
+    }
+
     setEnviando(true);
     const { error } = await supabase.from('solicitacoes').insert({ policial_id:usuario.id, policial_nome:usuario.nome, matricula:usuario.matricula, patente:usuario.patente, secao:usuario.secao||'—', dia, semana, motivo, status:'pendente', email_policial:email });
     setEnviando(false);
