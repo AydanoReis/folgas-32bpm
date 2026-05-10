@@ -42,11 +42,8 @@ function Spinner() {
 function gerarPDF(solicitacoes) {
   const aprovadas = solicitacoes.filter(s => s.status === 'aprovado');
   if (aprovadas.length === 0) { alert('Nenhuma folga aprovada para gerar relatório.'); return; }
-
   const doc = new jsPDF();
   const pageW = doc.internal.pageSize.getWidth();
-
-  // Cabeçalho
   doc.setFillColor(13, 35, 64);
   doc.rect(0, 0, pageW, 28, 'F');
   doc.setTextColor(255, 255, 255);
@@ -56,24 +53,14 @@ function gerarPDF(solicitacoes) {
   doc.setFontSize(10);
   doc.setFont('helvetica', 'normal');
   doc.text(`PCSV · Expediente Semanal · Gerado em ${new Date().toLocaleDateString('pt-BR')}`, pageW / 2, 21, { align: 'center' });
-
   let y = 35;
   doc.setTextColor(0, 0, 0);
-
-  // Por dia da semana
   DIAS.forEach(dia => {
     const dodia = aprovadas.filter(s => s.dia === dia);
     if (dodia.length === 0) return;
-
-    // Agrupa por seção
     const porSecao = {};
-    dodia.forEach(s => {
-      if (!porSecao[s.secao]) porSecao[s.secao] = [];
-      porSecao[s.secao].push(s);
-    });
-
+    dodia.forEach(s => { if (!porSecao[s.secao]) porSecao[s.secao] = []; porSecao[s.secao].push(s); });
     if (y > 250) { doc.addPage(); y = 20; }
-
     doc.setFillColor(30, 77, 123);
     doc.rect(10, y, pageW - 20, 8, 'F');
     doc.setTextColor(255, 255, 255);
@@ -81,11 +68,9 @@ function gerarPDF(solicitacoes) {
     doc.setFont('helvetica', 'bold');
     doc.text(dia.toUpperCase() + '-FEIRA', 14, y + 5.5);
     y += 10;
-
     doc.setTextColor(0, 0, 0);
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(9);
-
     Object.entries(porSecao).forEach(([secao, pols]) => {
       if (y > 270) { doc.addPage(); y = 20; }
       const nomes = pols.map(p => `${p.patente} ${p.policial_nome} (${p.motivo})`).join(', ');
@@ -96,13 +81,9 @@ function gerarPDF(solicitacoes) {
       doc.text(linhas, 40, y);
       y += linhas.length * 5 + 2;
     });
-
     y += 4;
   });
-
-  // Resumo por seção e dia
   if (y > 200) { doc.addPage(); y = 20; }
-
   doc.setFillColor(13, 35, 64);
   doc.rect(10, y, pageW - 20, 8, 'F');
   doc.setTextColor(255, 255, 255);
@@ -110,28 +91,74 @@ function gerarPDF(solicitacoes) {
   doc.setFont('helvetica', 'bold');
   doc.text('RESUMO GERAL POR SEÇÃO E DIA', 14, y + 5.5);
   y += 12;
-
   const todasSecoes = [...new Set(aprovadas.map(s => s.secao))].sort();
   const head = [['Seção', ...DIAS.map(d => d.substring(0,3))]];
-  const body = todasSecoes.map(secao => {
-    return [secao, ...DIAS.map(dia => {
-      const count = aprovadas.filter(s => s.secao === secao && s.dia === dia).length;
-      return count > 0 ? String(count) : '-';
-    })];
-  });
-
-  doc.autoTable({
-    startY: y,
-    head,
-    body,
-    theme: 'grid',
-    headStyles: { fillColor: [30, 77, 123], textColor: 255, fontStyle: 'bold', fontSize: 8 },
-    bodyStyles: { fontSize: 8 },
-    columnStyles: { 0: { fontStyle: 'bold' } },
-    margin: { left: 10, right: 10 },
-  });
-
+  const body = todasSecoes.map(secao => [secao, ...DIAS.map(dia => { const count = aprovadas.filter(s => s.secao === secao && s.dia === dia).length; return count > 0 ? String(count) : '-'; })]);
+  doc.autoTable({ startY: y, head, body, theme: 'grid', headStyles: { fillColor: [30, 77, 123], textColor: 255, fontStyle: 'bold', fontSize: 8 }, bodyStyles: { fontSize: 8 }, columnStyles: { 0: { fontStyle: 'bold' } }, margin: { left: 10, right: 10 } });
   doc.save(`relatorio-folgas-32bpm-${new Date().toLocaleDateString('pt-BR').replace(/\//g,'-')}.pdf`);
+}
+
+// ── TELA LOGIN POLICIAL ───────────────────────────────────────────────────────
+function LoginPolicial({ onLogin }) {
+  const [matricula, setMatricula] = useState('');
+  const [senha, setSenha] = useState('');
+  const [erro, setErro] = useState('');
+  const [modo, setModo] = useState('login'); // login | cadastrar
+  const [novaSenha, setNovaSenha] = useState('');
+  const [confirmarSenha, setConfirmarSenha] = useState('');
+  const [policial, setPolicial] = useState(null);
+  const [buscando, setBuscando] = useState(false);
+
+  async function entrar() {
+    if (!matricula || !senha) { setErro('Preencha matrícula e senha.'); return; }
+    setBuscando(true);
+    const { data } = await supabase.from('policiais').select('*').eq('matricula', matricula).single();
+    setBuscando(false);
+    if (!data) { setErro('Matrícula não encontrada.'); return; }
+    if (!data.senha) {
+      setPolicial(data);
+      setModo('cadastrar');
+      return;
+    }
+    if (data.senha !== senha) { setErro('Senha incorreta.'); return; }
+    onLogin(data);
+  }
+
+  async function cadastrarSenha() {
+    if (novaSenha.length !== 4 || isNaN(novaSenha)) { setErro('A senha deve ter exatamente 4 números.'); return; }
+    if (novaSenha !== confirmarSenha) { setErro('As senhas não coincidem.'); return; }
+    await supabase.from('policiais').update({ senha: novaSenha }).eq('id', policial.id);
+    onLogin({ ...policial, senha: novaSenha });
+  }
+
+  if (modo === 'cadastrar') return (
+    <div style={{ background:'#fff', borderRadius:14, padding:22, boxShadow:'0 4px 20px #00000012' }}>
+      <div style={{ fontSize:30, marginBottom:10 }}>🔐</div>
+      <h2 style={{ color:'#1a3a5c', fontWeight:800, fontSize:15, marginBottom:4 }}>Primeiro acesso</h2>
+      <p style={{ color:'#6b8099', fontSize:12, marginBottom:16 }}>Olá, <strong>{policial.nome}</strong>! Cadastre uma senha de 4 números para acessar o sistema.</p>
+      <label style={lbl}>Nova senha (4 números)</label>
+      <input type="password" maxLength={4} value={novaSenha} onChange={e=>setNovaSenha(e.target.value)} placeholder="••••" style={{ ...inp, marginBottom:10 }} />
+      <label style={lbl}>Confirmar senha</label>
+      <input type="password" maxLength={4} value={confirmarSenha} onChange={e=>setConfirmarSenha(e.target.value)} placeholder="••••" style={{ ...inp, marginBottom:6 }} />
+      {erro && <p style={{ color:'#B71C1C', fontSize:12, marginBottom:6 }}>{erro}</p>}
+      <button onClick={cadastrarSenha} style={btnPrimary}>Cadastrar Senha e Entrar</button>
+    </div>
+  );
+
+  return (
+    <div style={{ background:'#fff', borderRadius:14, padding:22, boxShadow:'0 4px 20px #00000012' }}>
+      <div style={{ fontSize:30, marginBottom:10 }}>👮</div>
+      <h2 style={{ color:'#1a3a5c', fontWeight:800, fontSize:15, marginBottom:4 }}>Sou Policial</h2>
+      <p style={{ color:'#6b8099', fontSize:12, marginBottom:14 }}>Digite sua matrícula e senha para entrar</p>
+      <label style={lbl}>Matrícula</label>
+      <input value={matricula} onChange={e=>setMatricula(e.target.value)} placeholder="Ex.: 75708" style={{ ...inp, marginBottom:10 }} />
+      <label style={lbl}>Senha (4 números)</label>
+      <input type="password" maxLength={4} value={senha} onChange={e=>setSenha(e.target.value)} onKeyDown={e=>e.key==='Enter'&&entrar()} placeholder="••••" style={{ ...inp, marginBottom:6 }} />
+      {erro && <p style={{ color:'#B71C1C', fontSize:12, marginBottom:6 }}>{erro}</p>}
+      <button onClick={entrar} disabled={buscando} style={{ ...btnPrimary, opacity:buscando?0.7:1 }}>{buscando?'Verificando...':'Entrar'}</button>
+      <p style={{ color:'#aab', fontSize:11, marginTop:8, textAlign:'center' }}>Primeiro acesso? Digite sua matrícula e qualquer senha — o sistema vai pedir para cadastrar.</p>
+    </div>
+  );
 }
 
 function TelaSolicitacao({ usuario }) {
@@ -155,7 +182,7 @@ function TelaSolicitacao({ usuario }) {
 
   async function enviar() {
     if (!dia || !semana || !motivo) { setMsg({ tipo:'erro', texto:'Selecione o tipo, o dia e a data.' }); return; }
-    if (!email || !email.includes('@')) { setMsg({ tipo:'erro', texto:'Informe um email válido para receber a confirmação.' }); return; }
+    if (!email || !email.includes('@')) { setMsg({ tipo:'erro', texto:'Informe um email válido.' }); return; }
     setEnviando(true);
     const { error } = await supabase.from('solicitacoes').insert({
       policial_id: usuario.id, policial_nome: usuario.nome, matricula: usuario.matricula,
@@ -187,7 +214,6 @@ function TelaSolicitacao({ usuario }) {
           {usuario.secao ? <span style={{ background:'#e8f0fe', color:'#3d5a9e', borderRadius:6, padding:'2px 9px', fontSize:12, fontWeight:700 }}>{usuario.secao}</span>
             : <span style={{ background:'#fff3cd', color:'#856404', borderRadius:6, padding:'2px 9px', fontSize:12, fontWeight:700 }}>Seção não definida</span>}
         </div>
-
         <label style={lbl}>Tipo de solicitação *</label>
         <div style={{ display:'flex', gap:10, marginBottom:16 }}>
           {MOTIVOS.map(m => (
@@ -199,7 +225,6 @@ function TelaSolicitacao({ usuario }) {
             }}>{m === 'Folga' ? '🌙 Folga' : '🎖️ Concessão'}</button>
           ))}
         </div>
-
         <label style={lbl}>Dia da semana *</label>
         <div style={{ display:'flex', gap:6, flexWrap:'wrap', marginBottom:16 }}>
           {DIAS.map(d => (
@@ -210,17 +235,13 @@ function TelaSolicitacao({ usuario }) {
             }}>{d}</button>
           ))}
         </div>
-
         <label style={lbl}>Data de referência *</label>
         <input type="date" value={semana} onChange={e => setSemana(e.target.value)} style={{ ...inp, marginBottom:14 }} />
-
         <label style={lbl}>Seu email para receber confirmação *</label>
         <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="seu.email@gmail.com" style={{ ...inp, marginBottom:6 }} />
-
         {msg && <div style={{ padding:'10px 14px', borderRadius:8, marginTop:10, fontWeight:600, background:msg.tipo==='ok'?'#E8F5E9':'#FFEBEE', color:msg.tipo==='ok'?'#1B5E20':'#B71C1C' }}>{msg.texto}</div>}
         <button onClick={enviar} disabled={enviando} style={{ ...btnPrimary, opacity:enviando?0.7:1 }}>{enviando ? 'Enviando...' : 'Enviar Solicitação'}</button>
       </Card>
-
       <h3 style={{ fontSize:15, fontWeight:800, color:'#1a3a5c', margin:'22px 0 10px' }}>Minhas Solicitações</h3>
       {loading ? <Spinner /> : minhas.length === 0
         ? <p style={{ color:'#aab', fontSize:13 }}>Nenhuma solicitação registrada.</p>
@@ -288,17 +309,13 @@ function TelaGestor({ gestorLogado }) {
     await supabase.from('solicitacoes').update({ status }).eq('id', id);
     setSolicitacoes(prev => prev.map(s => s.id === id ? { ...s, status } : s));
     const sol = solicitacoes.find(s => s.id === id);
-    if (sol && sol.email_policial) {
+    if (sol && sol.email_policial && status !== 'pendente') {
       emailjs.init(EMAILJS_PUBLIC_KEY);
       emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, {
-        email: sol.email_policial,
-        nome: sol.policial_nome,
-        motivo: sol.motivo,
-        dia: sol.dia,
-        semana: sol.semana,
+        email: sol.email_policial, nome: sol.policial_nome, motivo: sol.motivo,
+        dia: sol.dia, semana: sol.semana,
         status: status === 'aprovado' ? '✅ APROVADA' : '❌ RECUSADA',
-        secao: sol.secao,
-        matricula: sol.matricula,
+        secao: sol.secao, matricula: sol.matricula,
       });
     }
   }
@@ -309,9 +326,15 @@ function TelaGestor({ gestorLogado }) {
     setSolicitacoes(prev => prev.filter(s => s.id !== id));
   }
 
+  async function resetarSenhaPolicial(id, nome) {
+    if (!window.confirm(`Resetar a senha de ${nome}? O policial precisará criar uma nova senha no próximo acesso.`)) return;
+    await supabase.from('policiais').update({ senha: '' }).eq('id', id);
+    alert('Senha resetada com sucesso!');
+  }
+
   async function adicionarPolicial() {
     if (!novoNome.trim() || !novaMatricula.trim() || !novaSecao) return;
-    const { data, error } = await supabase.from('policiais').insert({ nome: novoNome.toUpperCase(), matricula: novaMatricula, patente: novaPatente, secao: novaSecao }).select().single();
+    const { data, error } = await supabase.from('policiais').insert({ nome: novoNome.toUpperCase(), matricula: novaMatricula, patente: novaPatente, secao: novaSecao, senha: '' }).select().single();
     if (!error && data) setPoliciais(prev => [...prev, data].sort((a,b) => a.nome.localeCompare(b.nome)));
     setNovoNome(''); setNovaMatricula(''); setNovaPatente('3º SGT PM'); setNovaSecao('');
   }
@@ -392,16 +415,13 @@ function TelaGestor({ gestorLogado }) {
         {[{l:'Total',v:stats.total,c:'#1a3a5c'},{l:'Pendentes',v:stats.pendentes,c:'#7B5800'},{l:'Aprovadas',v:stats.aprovadas,c:'#1B5E20'},{l:'Recusadas',v:stats.recusadas,c:'#B71C1C'}]
           .map(s => <div key={s.l} style={{ background:'#fff', borderRadius:10, padding:'12px 8px', boxShadow:'0 2px 8px #00000012', textAlign:'center' }}><div style={{ fontSize:24, fontWeight:900, color:s.c }}>{s.v}</div><div style={{ fontSize:11, color:'#6b8099', fontWeight:700 }}>{s.l}</div></div>)}
       </div>
-
       <div style={{ display:'flex', gap:6, marginBottom:18, flexWrap:'wrap' }}>
         {ABAS.map(a => <button key={a.id} onClick={() => setAba(a.id)} style={{ padding:'8px 16px', borderRadius:8, fontWeight:700, cursor:'pointer', background:aba===a.id?'#1a3a5c':'#f0f4f8', color:aba===a.id?'#fff':'#2d4a63', border:'none', fontSize:13 }}>{a.label}</button>)}
       </div>
 
       {aba === 'solicitacoes' && (
         <>
-          <button onClick={() => gerarPDF(solicitacoes)} style={{ ...btnPrimary, marginTop:0, marginBottom:14, background:'linear-gradient(135deg,#1B5E20,#2E7D32)' }}>
-            📄 Gerar Relatório PDF
-          </button>
+          <button onClick={() => gerarPDF(solicitacoes)} style={{ ...btnPrimary, marginTop:0, marginBottom:14, background:'linear-gradient(135deg,#1B5E20,#2E7D32)' }}>📄 Gerar Relatório PDF</button>
           <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8, marginBottom:14 }}>
             <select value={filtroStatus} onChange={e => setFiltroStatus(e.target.value)} style={inp}>
               <option value="todos">Todos os status</option>
@@ -447,9 +467,9 @@ function TelaGestor({ gestorLogado }) {
                 {s.status === 'recusado' && (
                   <button onClick={() => excluirSolicitacao(s.id)} style={{ ...btnSm, background:'#FFEBEE', color:'#B71C1C', marginTop:8 }}>🗑️ Excluir</button>
                 )}
-                  {s.status === 'aprovado' && (
-  <button onClick={() => mudarStatus(s.id,'pendente')} style={{ ...btnSm, background:'#FFF8E1', color:'#7B5800', marginTop:8 }}>↩️ Revogar aprovação</button>
-)}
+                {s.status === 'aprovado' && (
+                  <button onClick={() => mudarStatus(s.id,'pendente')} style={{ ...btnSm, background:'#FFF8E1', color:'#7B5800', marginTop:8 }}>↩️ Revogar aprovação</button>
+                )}
               </Card>
             ))
           }
@@ -485,11 +505,12 @@ function TelaGestor({ gestorLogado }) {
                 <div style={{ flex:1 }}>
                   <div style={{ fontWeight:800, color:'#1a3a5c', fontSize:13 }}>{p.patente} {p.nome}</div>
                   <div style={{ color:'#6b8099', fontSize:12, marginTop:2 }}>Mat. {p.matricula}</div>
-                  <div style={{ marginTop:8 }}>
+                  <div style={{ display:'flex', gap:8, marginTop:8, flexWrap:'wrap', alignItems:'center' }}>
                     <select value={p.secao || ''} onChange={e => editarSecao(p.id, e.target.value)} style={{ ...inp, fontSize:12, padding:'6px 10px', width:'auto', minWidth:180 }}>
                       <option value="">— Seção não definida —</option>
                       {SECOES.map(s => <option key={s}>{s}</option>)}
                     </select>
+                    <button onClick={() => resetarSenhaPolicial(p.id, p.nome)} style={{ ...btnSm, background:'#FFF8E1', color:'#7B5800' }}>🔑 Resetar senha</button>
                   </div>
                 </div>
                 <button onClick={() => removerPolicial(p.id)} style={{ ...btnSm, background:'#FFEBEE', color:'#B71C1C', marginTop:4 }}>Remover</button>
@@ -549,16 +570,8 @@ export default function App() {
   const [modo, setModo] = useState('login');
   const [usuarioSel, setUsuarioSel] = useState(null);
   const [gestorLogado, setGestorLogado] = useState(null);
-  const [policiais, setPoliciais] = useState([]);
   const [senhaGestor, setSenhaGestor] = useState('');
   const [erroSenha, setErroSenha] = useState(false);
-  const [buscaLogin, setBuscaLogin] = useState('');
-  const [carregandoLogin, setCarregandoLogin] = useState(true);
-
-  useEffect(() => {
-    supabase.from('policiais').select('*').order('nome')
-      .then(({ data }) => { setPoliciais(data || []); setCarregandoLogin(false); });
-  }, []);
 
   async function loginGestor() {
     const { data } = await supabase.from('gestores').select('*').eq('senha', senhaGestor).single();
@@ -568,12 +581,8 @@ export default function App() {
 
   function sair() {
     setModo('login'); setUsuarioSel(null); setGestorLogado(null);
-    setSenhaGestor(''); setErroSenha(false); setBuscaLogin('');
+    setSenhaGestor(''); setErroSenha(false);
   }
-
-  const policiaisLogin = policiais.filter(p =>
-    p.nome.toLowerCase().includes(buscaLogin.toLowerCase()) || p.matricula.includes(buscaLogin)
-  );
 
   return (
     <div style={{ minHeight:'100vh', background:'#eef2f7', fontFamily:"'Segoe UI',Tahoma,sans-serif" }}>
@@ -596,20 +605,7 @@ export default function App() {
               <p style={{ color:'#6b8099', fontSize:13 }}>Selecione seu perfil para continuar</p>
             </div>
             <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:16 }}>
-              <div style={{ background:'#fff', borderRadius:14, padding:22, boxShadow:'0 4px 20px #00000012' }}>
-                <div style={{ fontSize:30, marginBottom:10 }}>👮</div>
-                <h2 style={{ color:'#1a3a5c', fontWeight:800, fontSize:15, marginBottom:4 }}>Sou Policial</h2>
-                <p style={{ color:'#6b8099', fontSize:12, marginBottom:14 }}>Solicitar folga / concessão e acompanhar status</p>
-                <label style={lbl}>Buscar pelo nome</label>
-                <input value={buscaLogin} onChange={e => setBuscaLogin(e.target.value)} placeholder="Digite seu nome..." style={{ ...inp, marginBottom:8 }} />
-                <label style={lbl}>Selecione seu nome</label>
-                {carregandoLogin ? <p style={{ color:'#aab', fontSize:13 }}>Carregando...</p> :
-                  <select onChange={e => { const p = policiais.find(p => p.id === Number(e.target.value)); if (p) { setUsuarioSel(p); setModo('policial'); } }} defaultValue="" style={inp}>
-                    <option value="" disabled>— Selecionar —</option>
-                    {policiaisLogin.map(p => <option key={p.id} value={p.id}>{p.patente} {p.nome}</option>)}
-                  </select>
-                }
-              </div>
+              <LoginPolicial onLogin={p => { setUsuarioSel(p); setModo('policial'); }} />
               <div style={{ background:'#fff', borderRadius:14, padding:22, boxShadow:'0 4px 20px #00000012' }}>
                 <div style={{ fontSize:30, marginBottom:10 }}>🗂️</div>
                 <h2 style={{ color:'#1a3a5c', fontWeight:800, fontSize:15, marginBottom:4 }}>Sou Gestor</h2>
