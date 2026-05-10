@@ -813,11 +813,15 @@ const [filtroEfRest, setFiltroEfRest] = useState('todas');
   const semSecao = policiais.filter(p => !p.secao || p.secao === '');
   const retornosProximos = policiais.filter(p => p.situacao === 'Férias' && p.ferias_fim && diasParaRetorno(p.ferias_fim) !== null && diasParaRetorno(p.ferias_fim) <= 3 && diasParaRetorno(p.ferias_fim) >= 0);
 
-  const policiaisfiltrados = policiais.filter(p => {
-    const buscaOk = p.nome.toLowerCase().includes(busca.toLowerCase()) || p.matricula.includes(busca);
-    const filtroOk = filtroBuscaEfetivo === 'todos' || (filtroBuscaEfetivo === 'sem_secao' && (!p.secao || p.secao === ''));
-    return buscaOk && filtroOk;
-  });
+ const policiaisfiltrados = policiais.filter(p => {
+  const buscaOk = p.nome.toLowerCase().includes(busca.toLowerCase()) || p.matricula.includes(busca);
+  const filtroOk = filtroBuscaEfetivo === 'todos' || (filtroBuscaEfetivo === 'sem_secao' && (!p.secao || p.secao === ''));
+  const secaoOk = filtroEfSeção === 'todas' || p.secao === filtroEfSeção;
+  const sitOk = filtroEfSit === 'todas' || (p.situacao||'Pronto') === filtroEfSit;
+  const ssOk = filtroEfSS === 'todas' || (p.sit_sanitaria||'Apto A') === filtroEfSS;
+  const restOk = filtroEfRest === 'todas' || (p.restricao||'Sem restrição') === filtroEfRest;
+  return buscaOk && filtroOk && secaoOk && sitOk && ssOk && restOk;
+});
 
   const stats = {
     total: solicitacoesSemana.length,
