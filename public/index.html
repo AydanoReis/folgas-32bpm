@@ -9,5 +9,13 @@
   <body>
     <noscript>É necessário habilitar o JavaScript para usar este sistema.</noscript>
     <div id="root"></div>
+ <link rel="manifest" href="/manifest.json" />
+<script>
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', function() {
+      navigator.serviceWorker.register('/sw.js');
+    });
+  }
+</script>
   </body>
 </html>
