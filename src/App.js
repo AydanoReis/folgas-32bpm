@@ -98,6 +98,73 @@ function gerarPDF(solicitacoes) {
   doc.save(`relatorio-folgas-32bpm-${new Date().toLocaleDateString('pt-BR').replace(/\//g,'-')}.pdf`);
 }
 
+function CalendarioFolgas({ solicitacoes }) {
+  const aprovadas = solicitacoes.filter(s => s.status === 'aprovado');
+  const [filtroSecao, setFiltroSecao] = useState('todas');
+
+  const filtradas = filtroSecao === 'todas' ? aprovadas : aprovadas.filter(s => s.secao === filtroSecao);
+
+  return (
+    <div>
+      <div style={{ display:'flex', gap:10, marginBottom:16, alignItems:'center', flexWrap:'wrap' }}>
+        <h3 style={{ fontSize:15, fontWeight:800, color:'#1a3a5c', margin:0 }}>📅 Calendário de Folgas Aprovadas</h3>
+        <select value={filtroSecao} onChange={e => setFiltroSecao(e.target.value)} style={{ ...inp, width:'auto', minWidth:160 }}>
+          <option value="todas">Todas as seções</option>
+          {SECOES.map(s => <option key={s}>{s}</option>)}
+        </select>
+      </div>
+
+      <div style={{ display:'flex', gap:6, marginBottom:8 }}>
+        <span style={{ background:'#E3F2FD', color:'#0D47A1', borderRadius:6, padding:'3px 10px', fontSize:12, fontWeight:700 }}>🌙 Folga</span>
+        <span style={{ background:'#F3E5F5', color:'#6A1B9A', borderRadius:6, padding:'3px 10px', fontSize:12, fontWeight:700 }}>🎖️ Concessão</span>
+      </div>
+
+      <div style={{ overflowX:'auto' }}>
+        <table style={{ width:'100%', borderCollapse:'collapse', minWidth:600 }}>
+          <thead>
+            <tr>
+              {DIAS.map(d => (
+                <th key={d} style={{ background:'#1a3a5c', color:'#fff', padding:'10px 6px', fontSize:12, fontWeight:800, textAlign:'center', border:'1px solid #0d2340' }}>{d}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              {DIAS.map(dia => {
+                const dodia = filtradas.filter(s => s.dia === dia);
+                return (
+                  <td key={dia} style={{ verticalAlign:'top', padding:6, border:'1px solid #d0dce8', background:'#f8fafc', minWidth:80 }}>
+                    {dodia.length === 0
+                      ? <span style={{ color:'#ccc', fontSize:11 }}>—</span>
+                      : dodia.map(s => (
+                        <div key={s.id} style={{
+                          background: s.motivo === 'Concessão' ? '#F3E5F5' : '#E3F2FD',
+                          color: s.motivo === 'Concessão' ? '#6A1B9A' : '#0D47A1',
+                          borderRadius:6, padding:'4px 6px', marginBottom:4, fontSize:11, fontWeight:700
+                        }}>
+                          <div>{s.policial_nome.split(' ').slice(0,2).join(' ')}</div>
+                          <div style={{ fontSize:10, opacity:0.8 }}>{s.secao}</div>
+                        </div>
+                      ))
+                    }
+                    {dodia.length > 0 && (
+                      <div style={{ fontSize:10, color:'#6b8099', marginTop:2, textAlign:'right' }}>{dodia.length} folga{dodia.length > 1 ? 's' : ''}</div>
+                    )}
+                  </td>
+                );
+              })}
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      {aprovadas.length === 0 && (
+        <p style={{ color:'#aab', fontSize:13, textAlign:'center', marginTop:20 }}>Nenhuma folga aprovada ainda.</p>
+      )}
+    </div>
+  );
+}
+
 function LoginPolicial({ onLogin }) {
   const [policiais, setPoliciais] = useState([]);
   const [buscaLogin, setBuscaLogin] = useState('');
@@ -121,10 +188,7 @@ function LoginPolicial({ onLogin }) {
   async function entrar() {
     if (!policialSel) { setErro('Selecione seu nome.'); return; }
     if (!senha) { setErro('Digite sua senha.'); return; }
-    if (!policialSel.senha) {
-      setModo('cadastrar');
-      return;
-    }
+    if (!policialSel.senha) { setModo('cadastrar'); return; }
     if (policialSel.senha !== senha) { setErro('Senha incorreta.'); return; }
     onLogin(policialSel);
   }
@@ -168,7 +232,7 @@ function LoginPolicial({ onLogin }) {
       <input type="password" maxLength={4} value={senha} onChange={e => setSenha(e.target.value)} onKeyDown={e => e.key==='Enter'&&entrar()} placeholder="••••" style={{ ...inp, marginBottom:6 }} />
       {erro && <p style={{ color:'#B71C1C', fontSize:12, marginBottom:6 }}>{erro}</p>}
       <button onClick={entrar} style={btnPrimary}>Entrar</button>
-      <p style={{ color:'#aab', fontSize:11, marginTop:8, textAlign:'center' }}>Primeiro acesso? Selecione seu nome e clique em Entrar — o sistema vai pedir para cadastrar sua senha.</p>
+      <p style={{ color:'#aab', fontSize:11, marginTop:8, textAlign:'center' }}>Primeiro acesso? Selecione seu nome e clique em Entrar.</p>
     </div>
   );
 }
@@ -415,6 +479,7 @@ function TelaGestor({ gestorLogado }) {
 
   const ABAS = [
     { id:'solicitacoes', label:'📋 Solicitações' },
+    { id:'calendario', label:'📅 Calendário' },
     { id:'efetivo', label:'👮 Efetivo' },
     { id:'gestores', label:'🗝️ Gestores' },
   ];
@@ -486,6 +551,12 @@ function TelaGestor({ gestorLogado }) {
             ))
           }
         </>
+      )}
+
+      {aba === 'calendario' && (
+        <Card>
+          <CalendarioFolgas solicitacoes={solicitacoes} />
+        </Card>
       )}
 
       {aba === 'efetivo' && (
