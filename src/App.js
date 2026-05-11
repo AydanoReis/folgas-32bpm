@@ -100,6 +100,11 @@ function gerarPDF(solicitacoes, policiais, semanaAtual) {
   const statusOp = pendentes.length === 0 ? 'NORMAL' : pendentes.length <= 3 ? 'ATENÇÃO' : 'CRÍTICO';
   const corStatusOp = statusOp === 'NORMAL' ? [27,94,32] : statusOp === 'ATENÇÃO' ? [123,88,0] : [183,28,28];
 
+  const isoInicio = semanaAtual.toISOString().split('T')[0];
+  const isoFim = fimSemana.toISOString().split('T')[0];
+  const prontos = policiais.filter(p => (p.situacao||'Pronto') === 'Pronto');
+  const semFolga = prontos.filter(p => !solicitacoes.find(s => s.policial_id === p.id && s.semana >= isoInicio && s.semana <= isoFim && s.status !== 'recusado'));
+
   const doc = new jsPDF();
   const pageW = doc.internal.pageSize.getWidth();
   const pageH = doc.internal.pageSize.getHeight();
@@ -150,8 +155,9 @@ function gerarPDF(solicitacoes, policiais, semanaAtual) {
     `• Seção mais impactada: ${secaoMais ? `${secaoMais.secao} (${secaoMais.count} folga${secaoMais.count>1?'s':''})` : 'Nenhuma'}`,
     `• Total de folgas regulares: ${folgas.length}`,
     `• Total de concessões: ${concessoes.length}`,
+    `• Prontos sem solicitação: ${semFolga.length}`,
   ];
-  resumoItens.forEach((item, i) => { doc.text(item, 16, y + 16 + i*7); });
+  resumoItens.forEach((item, i) => { doc.text(item, 16, y + 16 + i*6); });
   doc.setFillColor(...corStatusOp);
   doc.rect(pageW-70, y+6, 55, 14, 'F');
   doc.setTextColor(255,255,255); doc.setFontSize(10); doc.setFont('helvetica', 'bold');
@@ -168,7 +174,6 @@ function gerarPDF(solicitacoes, policiais, semanaAtual) {
   doc.setTextColor(255,255,255); doc.setFontSize(11); doc.setFont('helvetica','bold');
   doc.text('QUADRO OPERACIONAL DETALHADO', pageW/2, 10, { align:'center' });
   y = 22;
-
   if (aprovadas.length === 0) {
     doc.setTextColor(100,100,100); doc.setFontSize(11); doc.setFont('helvetica','normal');
     doc.text('Nenhuma folga aprovada neste período.', pageW/2, y+10, { align:'center' });
@@ -192,14 +197,13 @@ function gerarPDF(solicitacoes, policiais, semanaAtual) {
         const tableBody = dodia.map(s => [
           s.secao && s.secao !== '—' ? s.secao : 'Não vinculada',
           `${s.patente} ${s.policial_nome}`,
-          s.motivo === 'Folga' ? 'Folga' : 'Concessão',
+          s.motivo,
         ]);
         doc.autoTable({ startY:y, head:[['Seção','Policial','Tipo']], body:tableBody, theme:'grid', headStyles:{ fillColor:[50,100,150], textColor:255, fontStyle:'bold', fontSize:8 }, bodyStyles:{ fontSize:8 }, columnStyles:{ 0:{ cellWidth:35 }, 2:{ cellWidth:25, halign:'center' } }, alternateRowStyles:{ fillColor:[245,248,252] }, margin:{ left:10, right:10 } });
         y = doc.lastAutoTable.finalY + 6;
       }
     });
   }
-
   doc.setTextColor(120,130,140); doc.setFontSize(8); doc.setFont('helvetica','normal');
   doc.text('32º BPM — Sistema Interno de Controle de Folgas', pageW/2, pageH-8, { align:'center' });
   doc.text('Página 2', pageW-12, pageH-8, { align:'right' });
@@ -217,12 +221,7 @@ function gerarPDF(solicitacoes, policiais, semanaAtual) {
     doc.text('SITUAÇÃO SANITÁRIA DO EFETIVO', 14, y+5.5); y += 10;
     const aptoAComRestricao = policiais.filter(p => (p.sit_sanitaria||'Apto A') === 'Apto A' && temRestricao(p)).length;
     const aptoASemRestricao = policiais.filter(p => (p.sit_sanitaria||'Apto A') === 'Apto A' && !temRestricao(p)).length;
-    const ssRows = [
-      ['Apto A (sem restrição)', String(aptoASemRestricao)],
-      ['Apto A (com restrição)', String(aptoAComRestricao)],
-      ...['Apto B','Apto C','LTS'].map(ss => [ss, String(policiais.filter(p => (p.sit_sanitaria||'Apto A') === ss).length)]),
-    ];
-    doc.autoTable({ startY:y, head:[['Situação Sanitária','Total']], body:ssRows, theme:'grid', headStyles:{ fillColor:[50,100,150], textColor:255, fontStyle:'bold', fontSize:8 }, bodyStyles:{ fontSize:8 }, alternateRowStyles:{ fillColor:[245,248,252] }, margin:{ left:10, right:10 } });
+    doc.autoTable({ startY:y, head:[['Situação Sanitária','Total']], body:[['Apto A (sem restrição)',String(aptoASemRestricao)],['Apto A (com restrição)',String(aptoAComRestricao)],...['Apto B','Apto C','LTS'].map(ss=>[ss,String(policiais.filter(p=>(p.sit_sanitaria||'Apto A')===ss).length)])], theme:'grid', headStyles:{ fillColor:[50,100,150], textColor:255, fontStyle:'bold', fontSize:8 }, bodyStyles:{ fontSize:8 }, alternateRowStyles:{ fillColor:[245,248,252] }, margin:{ left:10, right:10 } });
     y = doc.lastAutoTable.finalY + 6;
 
     doc.setFillColor(50,100,150); doc.rect(10,y,pageW-20,8,'F');
@@ -231,13 +230,12 @@ function gerarPDF(solicitacoes, policiais, semanaAtual) {
     doc.autoTable({ startY:y, head:[['Situação','Total']], body:SITUACOES.map(s=>[s,String(policiais.filter(p=>(p.situacao||'Pronto')===s).length)]), theme:'grid', headStyles:{ fillColor:[50,100,150], textColor:255, fontStyle:'bold', fontSize:8 }, bodyStyles:{ fontSize:8 }, alternateRowStyles:{ fillColor:[245,248,252] }, margin:{ left:10, right:10 } });
     y = doc.lastAutoTable.finalY + 6;
 
-    const emAfastamento = policiais.filter(p => p.situacao !== 'Pronto' && p.ferias_fim);
-    if (emAfastamento.length > 0) {
+    if (semFolga.length > 0) {
       if (y > 200) { doc.addPage(); y = 20; }
-      doc.setFillColor(230,81,0); doc.rect(10,y,pageW-20,8,'F');
+      doc.setFillColor(13,35,64); doc.rect(10,y,pageW-20,8,'F');
       doc.setTextColor(255,255,255); doc.setFontSize(9); doc.setFont('helvetica','bold');
-      doc.text('POLICIAIS AFASTADOS COM DATAS', 14, y+5.5); y += 10;
-      doc.autoTable({ startY:y, head:[['Nome','Situação','Início','Fim','Dias restantes']], body:emAfastamento.map(p=>[`${p.patente} ${p.nome}`,p.situacao,p.ferias_inicio||'—',p.ferias_fim||'—',diasParaRetorno(p.ferias_fim)!==null?`${diasParaRetorno(p.ferias_fim)} dias`:'—']), theme:'grid', headStyles:{ fillColor:[230,81,0], textColor:255, fontStyle:'bold', fontSize:8 }, bodyStyles:{ fontSize:8 }, margin:{ left:10, right:10 } });
+      doc.text(`PRONTOS SEM SOLICITAÇÃO ESTA SEMANA (${semFolga.length})`, 14, y+5.5); y += 10;
+      doc.autoTable({ startY:y, head:[['Patente','Nome','Matrícula','Seção']], body:semFolga.map(p=>[p.patente,p.nome,p.matricula,p.secao||'—']), theme:'grid', headStyles:{ fillColor:[13,35,64], textColor:255, fontStyle:'bold', fontSize:8 }, bodyStyles:{ fontSize:8 }, alternateRowStyles:{ fillColor:[245,248,252] }, margin:{ left:10, right:10 } });
       y = doc.lastAutoTable.finalY + 6;
     }
   }
@@ -260,11 +258,10 @@ function gerarPDF(solicitacoes, policiais, semanaAtual) {
   doc.setTextColor(120,130,140); doc.setFontSize(8); doc.setFont('helvetica','normal');
   doc.text('32º BPM — Sistema Interno de Controle de Folgas', pageW/2, pageH-8, { align:'center' });
   doc.text('Página 3', pageW-12, pageH-8, { align:'right' });
-
   doc.save(`relatorio-32bpm-${periodoStr.replace(/\//g,'-').replace(/ /g,'')}.pdf`);
 }
 
-function Dashboard({ solicitacoes, policiais, onAtualizarPolicial, onRemoverPolicial }) {
+function Dashboard({ solicitacoes, policiais, onAtualizarPolicial, onRemoverPolicial, semanaAtual }) {
   const aprovadas = solicitacoes.filter(s => s.status === 'aprovado');
   const total = solicitacoes.length;
   const totalAprovadas = aprovadas.length;
@@ -293,6 +290,14 @@ function Dashboard({ solicitacoes, policiais, onAtualizarPolicial, onRemoverPoli
   ];
   const sitData = SITUACOES.map(s => ({ name:s, value:policiais.filter(p=>(p.situacao||'Pronto')===s).length })).filter(s=>s.value>0);
 
+  // Prontos sem solicitação esta semana
+  const fimSemana = new Date(semanaAtual);
+  fimSemana.setDate(fimSemana.getDate() + 6);
+  const isoInicio = semanaAtual.toISOString().split('T')[0];
+  const isoFim = fimSemana.toISOString().split('T')[0];
+  const prontos = policiais.filter(p => (p.situacao||'Pronto') === 'Pronto');
+  const semFolga = prontos.filter(p => !solicitacoes.find(s => s.policial_id === p.id && s.semana >= isoInicio && s.semana <= isoFim && s.status !== 'recusado'));
+
   return (
     <div>
       <h3 style={{ fontSize:15, fontWeight:800, color:'#1a3a5c', marginBottom:16 }}>📈 Dashboard de Estatísticas</h3>
@@ -306,7 +311,6 @@ function Dashboard({ solicitacoes, policiais, onAtualizarPolicial, onRemoverPoli
               <div key={p.id} style={{ display:'flex', gap:8, alignItems:'center', marginBottom:4 }}>
                 <span style={{ fontWeight:700, color:'#1a3a5c', fontSize:12 }}>{p.patente} {p.nome}</span>
                 <span style={{ background:dias===0?'#B71C1C':dias<=1?'#E65100':'#F9A825', color:'#fff', borderRadius:6, padding:'1px 8px', fontSize:11, fontWeight:800 }}>{dias===0?'Retorna hoje!':dias===1?'Retorna amanhã!':`${dias} dias`}</span>
-                <span style={{ color:'#6b8099', fontSize:11 }}>Fim: {new Date(p.ferias_fim+'T00:00:00').toLocaleDateString('pt-BR')}</span>
               </div>
             );
           })}
@@ -321,8 +325,7 @@ function Dashboard({ solicitacoes, policiais, onAtualizarPolicial, onRemoverPoli
             return (
               <div key={p.id} style={{ display:'flex', gap:8, alignItems:'center', marginBottom:4 }}>
                 <span style={{ fontWeight:700, color:'#1a3a5c', fontSize:12 }}>{p.patente} {p.nome}</span>
-                <span style={{ background:dias===0?'#6A1B9A':dias<=1?'#8E24AA':'#AB47BC', color:'#fff', borderRadius:6, padding:'1px 8px', fontSize:11, fontWeight:800 }}>{dias===0?'Retorna hoje!':dias===1?'Retorna amanhã!':`${dias} dias`}</span>
-                <span style={{ color:'#6b8099', fontSize:11 }}>Fim: {new Date(p.ferias_fim+'T00:00:00').toLocaleDateString('pt-BR')}</span>
+                <span style={{ background:dias===0?'#6A1B9A':'#AB47BC', color:'#fff', borderRadius:6, padding:'1px 8px', fontSize:11, fontWeight:800 }}>{dias===0?'Retorna hoje!':dias===1?'Retorna amanhã!':`${dias} dias`}</span>
               </div>
             );
           })}
@@ -345,6 +348,18 @@ function Dashboard({ solicitacoes, policiais, onAtualizarPolicial, onRemoverPoli
         </div>
       )}
 
+      {/* Prontos sem folga esta semana */}
+      {semFolga.length > 0 && (
+        <div style={{ background:'#E3F2FD', border:'2px solid #90CAF9', borderRadius:10, padding:'12px 16px', marginBottom:14 }}>
+          <div style={{ fontWeight:800, color:'#0D47A1', fontSize:13, marginBottom:8 }}>📋 {semFolga.length} policial(is) Pronto(s) sem solicitação esta semana:</div>
+          <div style={{ display:'flex', flexWrap:'wrap', gap:6 }}>
+            {semFolga.map(p => (
+              <span key={p.id} style={{ background:'#fff', color:'#0D47A1', borderRadius:6, padding:'2px 8px', fontSize:11, fontWeight:700, border:'1px solid #90CAF9' }}>{p.patente} {p.nome.split(' ').slice(0,2).join(' ')}</span>
+            ))}
+          </div>
+        </div>
+      )}
+
       {aprovadas.length > 0 && (
         <Card>
           <h4 style={{ fontSize:13, fontWeight:800, color:'#1a3a5c', marginBottom:12 }}>🔍 Insights Automáticos</h4>
@@ -357,16 +372,15 @@ function Dashboard({ solicitacoes, policiais, onAtualizarPolicial, onRemoverPoli
         </Card>
       )}
 
-      {/* Capacidade Operacional */}
       <Card>
         <h4 style={{ fontSize:13, fontWeight:800, color:'#1a3a5c', marginBottom:12 }}>⚙️ Capacidade Operacional</h4>
         <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:10 }}>
           {[
             { l:'Total do Efetivo', v:policiais.length, c:'#1a3a5c' },
-            { l:'Prontos p/ Serviço', v:policiais.filter(p=>(p.situacao||'Pronto')==='Pronto').length, c:'#1B5E20' },
+            { l:'Prontos p/ Serviço', v:prontos.length, c:'#1B5E20' },
             { l:'Afastados', v:policiais.filter(p=>(p.situacao||'Pronto')!=='Pronto').length, c:'#B71C1C' },
             { l:'Com Restrição', v:policiais.filter(p=>temRestricao(p)).length, c:'#E65100' },
-            { l:'Apto A c/ Rest.', v:aptoAComRestricao.length, c:'#E65100' },
+            { l:'Sem folga esta semana', v:semFolga.length, c:'#0D47A1' },
             { l:'LTS Sanitário', v:policiais.filter(p=>(p.sit_sanitaria||'Apto A')==='LTS').length, c:'#6A1B9A' },
           ].map(s => (
             <div key={s.l} style={{ background:'#f8fafc', borderRadius:10, padding:'12px 8px', textAlign:'center', border:'1px solid #e0e8f0' }}>
@@ -377,7 +391,6 @@ function Dashboard({ solicitacoes, policiais, onAtualizarPolicial, onRemoverPoli
         </div>
       </Card>
 
-      {/* Todos os afastados */}
       {policiais.filter(p => (p.situacao||'Pronto') !== 'Pronto').length > 0 && (
         <Card>
           <h4 style={{ fontSize:13, fontWeight:800, color:'#1a3a5c', marginBottom:12 }}>🚨 Policiais Afastados</h4>
@@ -600,14 +613,12 @@ function LoginPolicial({ onLogin }) {
               <div style={{ padding:'10px 14px', color:'#aab', fontSize:13 }}>Carregando...</div>
             ) : (
               policiaisFiltrados.map(p => (
-                <div
-                  key={p.id}
-                  onMouseDown={() => selecionarPolicial(p)}
-                  style={{ padding:'10px 14px', cursor:'pointer', borderBottom:'1px solid #f0f4f8', fontSize:13, color:'#1a3a5c', fontWeight: policialSel?.id === p.id ? 800 : 400, background: policialSel?.id === p.id ? '#f0f6ff' : '#fff' }}
+                <div key={p.id} onMouseDown={() => selecionarPolicial(p)}
+                  style={{ padding:'10px 14px', cursor:'pointer', borderBottom:'1px solid #f0f4f8', fontSize:13, color:'#1a3a5c' }}
                   onMouseEnter={e => e.currentTarget.style.background='#f0f6ff'}
-                  onMouseLeave={e => e.currentTarget.style.background= policialSel?.id === p.id ? '#f0f6ff' : '#fff'}
+                  onMouseLeave={e => e.currentTarget.style.background='#fff'}
                 >
-                  <div>{p.patente} {p.nome}</div>
+                  <div style={{ fontWeight:700 }}>{p.patente} {p.nome}</div>
                   <div style={{ fontSize:11, color:'#6b8099' }}>Mat. {p.matricula} — {p.secao||'Sem seção'}</div>
                 </div>
               ))
@@ -628,6 +639,7 @@ function LoginPolicial({ onLogin }) {
     </div>
   );
 }
+
 function TelaSolicitacao({ usuario }) {
   const [dia, setDia] = useState(null);
   const [semana, setSemana] = useState('');
@@ -653,18 +665,8 @@ function TelaSolicitacao({ usuario }) {
     if (naoProto) return;
     if (!dia || !semana || !motivo) { setMsg({ tipo:'erro', texto:'Selecione o tipo, o dia e a data.' }); return; }
     if (!email || !email.includes('@')) { setMsg({ tipo:'erro', texto:'Informe um email válido.' }); return; }
-
-    // Verificar duplicidade
-    const jaExiste = minhas.find(s =>
-      s.semana === semana &&
-      s.motivo === motivo &&
-      s.status !== 'recusado'
-    );
-    if (jaExiste) {
-      setMsg({ tipo:'erro', texto:`Você já possui uma ${motivo} solicitada para esta semana.` });
-      return;
-    }
-
+    const jaExiste = minhas.find(s => s.semana === semana && s.motivo === motivo && s.status !== 'recusado');
+    if (jaExiste) { setMsg({ tipo:'erro', texto:`Você já possui uma ${motivo} solicitada para esta semana.` }); return; }
     setEnviando(true);
     const { error } = await supabase.from('solicitacoes').insert({ policial_id:usuario.id, policial_nome:usuario.nome, matricula:usuario.matricula, patente:usuario.patente, secao:usuario.secao||'—', dia, semana, motivo, status:'pendente', email_policial:email });
     setEnviando(false);
@@ -707,8 +709,8 @@ function TelaSolicitacao({ usuario }) {
             <div style={{ display:'flex', gap:6, flexWrap:'wrap', marginBottom:16 }}>
               {DIAS.map(d => <button key={d} onClick={() => setDia(d)} style={{ padding:'7px 11px', borderRadius:8, fontWeight:700, fontSize:13, cursor:'pointer', background:dia===d?'#1a3a5c':'#f0f4f8', color:dia===d?'#fff':'#2d4a63', border:dia===d?'2px solid #1a3a5c':'2px solid transparent' }}>{d}</button>)}
             </div>
-<label style={lbl}>Semana de referência *</label>
-                <input type="date" value={semana} onChange={e => setSemana(e.target.value)} style={{ ...inp, marginBottom:14 }} />
+            <label style={lbl}>Semana de referência *</label>
+            <input type="date" value={semana} onChange={e => setSemana(e.target.value)} style={{ ...inp, marginBottom:14 }} />
             <label style={lbl}>Seu email *</label>
             <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="seu.email@gmail.com" style={{ ...inp, marginBottom:6 }} />
             {msg && <div style={{ padding:'10px 14px', borderRadius:8, marginTop:10, fontWeight:600, background:msg.tipo==='ok'?'#E8F5E9':'#FFEBEE', color:msg.tipo==='ok'?'#1B5E20':'#B71C1C' }}>{msg.texto}</div>}
@@ -801,9 +803,15 @@ function TelaGestor({ gestorLogado }) {
   const semSecao = policiais.filter(p => !p.secao || p.secao === '');
   const retornosProximos = policiais.filter(p => p.situacao === 'Férias' && p.ferias_fim && diasParaRetorno(p.ferias_fim) !== null && diasParaRetorno(p.ferias_fim) <= 3 && diasParaRetorno(p.ferias_fim) >= 0);
 
+  // Prontos sem folga esta semana
+  const prontos = policiais.filter(p => (p.situacao||'Pronto') === 'Pronto');
+  const semFolgaSemana = prontos.filter(p => !solicitacoesSemana.find(s => s.policial_id === p.id && s.status !== 'recusado'));
+
   const policiaisfiltrados = policiais.filter(p => {
     const buscaOk = p.nome.toLowerCase().includes(busca.toLowerCase()) || p.matricula.includes(busca);
-    const filtroOk = filtroBuscaEfetivo === 'todos' || (filtroBuscaEfetivo === 'sem_secao' && (!p.secao || p.secao === ''));
+    const filtroOk = filtroBuscaEfetivo === 'todos'
+      || (filtroBuscaEfetivo === 'sem_secao' && (!p.secao || p.secao === ''))
+      || (filtroBuscaEfetivo === 'sem_folga' && semFolgaSemana.find(sf => sf.id === p.id));
     const secaoOk = filtroEfSecao === 'todas' || p.secao === filtroEfSecao;
     const sitOk = filtroEfSit === 'todas' || (p.situacao||'Pronto') === filtroEfSit;
     const ssOk = filtroEfSS === 'todas' || (p.sit_sanitaria||'Apto A') === filtroEfSS;
@@ -818,7 +826,10 @@ function TelaGestor({ gestorLogado }) {
     recusadas: solicitacoesSemana.filter(s => s.status === 'recusado').length,
   };
 
+  const isPrincipal = gestorLogado.principal === true;
+
   async function mudarStatus(id, status) {
+    if (!isPrincipal) return;
     await supabase.from('solicitacoes').update({ status }).eq('id', id);
     setSolicitacoes(prev => prev.map(s => s.id === id ? { ...s, status } : s));
     const sol = solicitacoes.find(s => s.id === id);
@@ -909,10 +920,15 @@ function TelaGestor({ gestorLogado }) {
               <div key={p.id} style={{ display:'flex', gap:8, alignItems:'center', marginBottom:4, flexWrap:'wrap' }}>
                 <span style={{ fontWeight:700, color:'#1a3a5c', fontSize:12 }}>{p.patente} {p.nome}</span>
                 <span style={{ background:dias===0?'#B71C1C':dias<=1?'#E65100':'#F9A825', color:'#fff', borderRadius:6, padding:'1px 8px', fontSize:11, fontWeight:800 }}>{dias===0?'Retorna hoje!':dias===1?'Retorna amanhã!':`${dias} dias`}</span>
-                <span style={{ color:'#6b8099', fontSize:11 }}>Fim: {new Date(p.ferias_fim+'T00:00:00').toLocaleDateString('pt-BR')}</span>
               </div>
             );
           })}
+        </div>
+      )}
+
+      {!isPrincipal && (
+        <div style={{ background:'#E3F2FD', border:'2px solid #90CAF9', borderRadius:10, padding:'10px 16px', marginBottom:14, fontSize:13, color:'#0D47A1', fontWeight:700 }}>
+          👁️ Você está no modo visualização. Apenas o gestor principal pode aprovar ou recusar solicitações.
         </div>
       )}
 
@@ -968,14 +984,14 @@ function TelaGestor({ gestorLogado }) {
                 </div>
                 {s.email_policial && <p style={{ color:'#aab', fontSize:12, marginTop:4 }}>📧 {s.email_policial}</p>}
                 <p style={{ color:'#bbb', fontSize:12, marginTop:4 }}>{new Date(s.created_at).toLocaleDateString('pt-BR')}</p>
-                {s.status === 'pendente' && (
+                {isPrincipal && s.status === 'pendente' && (
                   <div style={{ display:'flex', gap:8, marginTop:10 }}>
                     <button onClick={() => mudarStatus(s.id,'aprovado')} style={{ ...btnSm, background:'#1B5E20', color:'#fff' }}>✔ Aprovar</button>
                     <button onClick={() => mudarStatus(s.id,'recusado')} style={{ ...btnSm, background:'#B71C1C', color:'#fff' }}>✘ Recusar</button>
                   </div>
                 )}
-                {s.status === 'recusado' && <button onClick={() => excluirSolicitacao(s.id)} style={{ ...btnSm, background:'#FFEBEE', color:'#B71C1C', marginTop:8 }}>🗑️ Excluir</button>}
-                {s.status === 'aprovado' && <button onClick={() => mudarStatus(s.id,'pendente')} style={{ ...btnSm, background:'#FFF8E1', color:'#7B5800', marginTop:8 }}>↩️ Revogar aprovação</button>}
+                {isPrincipal && s.status === 'recusado' && <button onClick={() => excluirSolicitacao(s.id)} style={{ ...btnSm, background:'#FFEBEE', color:'#B71C1C', marginTop:8 }}>🗑️ Excluir</button>}
+                {isPrincipal && s.status === 'aprovado' && <button onClick={() => mudarStatus(s.id,'pendente')} style={{ ...btnSm, background:'#FFF8E1', color:'#7B5800', marginTop:8 }}>↩️ Revogar aprovação</button>}
               </Card>
             ))
           }
@@ -983,15 +999,23 @@ function TelaGestor({ gestorLogado }) {
       )}
 
       {aba === 'calendario' && <Card><CalendarioFolgas solicitacoes={solicitacoes} /></Card>}
-      {aba === 'estatisticas' && <Dashboard solicitacoes={solicitacoes} policiais={policiais} onAtualizarPolicial={atualizarPolicial} onRemoverPolicial={removerPolicial} />}
+      {aba === 'estatisticas' && <Dashboard solicitacoes={solicitacoes} policiais={policiais} onAtualizarPolicial={atualizarPolicial} onRemoverPolicial={removerPolicial} semanaAtual={semanaAtual} />}
 
       {aba === 'efetivo' && (
         <>
           {semSecao.length > 0 && (
             <div style={{ background:'#FFEBEE', border:'2px solid #EF9A9A', borderRadius:10, padding:'12px 16px', marginBottom:14 }}>
               <div style={{ fontWeight:800, color:'#B71C1C', fontSize:13, marginBottom:6 }}>⚠️ {semSecao.length} policial(is) sem seção definida</div>
-              <button onClick={() => setFiltroBuscaEfetivo(filtroBuscaEfetivo==='sem_secao'?'todos':'sem_secao')} style={{ ...btnSm, background:'#B71C1C', color:'#fff' }}>
+              <button onClick={() => setFiltroBuscaEfetivo(filtroBuscaEfetivo==='sem_secao'?'todos':'sem_secao')} style={{ ...btnSm, background:'#B71C1C', color:'#fff', marginRight:8 }}>
                 {filtroBuscaEfetivo==='sem_secao'?'Ver todos':'Ver só sem seção'}
+              </button>
+            </div>
+          )}
+          {semFolgaSemana.length > 0 && (
+            <div style={{ background:'#E3F2FD', border:'2px solid #90CAF9', borderRadius:10, padding:'12px 16px', marginBottom:14 }}>
+              <div style={{ fontWeight:800, color:'#0D47A1', fontSize:13, marginBottom:6 }}>📋 {semFolgaSemana.length} policial(is) Pronto(s) sem solicitação esta semana</div>
+              <button onClick={() => setFiltroBuscaEfetivo(filtroBuscaEfetivo==='sem_folga'?'todos':'sem_folga')} style={{ ...btnSm, background:'#0D47A1', color:'#fff' }}>
+                {filtroBuscaEfetivo==='sem_folga'?'Ver todos':'Ver só sem folga'}
               </button>
             </div>
           )}
@@ -1014,7 +1038,6 @@ function TelaGestor({ gestorLogado }) {
             </div>
             <button onClick={adicionarPolicial} style={{ ...btnPrimary, marginTop:12 }}>Adicionar ao Efetivo</button>
           </Card>
-
           <input value={busca} onChange={e => setBusca(e.target.value)} placeholder="🔍 Buscar por nome ou matrícula..." style={{ ...inp, marginBottom:10 }} />
           <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8, marginBottom:10 }}>
             <select value={filtroEfSecao} onChange={e => setFiltroEfSecao(e.target.value)} style={inp}>
@@ -1034,7 +1057,6 @@ function TelaGestor({ gestorLogado }) {
               {RESTRICOES.map(s => <option key={s}>{s}</option>)}
             </select>
           </div>
-
           <p style={{ color:'#6b8099', fontSize:12, marginBottom:10 }}>{policiaisfiltrados.length} policial(is)</p>
           {policiaisfiltrados.map(p => (
             <Card key={p.id} style={{ padding:'12px 16px', border:(!p.secao||p.secao==='')?'2px solid #EF9A9A':'none' }}>
@@ -1117,7 +1139,7 @@ function TelaGestor({ gestorLogado }) {
         <>
           <Card>
             <h3 style={{ fontSize:14, fontWeight:800, color:'#1a3a5c', marginBottom:4 }}>🔒 Alterar Minha Senha</h3>
-            <p style={{ color:'#6b8099', fontSize:13, marginBottom:14 }}>Conectado como: <strong>{gestorLogado.nome}</strong></p>
+            <p style={{ color:'#6b8099', fontSize:13, marginBottom:14 }}>Conectado como: <strong>{gestorLogado.nome}</strong> {isPrincipal && <span style={{ background:'#FFF8E1', color:'#7B5800', borderRadius:6, padding:'2px 8px', fontSize:11, fontWeight:700 }}>PRINCIPAL</span>}</p>
             <label style={lbl}>Senha atual</label>
             <input type="password" value={senhaAtual} onChange={e => setSenhaAtual(e.target.value)} placeholder="••••" style={{ ...inp, marginBottom:10 }} />
             <label style={lbl}>Nova senha</label>
