@@ -54,8 +54,8 @@ function temRestricao(p) {
   return p.restricao && p.restricao !== 'Sem restrição';
 }
 function nivelLabel(g) {
-  if (g.principal) return { label:'PRINCIPAL', bg:'#FFF8E1', color:'#7B5800' };
-  if (g.nivel === 'master') return { label:'MASTER', bg:'#E8F5E9', color:'#1B5E20' };
+  if (g.principal) return { label:'PRINCIPAL', bg:'#0d2340', color:'#fff' };
+  if (g.nivel === 'master') return { label:'MASTER', bg:'#1B5E20', color:'#fff' };
   return { label:'GESTOR', bg:'#f0f4f8', color:'#6b8099' };
 }
 
@@ -114,14 +114,13 @@ function gerarPDF(solicitacoes, policiais, semanaAtual) {
   const pageW = doc.internal.pageSize.getWidth();
   const pageH = doc.internal.pageSize.getHeight();
 
-  doc.setFillColor(13, 35, 64);
-  doc.rect(0, 0, pageW, 55, 'F');
-  doc.setTextColor(255, 255, 255);
-  doc.setFontSize(11); doc.setFont('helvetica', 'normal');
+  doc.setFillColor(13,35,64); doc.rect(0,0,pageW,55,'F');
+  doc.setTextColor(255,255,255);
+  doc.setFontSize(11); doc.setFont('helvetica','normal');
   doc.text('POLÍCIA MILITAR DO ESTADO DO RIO DE JANEIRO', pageW/2, 14, { align:'center' });
-  doc.setFontSize(18); doc.setFont('helvetica', 'bold');
+  doc.setFontSize(18); doc.setFont('helvetica','bold');
   doc.text('32º BATALHÃO DE POLÍCIA MILITAR', pageW/2, 25, { align:'center' });
-  doc.setFontSize(13); doc.setFont('helvetica', 'normal');
+  doc.setFontSize(13); doc.setFont('helvetica','normal');
   doc.text('CONTROLE SEMANAL DE FOLGAS — PCSV', pageW/2, 35, { align:'center' });
   doc.setFontSize(10);
   doc.text(`Período: ${periodoStr}   |   Emitido: ${hoje}`, pageW/2, 44, { align:'center' });
@@ -137,23 +136,20 @@ function gerarPDF(solicitacoes, policiais, semanaAtual) {
   const cardW = (pageW - 20 - 9) / 4;
   cards.forEach((c, i) => {
     const x = 10 + i * (cardW + 3);
-    doc.setFillColor(...c.cor);
-    doc.rect(x, y, cardW, 22, 'F');
+    doc.setFillColor(...c.cor); doc.rect(x, y, cardW, 22, 'F');
     doc.setTextColor(255,255,255);
-    doc.setFontSize(20); doc.setFont('helvetica', 'bold');
+    doc.setFontSize(20); doc.setFont('helvetica','bold');
     doc.text(String(c.valor), x + cardW/2, y + 13, { align:'center' });
-    doc.setFontSize(8); doc.setFont('helvetica', 'normal');
+    doc.setFontSize(8); doc.setFont('helvetica','normal');
     doc.text(c.label.toUpperCase(), x + cardW/2, y + 19, { align:'center' });
   });
 
   y += 30;
-  doc.setFillColor(240, 244, 248);
-  doc.rect(10, y, pageW-20, 48, 'F');
-  doc.setDrawColor(200,210,220);
-  doc.rect(10, y, pageW-20, 48, 'S');
-  doc.setTextColor(13,35,64); doc.setFontSize(11); doc.setFont('helvetica', 'bold');
+  doc.setFillColor(240,244,248); doc.rect(10,y,pageW-20,48,'F');
+  doc.setDrawColor(200,210,220); doc.rect(10,y,pageW-20,48,'S');
+  doc.setTextColor(13,35,64); doc.setFontSize(11); doc.setFont('helvetica','bold');
   doc.text('RESUMO EXECUTIVO', 16, y+8);
-  doc.setFontSize(9); doc.setFont('helvetica', 'normal'); doc.setTextColor(40,40,40);
+  doc.setFontSize(9); doc.setFont('helvetica','normal'); doc.setTextColor(40,40,40);
   [
     `• Dia com maior concentração: ${diaMaisAtivo.count > 0 ? `${diaMaisAtivo.dia}-feira (${diaMaisAtivo.count} folga${diaMaisAtivo.count>1?'s':''})` : 'Nenhum'}`,
     `• Seção mais impactada: ${secaoMais ? `${secaoMais.secao} (${secaoMais.count} folga${secaoMais.count>1?'s':''})` : 'Nenhuma'}`,
@@ -161,13 +157,11 @@ function gerarPDF(solicitacoes, policiais, semanaAtual) {
     `• Total de concessões: ${concessoes.length}`,
     `• Prontos sem solicitação: ${semFolga.length}`,
   ].forEach((item, i) => { doc.text(item, 16, y + 16 + i*6); });
-  doc.setFillColor(...corStatusOp);
-  doc.rect(pageW-70, y+6, 55, 14, 'F');
-  doc.setTextColor(255,255,255); doc.setFontSize(10); doc.setFont('helvetica', 'bold');
+  doc.setFillColor(...corStatusOp); doc.rect(pageW-70,y+6,55,14,'F');
+  doc.setTextColor(255,255,255); doc.setFontSize(10); doc.setFont('helvetica','bold');
   doc.text('SITUAÇÃO OPERACIONAL', pageW-42.5, y+11, { align:'center' });
-  doc.setFontSize(12);
-  doc.text(statusOp, pageW-42.5, y+18, { align:'center' });
-  doc.setTextColor(120,130,140); doc.setFontSize(8); doc.setFont('helvetica', 'normal');
+  doc.setFontSize(12); doc.text(statusOp, pageW-42.5, y+18, { align:'center' });
+  doc.setTextColor(120,130,140); doc.setFontSize(8); doc.setFont('helvetica','normal');
   doc.text('32º BPM — Sistema Interno de Controle de Folgas', pageW/2, pageH-8, { align:'center' });
   doc.text('Página 1', pageW-12, pageH-8, { align:'right' });
 
@@ -187,8 +181,7 @@ function gerarPDF(solicitacoes, policiais, semanaAtual) {
         doc.setFillColor(230,235,240); doc.rect(10,y,pageW-20,10,'F');
         doc.setTextColor(100,110,120); doc.setFontSize(9); doc.setFont('helvetica','bold');
         doc.text(`${dia.toUpperCase()}-FEIRA`, 14, y+6.5);
-        doc.setFont('helvetica','normal');
-        doc.text('Sem registros', pageW-14, y+6.5, { align:'right' });
+        doc.setFont('helvetica','normal'); doc.text('Sem registros', pageW-14, y+6.5, { align:'right' });
         y += 13;
       } else {
         doc.setFillColor(30,77,123); doc.rect(10,y,pageW-20,10,'F');
@@ -214,8 +207,8 @@ function gerarPDF(solicitacoes, policiais, semanaAtual) {
     doc.setFillColor(50,100,150); doc.rect(10,y,pageW-20,8,'F');
     doc.setTextColor(255,255,255); doc.setFontSize(9); doc.setFont('helvetica','bold');
     doc.text('SITUAÇÃO SANITÁRIA DO EFETIVO', 14, y+5.5); y += 10;
-    const aptoAC = policiais.filter(p => (p.sit_sanitaria||'Apto A')==='Apto A' && temRestricao(p)).length;
-    const aptoAS = policiais.filter(p => (p.sit_sanitaria||'Apto A')==='Apto A' && !temRestricao(p)).length;
+    const aptoAC = policiais.filter(p=>(p.sit_sanitaria||'Apto A')==='Apto A'&&temRestricao(p)).length;
+    const aptoAS = policiais.filter(p=>(p.sit_sanitaria||'Apto A')==='Apto A'&&!temRestricao(p)).length;
     doc.autoTable({ startY:y, head:[['Situação Sanitária','Total']], body:[['Apto A (sem restrição)',String(aptoAS)],['Apto A (com restrição)',String(aptoAC)],...['Apto B','Apto C','LTS'].map(ss=>[ss,String(policiais.filter(p=>(p.sit_sanitaria||'Apto A')===ss).length)])], theme:'grid', headStyles:{ fillColor:[50,100,150], textColor:255, fontStyle:'bold', fontSize:8 }, bodyStyles:{ fontSize:8 }, alternateRowStyles:{ fillColor:[245,248,252] }, margin:{ left:10, right:10 } });
     y = doc.lastAutoTable.finalY + 6;
     doc.setFillColor(50,100,150); doc.rect(10,y,pageW-20,8,'F');
@@ -531,6 +524,8 @@ function TelaSolicitacao({ usuario }) {
   const [loading, setLoading] = useState(true);
   const [enviando, setEnviando] = useState(false);
   const [msg, setMsg] = useState(null);
+  const [solicitandoTroca, setSolicitandoTroca] = useState(null);
+  const [novoDiaTroca, setNovoDiaTroca] = useState('');
 
   const carregarMinhas = useCallback(async () => {
     setLoading(true);
@@ -563,6 +558,22 @@ function TelaSolicitacao({ usuario }) {
     if (!window.confirm('Cancelar esta solicitação?')) return;
     await supabase.from('solicitacoes').delete().eq('id', id);
     setMinhas(prev => prev.filter(s => s.id !== id));
+  }
+
+  async function enviarTroca(sol) {
+    if (!novoDiaTroca) { setMsg({ tipo:'erro', texto:'Selecione o novo dia.' }); return; }
+    if (novoDiaTroca === sol.dia) { setMsg({ tipo:'erro', texto:'O novo dia deve ser diferente do atual.' }); return; }
+    await supabase.from('solicitacoes').update({ dia_troca:novoDiaTroca, status_troca:'pendente' }).eq('id', sol.id);
+    setMinhas(prev => prev.map(s => s.id === sol.id ? { ...s, dia_troca:novoDiaTroca, status_troca:'pendente' } : s));
+    setSolicitandoTroca(null);
+    setNovoDiaTroca('');
+    setMsg({ tipo:'ok', texto:'Solicitação de troca enviada! Aguarde aprovação.' });
+    setTimeout(() => setMsg(null), 4000);
+  }
+
+  async function cancelarTroca(id) {
+    await supabase.from('solicitacoes').update({ dia_troca:'', status_troca:'' }).eq('id', id);
+    setMinhas(prev => prev.map(s => s.id === id ? { ...s, dia_troca:'', status_troca:'' } : s));
   }
 
   return (
@@ -600,16 +611,59 @@ function TelaSolicitacao({ usuario }) {
           </>
         )}
       </Card>
+
       <h3 style={{ fontSize:15, fontWeight:800, color:'#1a3a5c', margin:'22px 0 10px' }}>Minhas Solicitações</h3>
       {loading ? <Spinner /> : minhas.length === 0 ? <p style={{ color:'#aab', fontSize:13 }}>Nenhuma solicitação registrada.</p>
         : minhas.map(s => (
           <Card key={s.id}>
             <div style={{ display:'flex', justifyContent:'space-between', flexWrap:'wrap', gap:8, alignItems:'center' }}>
-              <div style={{ display:'flex', gap:8, alignItems:'center', flexWrap:'wrap' }}><MotivoBadge motivo={s.motivo} /><span style={{ fontWeight:800, color:'#1a3a5c' }}>{s.dia}</span><span style={{ color:'#6b8099', fontSize:13 }}>{s.semana}</span></div>
+              <div style={{ display:'flex', gap:8, alignItems:'center', flexWrap:'wrap' }}>
+                <MotivoBadge motivo={s.motivo} />
+                <span style={{ fontWeight:800, color:'#1a3a5c' }}>{s.dia}</span>
+                <span style={{ color:'#6b8099', fontSize:13 }}>{s.semana}</span>
+              </div>
               <Badge status={s.status} />
             </div>
+
+            {/* Troca de dia */}
+            {s.status === 'aprovado' && s.status_troca === 'aprovado' && (
+              <div style={{ background:'#E8F5E9', borderRadius:8, padding:'6px 10px', marginTop:8, fontSize:12, color:'#1B5E20', fontWeight:700 }}>
+                ✅ Troca aprovada! Novo dia: <strong>{s.dia_troca}</strong>
+              </div>
+            )}
+            {s.status === 'aprovado' && s.status_troca === 'pendente' && (
+              <div style={{ background:'#FFF8E1', borderRadius:8, padding:'6px 10px', marginTop:8, fontSize:12, color:'#7B5800', fontWeight:700, display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+                <span>⏳ Troca para <strong>{s.dia_troca}</strong> aguardando aprovação</span>
+                <button onClick={() => cancelarTroca(s.id)} style={{ ...btnSm, background:'#FFEBEE', color:'#B71C1C', fontSize:11 }}>Cancelar troca</button>
+              </div>
+            )}
+            {s.status === 'aprovado' && s.status_troca === 'recusado' && (
+              <div style={{ background:'#FFEBEE', borderRadius:8, padding:'6px 10px', marginTop:8, fontSize:12, color:'#B71C1C', fontWeight:700 }}>
+                ❌ Troca para <strong>{s.dia_troca}</strong> foi recusada
+              </div>
+            )}
+
             <p style={{ color:'#bbb', fontSize:12, marginTop:6 }}>Enviado em {new Date(s.created_at).toLocaleDateString('pt-BR')}</p>
-            {s.status === 'pendente' && <button onClick={() => cancelarSolicitacao(s.id)} style={{ ...btnSm, background:'#FFEBEE', color:'#B71C1C', marginTop:8 }}>✕ Cancelar</button>}
+
+            <div style={{ display:'flex', gap:8, flexWrap:'wrap', marginTop:8 }}>
+              {s.status === 'pendente' && <button onClick={() => cancelarSolicitacao(s.id)} style={{ ...btnSm, background:'#FFEBEE', color:'#B71C1C' }}>✕ Cancelar</button>}
+              {s.status === 'aprovado' && !s.status_troca && (
+                <button onClick={() => { setSolicitandoTroca(s.id); setNovoDiaTroca(''); }} style={{ ...btnSm, background:'#E3F2FD', color:'#0D47A1' }}>🔄 Solicitar troca de dia</button>
+              )}
+            </div>
+
+            {solicitandoTroca === s.id && (
+              <div style={{ background:'#f0f6ff', borderRadius:8, padding:'12px', marginTop:10 }}>
+                <p style={{ fontWeight:700, color:'#1a3a5c', fontSize:13, marginBottom:8 }}>Escolha o novo dia:</p>
+                <div style={{ display:'flex', gap:6, flexWrap:'wrap', marginBottom:10 }}>
+                  {DIAS.map(d => <button key={d} onClick={() => setNovoDiaTroca(d)} style={{ padding:'6px 10px', borderRadius:8, fontWeight:700, fontSize:12, cursor:'pointer', background:novoDiaTroca===d?'#0D47A1':'#f0f4f8', color:novoDiaTroca===d?'#fff':'#2d4a63', border:novoDiaTroca===d?'2px solid #0D47A1':'2px solid transparent' }}>{d}</button>)}
+                </div>
+                <div style={{ display:'flex', gap:8 }}>
+                  <button onClick={() => enviarTroca(s)} style={{ ...btnSm, background:'#0D47A1', color:'#fff' }}>Enviar pedido de troca</button>
+                  <button onClick={() => { setSolicitandoTroca(null); setNovoDiaTroca(''); }} style={{ ...btnSm, background:'#f0f4f8', color:'#6b8099' }}>Cancelar</button>
+                </div>
+              </div>
+            )}
           </Card>
         ))
       }
@@ -672,6 +726,7 @@ function TelaGestor({ gestorLogado }) {
   const isoInicio = semanaAtual.toISOString().split('T')[0];
   const isoFim = fimSemana.toISOString().split('T')[0];
   const solicitacoesSemana = solicitacoes.filter(s => s.semana >= isoInicio && s.semana <= isoFim);
+  const trocasPendentes = solicitacoes.filter(s => s.status_troca === 'pendente');
 
   const filtradas = solicitacoesSemana
     .filter(s => filtroStatus === 'todos' || s.status === filtroStatus)
@@ -713,6 +768,18 @@ function TelaGestor({ gestorLogado }) {
       emailjs.init(EMAILJS_PUBLIC_KEY);
       emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, { email:sol.email_policial, nome:sol.policial_nome, motivo:sol.motivo, dia:sol.dia, semana:sol.semana, status:status==='aprovado'?'✅ APROVADA':'❌ RECUSADA', secao:sol.secao, matricula:sol.matricula });
     }
+  }
+
+  async function aprovarTroca(sol) {
+    if (!isMaster) return;
+    await supabase.from('solicitacoes').update({ dia:sol.dia_troca, status_troca:'aprovado' }).eq('id', sol.id);
+    setSolicitacoes(prev => prev.map(s => s.id === sol.id ? { ...s, dia:sol.dia_troca, status_troca:'aprovado' } : s));
+  }
+
+  async function recusarTroca(id) {
+    if (!isMaster) return;
+    await supabase.from('solicitacoes').update({ status_troca:'recusado' }).eq('id', id);
+    setSolicitacoes(prev => prev.map(s => s.id === id ? { ...s, status_troca:'recusado' } : s));
   }
 
   async function excluirSolicitacao(id) {
@@ -787,10 +854,11 @@ function TelaGestor({ gestorLogado }) {
 
   const ABAS = [
     { id:'solicitacoes', label:'📋 Solicitações' },
-    { id:'calendario',   label:'📅 Calendário' },
+    { id:'trocas', label:`🔄 Trocas${trocasPendentes.length > 0 ? ` (${trocasPendentes.length})` : ''}` },
+    { id:'calendario', label:'📅 Calendário' },
     { id:'estatisticas', label:'📈 Estatísticas' },
-    { id:'efetivo',      label:'👮 Efetivo' },
-    { id:'gestores',     label:'🗝️ Gestores' },
+    { id:'efetivo', label:'👮 Efetivo' },
+    { id:'gestores', label:'🗝️ Gestores' },
   ];
 
   if (loading) return <Spinner />;
@@ -860,6 +928,8 @@ function TelaGestor({ gestorLogado }) {
                   <span style={{ background:'#e8f0fe', color:'#3d5a9e', borderRadius:6, padding:'2px 8px', fontSize:12, fontWeight:700 }}>{s.secao&&s.secao!=='—'?s.secao:'Não vinculada'}</span>
                   <span style={{ color:'#2d4a63', fontSize:13 }}>📅 <strong>{s.dia}</strong> — {s.semana}</span>
                 </div>
+                {s.status_troca === 'pendente' && <div style={{ background:'#FFF8E1', borderRadius:6, padding:'4px 10px', marginTop:6, fontSize:12, color:'#7B5800', fontWeight:700 }}>⏳ Troca pendente para: <strong>{s.dia_troca}</strong></div>}
+                {s.status_troca === 'aprovado' && <div style={{ background:'#E8F5E9', borderRadius:6, padding:'4px 10px', marginTop:6, fontSize:12, color:'#1B5E20', fontWeight:700 }}>✅ Troca aprovada para: <strong>{s.dia_troca}</strong></div>}
                 {s.email_policial && <p style={{ color:'#aab', fontSize:12, marginTop:4 }}>📧 {s.email_policial}</p>}
                 <p style={{ color:'#bbb', fontSize:12, marginTop:4 }}>{new Date(s.created_at).toLocaleDateString('pt-BR')}</p>
                 {isMaster && s.status === 'pendente' && (
@@ -870,6 +940,60 @@ function TelaGestor({ gestorLogado }) {
                 )}
                 {isMaster && s.status === 'recusado' && <button onClick={() => excluirSolicitacao(s.id)} style={{ ...btnSm, background:'#FFEBEE', color:'#B71C1C', marginTop:8 }}>🗑️ Excluir</button>}
                 {isMaster && s.status === 'aprovado' && <button onClick={() => mudarStatus(s.id,'pendente')} style={{ ...btnSm, background:'#FFF8E1', color:'#7B5800', marginTop:8 }}>↩️ Revogar aprovação</button>}
+              </Card>
+            ))
+          }
+        </>
+      )}
+
+      {aba === 'trocas' && (
+        <>
+          <h3 style={{ fontSize:15, fontWeight:800, color:'#1a3a5c', marginBottom:16 }}>🔄 Solicitações de Troca de Dia</h3>
+          {trocasPendentes.length === 0
+            ? <p style={{ color:'#aab', fontSize:13, textAlign:'center', padding:20 }}>Nenhuma solicitação de troca pendente.</p>
+            : trocasPendentes.map(s => (
+              <Card key={s.id} style={{ border:'2px solid #FFD54F' }}>
+                <div style={{ display:'flex', justifyContent:'space-between', flexWrap:'wrap', gap:8 }}>
+                  <div><span style={{ fontWeight:800, color:'#1a3a5c', fontSize:14 }}>{s.patente} {s.policial_nome}</span><span style={{ color:'#6b8099', fontSize:12, marginLeft:8 }}>Mat. {s.matricula}</span></div>
+                  <span style={{ background:'#FFF8E1', color:'#7B5800', border:'1px solid #FFD54F', padding:'3px 10px', borderRadius:20, fontSize:11, fontWeight:800 }}>TROCA PENDENTE</span>
+                </div>
+                <div style={{ display:'flex', gap:8, flexWrap:'wrap', marginTop:8, alignItems:'center' }}>
+                  <MotivoBadge motivo={s.motivo} />
+                  <span style={{ background:'#e8f0fe', color:'#3d5a9e', borderRadius:6, padding:'2px 8px', fontSize:12, fontWeight:700 }}>{s.secao}</span>
+                </div>
+                <div style={{ display:'flex', gap:12, alignItems:'center', marginTop:10, background:'#f8fafc', borderRadius:8, padding:'10px 14px' }}>
+                  <div style={{ textAlign:'center' }}>
+                    <div style={{ fontSize:10, color:'#6b8099', fontWeight:700, marginBottom:4 }}>DIA ATUAL</div>
+                    <div style={{ fontWeight:900, color:'#B71C1C', fontSize:16 }}>{s.dia}</div>
+                  </div>
+                  <div style={{ fontSize:20 }}>→</div>
+                  <div style={{ textAlign:'center' }}>
+                    <div style={{ fontSize:10, color:'#6b8099', fontWeight:700, marginBottom:4 }}>NOVO DIA</div>
+                    <div style={{ fontWeight:900, color:'#1B5E20', fontSize:16 }}>{s.dia_troca}</div>
+                  </div>
+                  <div style={{ fontSize:10, color:'#6b8099', marginLeft:'auto' }}>Semana: {s.semana}</div>
+                </div>
+                {isMaster && (
+                  <div style={{ display:'flex', gap:8, marginTop:10 }}>
+                    <button onClick={() => aprovarTroca(s)} style={{ ...btnSm, background:'#1B5E20', color:'#fff' }}>✔ Aprovar troca</button>
+                    <button onClick={() => recusarTroca(s.id)} style={{ ...btnSm, background:'#B71C1C', color:'#fff' }}>✘ Recusar troca</button>
+                  </div>
+                )}
+              </Card>
+            ))
+          }
+          <h3 style={{ fontSize:14, fontWeight:800, color:'#1a3a5c', margin:'20px 0 10px' }}>Histórico de Trocas</h3>
+          {solicitacoes.filter(s => s.status_troca && s.status_troca !== 'pendente' && s.status_troca !== '').length === 0
+            ? <p style={{ color:'#aab', fontSize:13 }}>Nenhuma troca processada ainda.</p>
+            : solicitacoes.filter(s => s.status_troca && s.status_troca !== 'pendente' && s.status_troca !== '').map(s => (
+              <Card key={s.id} style={{ opacity:0.8 }}>
+                <div style={{ display:'flex', justifyContent:'space-between', flexWrap:'wrap', gap:8, alignItems:'center' }}>
+                  <div>
+                    <span style={{ fontWeight:800, color:'#1a3a5c', fontSize:13 }}>{s.patente} {s.policial_nome}</span>
+                    <div style={{ fontSize:12, color:'#6b8099', marginTop:2 }}>{s.dia_troca ? `${s.dia} → ${s.dia_troca}` : ''} · {s.semana}</div>
+                  </div>
+                  <span style={{ background:s.status_troca==='aprovado'?'#E8F5E9':'#FFEBEE', color:s.status_troca==='aprovado'?'#1B5E20':'#B71C1C', border:`1px solid ${s.status_troca==='aprovado'?'#A5D6A7':'#EF9A9A'}`, padding:'3px 10px', borderRadius:20, fontSize:11, fontWeight:800 }}>{s.status_troca==='aprovado'?'APROVADA':'RECUSADA'}</span>
+                </div>
               </Card>
             ))
           }
