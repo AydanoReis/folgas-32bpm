@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from './supabaseClient';
 import emailjs from '@emailjs/browser';
 import jsPDF from 'jspdf';
@@ -15,7 +15,7 @@ const MOTIVOS = ['Folga','Concessão'];
 const SIT_SANITARIA_LTS = ['Apto A','Apto B','Apto C','LTS'];
 const SITUACOES = ['Pronto','Férias','LE','LTSPF','LTS','LP','Núpcias','Luto'];
 const RESTRICOES = ['Sem restrição','SP','CD','CRD','CHR'];
-const FUNCOES_GESTOR = ['','Comandante','SubComandante','Comandante de Cia','Chefe da P1','Brigada'];
+const FUNCOES_GESTOR = ['','Comandante','SubComandante','Comandante de Cia','Chefe da P1','Brigada','Sargenteante'];
 const COR_SS = { 'Apto A':'#1565C0', 'Apto B':'#F9A825', 'Apto C':'#B71C1C', 'LTS':'#6A1B9A' };
 const EMOJI_SS = { 'Apto A':'🔵', 'Apto B':'🟡', 'Apto C':'🔴', 'LTS':'🟣' };
 const STATUS_COLORS = {
@@ -24,6 +24,7 @@ const STATUS_COLORS = {
   recusado:  { bg:'#FFEBEE', text:'#B71C1C', border:'#EF9A9A' },
 };
 const CORES_GRAFICO = ['#1a3a5c','#2E7D32','#6A1B9A','#0D47A1','#B71C1C','#E65100','#00695C','#4A148C','#880E4F','#1B5E20','#F57F17','#37474F','#1565C0','#283593','#4E342E','#33691E','#006064','#01579B'];
+const AUTO_REFRESH_INTERVAL = 60000; // 1 minuto
 
 const inp = { width:'100%', padding:'10px 12px', borderRadius:8, border:'1.5px solid #d0dce8', fontSize:14, color:'#1a3a5c', background:'#f8fafc', boxSizing:'border-box', outline:'none' };
 const lbl = { display:'block', fontSize:11, fontWeight:800, color:'#4a6580', marginBottom:5, textTransform:'uppercase', letterSpacing:0.5 };
@@ -57,6 +58,15 @@ function nivelLabel(g) {
   if (g.principal) return { label:'PRINCIPAL', bg:'#0d2340', color:'#fff' };
   if (g.nivel === 'master') return { label:'MASTER', bg:'#1B5E20', color:'#fff' };
   return { label:'GESTOR', bg:'#f0f4f8', color:'#6b8099' };
+}
+function salvarSessao(tipo, dados) {
+  try { sessionStorage.setItem('sessao_tipo', tipo); sessionStorage.setItem('sessao_dados', JSON.stringify(dados)); } catch(e) {}
+}
+function carregarSessao() {
+  try { const tipo = sessionStorage.getItem('sessao_tipo'); const dados = sessionStorage.getItem('sessao_dados'); return tipo && dados ? { tipo, dados: JSON.parse(dados) } : null; } catch(e) { return null; }
+}
+function limparSessao() {
+  try { sessionStorage.removeItem('sessao_tipo'); sessionStorage.removeItem('sessao_dados'); } catch(e) {}
 }
 
 function Card({ children, style }) {
@@ -407,16 +417,36 @@ function Dashboard({ solicitacoes, policiais, onAtualizarPolicial, onRemoverPoli
 function CalendarioFolgas({ solicitacoes }) {
   const aprovadas = solicitacoes.filter(s => s.status === 'aprovado');
   const [filtroSecao, setFiltroSecao] = useState('todas');
-  const filtradas = filtroSecao === 'todas' ? aprovadas : aprovadas.filter(s => s.secao === filtroSecao);
+  const [semanaCalendario, setSemanaCalendario] = useState(() => getInicioSemana(new Date()));
+
+  function semanaAnteriorCal() { const d = new Date(semanaCalendario); d.setDate(d.getDate()-7); setSemanaCalendario(d); }
+  function proximaSemanaCalendario() { const d = new Date(semanaCalendario); d.setDate(d.getDate()+7); setSemanaCalendario(d); }
+
+  const fimSemana = new Date(semanaCalendario);
+  fimSemana.setDate(fimSemana.getDate() + 6);
+  const isoInicio = semanaCalendario.toISOString().split('T')[0];
+  const isoFim = fimSemana.toISOString().split('T')[0];
+
+  const aprovadasSemana = aprovadas.filter(s => s.semana >= isoInicio && s.semana <= isoFim);
+  const filtradas = filtroSecao === 'todas' ? aprovadasSemana : aprovadasSemana.filter(s => s.secao === filtroSecao);
+
   return (
     <div>
-      <div style={{ display:'flex', gap:10, marginBottom:16, alignItems:'center', flexWrap:'wrap' }}>
+      <div style={{ display:'flex', gap:10, marginBottom:12, alignItems:'center', flexWrap:'wrap' }}>
         <h3 style={{ fontSize:15, fontWeight:800, color:'#1a3a5c', margin:0 }}>📅 Calendário de Folgas Aprovadas</h3>
-        <select value={filtroSecao} onChange={e => setFiltroSecao(e.target.value)} style={{ ...inp, width:'auto', minWidth:160 }}>
-          <option value="todas">Todas as seções</option>
-          {SECOES.map(s => <option key={s}>{s}</option>)}
-        </select>
       </div>
+
+      <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', background:'#f0f4f8', borderRadius:10, padding:'8px 14px', marginBottom:12 }}>
+        <button onClick={semanaAnteriorCal} style={{ ...btnSm, background:'#fff', color:'#1a3a5c' }}>← Anterior</button>
+        <span style={{ fontWeight:800, color:'#1a3a5c', fontSize:13 }}>{formatarSemana(semanaCalendario)}</span>
+        <button onClick={proximaSemanaCalendario} style={{ ...btnSm, background:'#fff', color:'#1a3a5c' }}>Próxima →</button>
+      </div>
+
+      <select value={filtroSecao} onChange={e => setFiltroSecao(e.target.value)} style={{ ...inp, marginBottom:12 }}>
+        <option value="todas">Todas as seções</option>
+        {SECOES.map(s => <option key={s}>{s}</option>)}
+      </select>
+
       <div style={{ display:'flex', gap:6, marginBottom:8 }}>
         <span style={{ background:'#E3F2FD', color:'#0D47A1', borderRadius:6, padding:'3px 10px', fontSize:12, fontWeight:700 }}>🌙 Folga</span>
         <span style={{ background:'#F3E5F5', color:'#6A1B9A', borderRadius:6, padding:'3px 10px', fontSize:12, fontWeight:700 }}>🎖️ Concessão</span>
@@ -427,7 +457,7 @@ function CalendarioFolgas({ solicitacoes }) {
           <tbody><tr>{DIAS.map(dia => { const dodia = filtradas.filter(s => s.dia === dia); return (<td key={dia} style={{ verticalAlign:'top', padding:6, border:'1px solid #d0dce8', background:'#f8fafc', minWidth:80 }}>{dodia.length === 0 ? <span style={{ color:'#ccc', fontSize:11 }}>—</span> : dodia.map(s => (<div key={s.id} style={{ background:s.motivo==='Concessão'?'#F3E5F5':'#E3F2FD', color:s.motivo==='Concessão'?'#6A1B9A':'#0D47A1', borderRadius:6, padding:'4px 6px', marginBottom:4, fontSize:11, fontWeight:700 }}><div>{s.policial_nome.split(' ').slice(0,2).join(' ')}</div><div style={{ fontSize:10, opacity:0.8 }}>{s.secao&&s.secao!=='—'?s.secao:'Não vinculada'}</div></div>))}{dodia.length > 0 && <div style={{ fontSize:10, color:'#6b8099', marginTop:2, textAlign:'right' }}>{dodia.length} folga{dodia.length>1?'s':''}</div>}</td>); })}</tr></tbody>
         </table>
       </div>
-      {aprovadas.length === 0 && <p style={{ color:'#aab', fontSize:13, textAlign:'center', marginTop:20 }}>Nenhuma folga aprovada ainda.</p>}
+      {filtradas.length === 0 && <p style={{ color:'#aab', fontSize:13, textAlign:'center', marginTop:20 }}>Nenhuma folga aprovada nesta semana.</p>}
     </div>
   );
 }
@@ -460,6 +490,7 @@ function LoginPolicial({ onLogin }) {
     if (!senha) { setErro('Digite sua senha.'); return; }
     if (!policialSel.senha) { setModo('cadastrar'); return; }
     if (policialSel.senha !== senha) { setErro('Senha incorreta.'); return; }
+    salvarSessao('policial', policialSel);
     onLogin(policialSel);
   }
 
@@ -467,7 +498,9 @@ function LoginPolicial({ onLogin }) {
     if (novaSenha.length !== 4 || isNaN(novaSenha)) { setErro('A senha deve ter exatamente 4 números.'); return; }
     if (novaSenha !== confirmarSenha) { setErro('As senhas não coincidem.'); return; }
     await supabase.from('policiais').update({ senha:novaSenha }).eq('id', policialSel.id);
-    onLogin({ ...policialSel, senha:novaSenha });
+    const atualizado = { ...policialSel, senha:novaSenha };
+    salvarSessao('policial', atualizado);
+    onLogin(atualizado);
   }
 
   if (modo === 'cadastrar') return (
@@ -536,6 +569,12 @@ function TelaSolicitacao({ usuario }) {
 
   useEffect(() => { carregarMinhas(); }, [carregarMinhas]);
 
+  // Auto-refresh a cada 1 minuto
+  useEffect(() => {
+    const interval = setInterval(() => { carregarMinhas(); }, AUTO_REFRESH_INTERVAL);
+    return () => clearInterval(interval);
+  }, [carregarMinhas]);
+
   const naoProto = usuario.situacao && usuario.situacao !== 'Pronto';
 
   async function enviar() {
@@ -565,8 +604,7 @@ function TelaSolicitacao({ usuario }) {
     if (novoDiaTroca === sol.dia) { setMsg({ tipo:'erro', texto:'O novo dia deve ser diferente do atual.' }); return; }
     await supabase.from('solicitacoes').update({ dia_troca:novoDiaTroca, status_troca:'pendente' }).eq('id', sol.id);
     setMinhas(prev => prev.map(s => s.id === sol.id ? { ...s, dia_troca:novoDiaTroca, status_troca:'pendente' } : s));
-    setSolicitandoTroca(null);
-    setNovoDiaTroca('');
+    setSolicitandoTroca(null); setNovoDiaTroca('');
     setMsg({ tipo:'ok', texto:'Solicitação de troca enviada! Aguarde aprovação.' });
     setTimeout(() => setMsg(null), 4000);
   }
@@ -624,34 +662,14 @@ function TelaSolicitacao({ usuario }) {
               </div>
               <Badge status={s.status} />
             </div>
-
-            {/* Troca de dia */}
-            {s.status === 'aprovado' && s.status_troca === 'aprovado' && (
-              <div style={{ background:'#E8F5E9', borderRadius:8, padding:'6px 10px', marginTop:8, fontSize:12, color:'#1B5E20', fontWeight:700 }}>
-                ✅ Troca aprovada! Novo dia: <strong>{s.dia_troca}</strong>
-              </div>
-            )}
-            {s.status === 'aprovado' && s.status_troca === 'pendente' && (
-              <div style={{ background:'#FFF8E1', borderRadius:8, padding:'6px 10px', marginTop:8, fontSize:12, color:'#7B5800', fontWeight:700, display:'flex', justifyContent:'space-between', alignItems:'center' }}>
-                <span>⏳ Troca para <strong>{s.dia_troca}</strong> aguardando aprovação</span>
-                <button onClick={() => cancelarTroca(s.id)} style={{ ...btnSm, background:'#FFEBEE', color:'#B71C1C', fontSize:11 }}>Cancelar troca</button>
-              </div>
-            )}
-            {s.status === 'aprovado' && s.status_troca === 'recusado' && (
-              <div style={{ background:'#FFEBEE', borderRadius:8, padding:'6px 10px', marginTop:8, fontSize:12, color:'#B71C1C', fontWeight:700 }}>
-                ❌ Troca para <strong>{s.dia_troca}</strong> foi recusada
-              </div>
-            )}
-
+            {s.status === 'aprovado' && s.status_troca === 'aprovado' && <div style={{ background:'#E8F5E9', borderRadius:8, padding:'6px 10px', marginTop:8, fontSize:12, color:'#1B5E20', fontWeight:700 }}>✅ Troca aprovada! Novo dia: <strong>{s.dia_troca}</strong></div>}
+            {s.status === 'aprovado' && s.status_troca === 'pendente' && <div style={{ background:'#FFF8E1', borderRadius:8, padding:'6px 10px', marginTop:8, fontSize:12, color:'#7B5800', fontWeight:700, display:'flex', justifyContent:'space-between', alignItems:'center' }}><span>⏳ Troca para <strong>{s.dia_troca}</strong> aguardando aprovação</span><button onClick={() => cancelarTroca(s.id)} style={{ ...btnSm, background:'#FFEBEE', color:'#B71C1C', fontSize:11 }}>Cancelar troca</button></div>}
+            {s.status === 'aprovado' && s.status_troca === 'recusado' && <div style={{ background:'#FFEBEE', borderRadius:8, padding:'6px 10px', marginTop:8, fontSize:12, color:'#B71C1C', fontWeight:700 }}>❌ Troca para <strong>{s.dia_troca}</strong> foi recusada</div>}
             <p style={{ color:'#bbb', fontSize:12, marginTop:6 }}>Enviado em {new Date(s.created_at).toLocaleDateString('pt-BR')}</p>
-
             <div style={{ display:'flex', gap:8, flexWrap:'wrap', marginTop:8 }}>
               {s.status === 'pendente' && <button onClick={() => cancelarSolicitacao(s.id)} style={{ ...btnSm, background:'#FFEBEE', color:'#B71C1C' }}>✕ Cancelar</button>}
-              {s.status === 'aprovado' && !s.status_troca && (
-                <button onClick={() => { setSolicitandoTroca(s.id); setNovoDiaTroca(''); }} style={{ ...btnSm, background:'#E3F2FD', color:'#0D47A1' }}>🔄 Solicitar troca de dia</button>
-              )}
+              {s.status === 'aprovado' && !s.status_troca && <button onClick={() => { setSolicitandoTroca(s.id); setNovoDiaTroca(''); }} style={{ ...btnSm, background:'#E3F2FD', color:'#0D47A1' }}>🔄 Solicitar troca de dia</button>}
             </div>
-
             {solicitandoTroca === s.id && (
               <div style={{ background:'#f0f6ff', borderRadius:8, padding:'12px', marginTop:10 }}>
                 <p style={{ fontWeight:700, color:'#1a3a5c', fontSize:13, marginBottom:8 }}>Escolha o novo dia:</p>
@@ -702,9 +720,10 @@ function TelaGestor({ gestorLogado }) {
   const [novoGestorFuncao, setNovoGestorFuncao] = useState('');
   const [novoGestorNivel, setNovoGestorNivel] = useState('gestor');
   const [msgGestor, setMsgGestor] = useState(null);
+  const [ultimaAtualizacao, setUltimaAtualizacao] = useState(new Date());
+  const intervalRef = useRef(null);
 
   const carregar = useCallback(async () => {
-    setLoading(true);
     const [s, p, g] = await Promise.all([
       supabase.from('solicitacoes').select('*').order('created_at', { ascending:false }),
       supabase.from('policiais').select('*').order('nome'),
@@ -713,10 +732,16 @@ function TelaGestor({ gestorLogado }) {
     setSolicitacoes(s.data || []);
     setPoliciais(p.data || []);
     setGestores(g.data || []);
+    setUltimaAtualizacao(new Date());
     setLoading(false);
   }, []);
 
-  useEffect(() => { carregar(); }, [carregar]);
+  useEffect(() => {
+    setLoading(true);
+    carregar();
+    intervalRef.current = setInterval(() => { carregar(); }, AUTO_REFRESH_INTERVAL);
+    return () => clearInterval(intervalRef.current);
+  }, [carregar]);
 
   function semanaAnterior() { const d = new Date(semanaAtual); d.setDate(d.getDate()-7); setSemanaAtual(d); }
   function proximaSemana() { const d = new Date(semanaAtual); d.setDate(d.getDate()+7); setSemanaAtual(d); }
@@ -878,6 +903,10 @@ function TelaGestor({ gestorLogado }) {
         </div>
       )}
 
+      <div style={{ display:'flex', justifyContent:'flex-end', marginBottom:8 }}>
+        <span style={{ fontSize:11, color:'#aab' }}>🔄 Atualizado às {ultimaAtualizacao.toLocaleTimeString('pt-BR', { hour:'2-digit', minute:'2-digit' })}</span>
+      </div>
+
       <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:10, marginBottom:18 }}>
         {[{l:'Total',v:stats.total,c:'#1a3a5c'},{l:'Pendentes',v:stats.pendentes,c:'#7B5800'},{l:'Aprovadas',v:stats.aprovadas,c:'#1B5E20'},{l:'Recusadas',v:stats.recusadas,c:'#B71C1C'}]
           .map(s => <div key={s.l} style={{ background:'#fff', borderRadius:10, padding:'12px 8px', boxShadow:'0 2px 8px #00000012', textAlign:'center' }}><div style={{ fontSize:24, fontWeight:900, color:s.c }}>{s.v}</div><div style={{ fontSize:11, color:'#6b8099', fontWeight:700 }}>{s.l}</div></div>)}
@@ -962,15 +991,9 @@ function TelaGestor({ gestorLogado }) {
                   <span style={{ background:'#e8f0fe', color:'#3d5a9e', borderRadius:6, padding:'2px 8px', fontSize:12, fontWeight:700 }}>{s.secao}</span>
                 </div>
                 <div style={{ display:'flex', gap:12, alignItems:'center', marginTop:10, background:'#f8fafc', borderRadius:8, padding:'10px 14px' }}>
-                  <div style={{ textAlign:'center' }}>
-                    <div style={{ fontSize:10, color:'#6b8099', fontWeight:700, marginBottom:4 }}>DIA ATUAL</div>
-                    <div style={{ fontWeight:900, color:'#B71C1C', fontSize:16 }}>{s.dia}</div>
-                  </div>
+                  <div style={{ textAlign:'center' }}><div style={{ fontSize:10, color:'#6b8099', fontWeight:700, marginBottom:4 }}>DIA ATUAL</div><div style={{ fontWeight:900, color:'#B71C1C', fontSize:16 }}>{s.dia}</div></div>
                   <div style={{ fontSize:20 }}>→</div>
-                  <div style={{ textAlign:'center' }}>
-                    <div style={{ fontSize:10, color:'#6b8099', fontWeight:700, marginBottom:4 }}>NOVO DIA</div>
-                    <div style={{ fontWeight:900, color:'#1B5E20', fontSize:16 }}>{s.dia_troca}</div>
-                  </div>
+                  <div style={{ textAlign:'center' }}><div style={{ fontSize:10, color:'#6b8099', fontWeight:700, marginBottom:4 }}>NOVO DIA</div><div style={{ fontWeight:900, color:'#1B5E20', fontSize:16 }}>{s.dia_troca}</div></div>
                   <div style={{ fontSize:10, color:'#6b8099', marginLeft:'auto' }}>Semana: {s.semana}</div>
                 </div>
                 {isMaster && (
@@ -988,10 +1011,7 @@ function TelaGestor({ gestorLogado }) {
             : solicitacoes.filter(s => s.status_troca && s.status_troca !== 'pendente' && s.status_troca !== '').map(s => (
               <Card key={s.id} style={{ opacity:0.8 }}>
                 <div style={{ display:'flex', justifyContent:'space-between', flexWrap:'wrap', gap:8, alignItems:'center' }}>
-                  <div>
-                    <span style={{ fontWeight:800, color:'#1a3a5c', fontSize:13 }}>{s.patente} {s.policial_nome}</span>
-                    <div style={{ fontSize:12, color:'#6b8099', marginTop:2 }}>{s.dia_troca ? `${s.dia} → ${s.dia_troca}` : ''} · {s.semana}</div>
-                  </div>
+                  <div><span style={{ fontWeight:800, color:'#1a3a5c', fontSize:13 }}>{s.patente} {s.policial_nome}</span><div style={{ fontSize:12, color:'#6b8099', marginTop:2 }}>{s.dia_troca ? `${s.dia} → ${s.dia_troca}` : ''} · {s.semana}</div></div>
                   <span style={{ background:s.status_troca==='aprovado'?'#E8F5E9':'#FFEBEE', color:s.status_troca==='aprovado'?'#1B5E20':'#B71C1C', border:`1px solid ${s.status_troca==='aprovado'?'#A5D6A7':'#EF9A9A'}`, padding:'3px 10px', borderRadius:20, fontSize:11, fontWeight:800 }}>{s.status_troca==='aprovado'?'APROVADA':'RECUSADA'}</span>
                 </div>
               </Card>
@@ -1180,13 +1200,22 @@ export default function App() {
   const [senhaGestor, setSenhaGestor] = useState('');
   const [erroSenha, setErroSenha] = useState(false);
 
+  // Restaurar sessão ao carregar
+  useEffect(() => {
+    const sessao = carregarSessao();
+    if (sessao) {
+      if (sessao.tipo === 'policial') { setUsuarioSel(sessao.dados); setModo('policial'); }
+      else if (sessao.tipo === 'gestor') { setGestorLogado(sessao.dados); setModo('gestor'); }
+    }
+  }, []);
+
   async function loginGestor() {
     const { data } = await supabase.from('gestores').select('*').eq('senha', senhaGestor).single();
-    if (data) { setGestorLogado(data); setModo('gestor'); setErroSenha(false); }
+    if (data) { salvarSessao('gestor', data); setGestorLogado(data); setModo('gestor'); setErroSenha(false); }
     else setErroSenha(true);
   }
 
-  function sair() { setModo('login'); setUsuarioSel(null); setGestorLogado(null); setSenhaGestor(''); setErroSenha(false); }
+  function sair() { limparSessao(); setModo('login'); setUsuarioSel(null); setGestorLogado(null); setSenhaGestor(''); setErroSenha(false); }
 
   return (
     <div style={{ minHeight:'100vh', background:'#eef2f7', fontFamily:"'Segoe UI',Tahoma,sans-serif" }}>
@@ -1226,4 +1255,4 @@ export default function App() {
       </div>
     </div>
   );
-}
+}  
