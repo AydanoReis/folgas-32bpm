@@ -1369,7 +1369,7 @@ export default function App() {
             position:'absolute', inset:0,
             backgroundImage:'url(/batalhao.jpg)',
             backgroundSize:'cover',
-            backgroundPosition:'center top',
+            backgroundPosition:'center 30%',
             filter:'brightness(0.35) saturate(0.8)',
           }} />
           {/* OVERLAY AZUL */}
