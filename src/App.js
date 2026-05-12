@@ -247,6 +247,70 @@ function gerarPDF(solicitacoes, policiais, semanaAtual) {
   doc.save(`relatorio-32bpm-${periodoStr.replace(/\//g,'-').replace(/ /g,'')}.pdf`);
 }
 
+// ========== LOGIN DO POLICIAL ==========
+function LoginPolicial({ onLogin }) {
+  const [matricula, setMatricula] = useState('');
+  const [senha, setSenha] = useState('');
+  const [erro, setErro] = useState('');
+  const [carregando, setCarregando] = useState(false);
+  const [criandoConta, setCriandoConta] = useState(false);
+  const [novaSenha, setNovaSenha] = useState('');
+  const [confirmaSenha, setConfirmaSenha] = useState('');
+  const [msgCadastro, setMsgCadastro] = useState(null);
+
+  async function entrar() {
+    if (!validarMatricula(matricula)) { setErro('Matrícula inválida (apenas números).'); return; }
+    if (!validarSenha(senha)) { setErro('Senha deve ter no mínimo 4 caracteres.'); return; }
+    setCarregando(true); setErro('');
+    const { data } = await supabase.from('policiais').select('*').eq('matricula', matricula).single();
+    setCarregando(false);
+    if (!data) { setErro('Matrícula não encontrada.'); return; }
+    if (!data.senha || data.senha === '') { setCriandoConta(true); return; }
+    if (data.senha !== senha) { setErro('Senha incorreta.'); return; }
+    onLogin(data);
+  }
+
+  async function criarSenha() {
+    if (!validarSenha(novaSenha)) { setMsgCadastro({ tipo:'erro', texto:'Senha deve ter no mínimo 4 caracteres.' }); return; }
+    if (novaSenha !== confirmaSenha) { setMsgCadastro({ tipo:'erro', texto:'As senhas não coincidem.' }); return; }
+    const { data, error } = await supabase.from('policiais').update({ senha: novaSenha }).eq('matricula', matricula).select().single();
+    if (error || !data) { setMsgCadastro({ tipo:'erro', texto:'Erro ao criar senha.' }); return; }
+    setMsgCadastro({ tipo:'ok', texto:'Senha criada! Entrando...' });
+    setTimeout(() => onLogin(data), 1000);
+  }
+
+  if (criandoConta) {
+    return (
+      <div style={{ background:'#fff', borderRadius:14, padding:22, boxShadow:'0 4px 20px #00000012' }}>
+        <div style={{ fontSize:30, marginBottom:10 }}>🔑</div>
+        <h2 style={{ color:'#1a3a5c', fontWeight:800, fontSize:15, marginBottom:4 }}>Criar senha</h2>
+        <p style={{ color:'#6b8099', fontSize:12, marginBottom:14 }}>Primeiro acesso — defina sua senha</p>
+        <label style={lbl}>Nova senha *</label>
+        <input type="password" value={novaSenha} onChange={e => setNovaSenha(e.target.value)} placeholder="Mínimo 4 caracteres" style={{ ...inp, marginBottom:10 }} />
+        <label style={lbl}>Confirmar senha *</label>
+        <input type="password" value={confirmaSenha} onChange={e => setConfirmaSenha(e.target.value)} placeholder="Repita a senha" onKeyDown={e => e.key === 'Enter' && criarSenha()} style={{ ...inp, marginBottom:6 }} />
+        {msgCadastro && <div style={{ padding:'10px 14px', borderRadius:8, fontWeight:600, marginBottom:6, background:msgCadastro.tipo==='ok'?'#E8F5E9':'#FFEBEE', color:msgCadastro.tipo==='ok'?'#1B5E20':'#B71C1C' }}>{msgCadastro.texto}</div>}
+        <button onClick={criarSenha} style={btnPrimary}>Criar senha e entrar</button>
+        <button onClick={() => setCriandoConta(false)} style={{ ...btnPrimary, background:'#f0f4f8', color:'#6b8099', marginTop:6 }}>Voltar</button>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ background:'#fff', borderRadius:14, padding:22, boxShadow:'0 4px 20px #00000012' }}>
+      <div style={{ fontSize:30, marginBottom:10 }}>👮</div>
+      <h2 style={{ color:'#1a3a5c', fontWeight:800, fontSize:15, marginBottom:4 }}>Sou Policial</h2>
+      <p style={{ color:'#6b8099', fontSize:12, marginBottom:14 }}>Solicitar folgas e acompanhar status</p>
+      <label style={lbl}>Matrícula *</label>
+      <input value={matricula} onChange={e => setMatricula(e.target.value)} placeholder="Ex.: 80231" style={{ ...inp, marginBottom:10 }} />
+      <label style={lbl}>Senha *</label>
+      <input type="password" value={senha} onChange={e => setSenha(e.target.value)} placeholder="••••" onKeyDown={e => e.key === 'Enter' && entrar()} style={{ ...inp, marginBottom:6 }} />
+      {erro && <p style={{ color:'#B71C1C', fontSize:12, marginBottom:4 }}>{erro}</p>}
+      <button onClick={entrar} disabled={carregando} style={{ ...btnPrimary, opacity:carregando?0.7:1 }}>{carregando ? 'Verificando...' : 'Entrar'}</button>
+    </div>
+  );
+}
+
 // ========== TELA DE SOLICITAÇÃO (Policial) ==========
 function TelaSolicitacao({ usuario }) {
   const [dia, setDia] = useState(null);
