@@ -3,7 +3,7 @@ import { supabase } from './supabaseClient';
 import emailjs from '@emailjs/browser';
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
+
 import {
   paginar,
   validarEmail,
@@ -14,7 +14,6 @@ import {
   registrarHistorico,
   exportarParaCSV,
   exportarParaExcel,
-  formatarData,
   formatarDataHora,
   CORES_STATUS,
   COR_SS,
