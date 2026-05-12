@@ -556,26 +556,25 @@ function LoginPolicial({ onLogin }) {
   }
 
   if (modo === 'cadastrar') return (
-    <div style={{ background:'#fff', borderRadius:14, padding:22, boxShadow:'0 4px 20px #00000012' }}>
-      <div style={{ fontSize:30, marginBottom:10 }}>🔐</div>
-      <h2 style={{ color:'#1a3a5c', fontWeight:800, fontSize:15, marginBottom:4 }}>Primeiro acesso</h2>
-      <p style={{ color:'#6b8099', fontSize:12, marginBottom:16 }}>Olá, <strong>{policialSel.nome}</strong>! Cadastre sua senha.</p>
+    <div>
+      <h2 style={{ color:'#1a3a5c', fontWeight:700, fontSize:16, marginBottom:4, marginTop:0 }}>Primeiro acesso</h2>
+      <p style={{ color:'#6b8099', fontSize:13, fontWeight:400, marginBottom:16 }}>Olá, <strong>{policialSel.nome}</strong>! Cadastre sua senha.</p>
       <label style={lbl}>Nova senha *</label>
       <input type="password" value={novaSenha} onChange={e=>setNovaSenha(e.target.value)} placeholder="Mínimo 4 caracteres" style={{ ...inp, marginBottom:10 }} />
       <label style={lbl}>Confirmar senha *</label>
       <input type="password" value={confirmarSenha} onChange={e=>setConfirmarSenha(e.target.value)} placeholder="Repita a senha" style={{ ...inp, marginBottom:6 }} />
       {erro && <p style={{ color:'#B71C1C', fontSize:12, marginBottom:6 }}>{erro}</p>}
-      <button onClick={cadastrarSenha} style={btnPrimary}>Cadastrar Senha e Entrar</button>
+      <button onClick={cadastrarSenha} style={{ ...btnPrimary, letterSpacing:0.5, textTransform:'uppercase', fontSize:13 }}>Cadastrar e Entrar</button>
       <button onClick={() => setModo('login')} style={{ ...btnPrimary, background:'#f0f4f8', color:'#6b8099', marginTop:6 }}>Voltar</button>
     </div>
   );
 
   return (
-    <div style={{ background:'#fff', borderRadius:14, padding:22, boxShadow:'0 4px 20px #00000012' }}>
-      <div style={{ fontSize:30, marginBottom:10 }}>👮</div>
-      <h2 style={{ color:'#1a3a5c', fontWeight:800, fontSize:15, marginBottom:4 }}>Sou Policial</h2>
-      <p style={{ color:'#6b8099', fontSize:12, marginBottom:14 }}>Digite seu nome e selecione na lista</p>
-      <label style={lbl}>Buscar pelo nome ou matrícula</label>
+    <div>
+      <p style={{ color:'#6b8099', fontSize:13, fontWeight:400, marginBottom:20, marginTop:0 }}>
+        Digite seu nome e selecione na lista.
+      </p>
+      <label style={lbl}>Nome ou matrícula</label>
       <div style={{ position:'relative', marginBottom:10 }}>
         <input value={buscaLogin} onChange={e => { setBuscaLogin(e.target.value); setPolicialSel(null); setMostrarSugestoes(true); }} onFocus={() => setMostrarSugestoes(true)} onBlur={() => setTimeout(() => setMostrarSugestoes(false), 200)} placeholder="Digite seu nome..." style={{ ...inp }} autoComplete="off" />
         {mostrarSugestoes && policiaisFiltrados.length > 0 && (
@@ -583,7 +582,7 @@ function LoginPolicial({ onLogin }) {
             {carregando ? <div style={{ padding:'10px 14px', color:'#aab', fontSize:13 }}>Carregando...</div>
               : policiaisFiltrados.map(p => (
                 <div key={p.id} onMouseDown={() => selecionarPolicial(p)} style={{ padding:'10px 14px', cursor:'pointer', borderBottom:'1px solid #f0f4f8', fontSize:13, color:'#1a3a5c' }} onMouseEnter={e => e.currentTarget.style.background='#f0f6ff'} onMouseLeave={e => e.currentTarget.style.background='#fff'}>
-                  <div style={{ fontWeight:700 }}>{p.patente} {p.nome}</div>
+                  <div style={{ fontWeight:600 }}>{p.patente} {p.nome}</div>
                   <div style={{ fontSize:11, color:'#6b8099' }}>Mat. {p.matricula} — {p.secao||'Sem seção'}</div>
                 </div>
               ))
@@ -591,12 +590,12 @@ function LoginPolicial({ onLogin }) {
           </div>
         )}
       </div>
-      {policialSel && <div style={{ background:'#f0f6ff', borderRadius:8, padding:'8px 12px', marginBottom:10, fontSize:12, color:'#1a3a5c', fontWeight:700 }}>✅ {policialSel.patente} {policialSel.nome} — Mat. {policialSel.matricula}</div>}
+      {policialSel && <div style={{ background:'#f0f6ff', borderRadius:8, padding:'8px 12px', marginBottom:12, fontSize:12, color:'#1a3a5c', fontWeight:600 }}>✅ {policialSel.patente} {policialSel.nome} — Mat. {policialSel.matricula}</div>}
       <label style={lbl}>Senha</label>
-      <input type="password" value={senha} onChange={e => setSenha(e.target.value)} onKeyDown={e => e.key==='Enter'&&entrar()} placeholder="••••" style={{ ...inp, marginBottom:6 }} />
-      {erro && <p style={{ color:'#B71C1C', fontSize:12, marginBottom:6 }}>{erro}</p>}
-      <button onClick={entrar} style={btnPrimary}>Entrar</button>
-      <p style={{ color:'#aab', fontSize:11, marginTop:8, textAlign:'center' }}>Esqueceu a senha? Fale com o gestor para resetar.</p>
+      <input type="password" value={senha} onChange={e => setSenha(e.target.value)} onKeyDown={e => e.key==='Enter'&&entrar()} placeholder="••••••" style={{ ...inp, marginBottom:6 }} />
+      {erro && <p style={{ color:'#B71C1C', fontSize:12, marginBottom:4 }}>{erro}</p>}
+      <button onClick={entrar} style={{ ...btnPrimary, letterSpacing:0.5, textTransform:'uppercase', fontSize:13 }}>Entrar</button>
+      <p style={{ color:'#aab', fontSize:11, marginTop:10, textAlign:'center', fontWeight:400 }}>Esqueceu a senha? Fale com o gestor para resetar.</p>
     </div>
   );
 }
@@ -1338,42 +1337,132 @@ export default function App() {
 
   function sair() { limparSessao(); setModo('login'); setUsuarioSel(null); setGestorLogado(null); setSenhaGestor(''); setErroSenha(false); }
 
+  const [abaLogin, setAbaLogin] = useState('policial');
+
   return (
-    <div style={{ minHeight:'100vh', background:'#eef2f7', fontFamily:"'Segoe UI',Tahoma,sans-serif" }}>
+    <div style={{ minHeight:'100vh', background:'#f0f2f5', fontFamily:"'Inter','Segoe UI',sans-serif" }}>
+
+      {/* CABEÇALHO */}
       <div style={{ background:'linear-gradient(135deg,#0d2340 0%,#1a3a5c 60%,#1e4d7b 100%)', padding:'16px 24px', display:'flex', alignItems:'center', justifyContent:'space-between', boxShadow:'0 4px 20px #00000040' }}>
         <div style={{ display:'flex', alignItems:'center', gap:12 }}>
           <img src="/logo.jpeg" alt="32 BPM" style={{ height:42, width:42, objectFit:'contain' }} />
           <div>
-            <div style={{ color:'#fff', fontWeight:900, fontSize:17, letterSpacing:0.5 }}>32º BPM — Controle de Folgas</div>
-            <div style={{ color:'#8db4d8', fontSize:11 }}>PCSV · Expediente Semanal · v2.1</div>
+            <div style={{ color:'#fff', fontWeight:700, fontSize:17, letterSpacing:0.3 }}>32º BPM — Controle de Folgas</div>
+            <div style={{ color:'#8db4d8', fontSize:11, fontWeight:400 }}>PCSV · Expediente Semanal · v2.1</div>
           </div>
         </div>
-        {modo !== 'login' && <button onClick={sair} style={{ background:'rgba(255,255,255,0.12)', color:'#fff', border:'1px solid rgba(255,255,255,0.25)', borderRadius:8, padding:'7px 14px', cursor:'pointer', fontSize:13, fontWeight:700 }}>← Sair</button>}
+        {modo !== 'login' && <button onClick={sair} style={{ background:'rgba(255,255,255,0.12)', color:'#fff', border:'1px solid rgba(255,255,255,0.25)', borderRadius:8, padding:'7px 14px', cursor:'pointer', fontSize:13, fontWeight:600 }}>← Sair</button>}
       </div>
-      <div style={{ maxWidth:740, margin:'28px auto', padding:'0 14px' }}>
-        {modo === 'login' && (
-          <>
-            <div style={{ textAlign:'center', marginBottom:26 }}>
-              <h1 style={{ color:'#1a3a5c', fontWeight:900, fontSize:20, marginBottom:4 }}>Acesso ao Sistema</h1>
-              <p style={{ color:'#6b8099', fontSize:13 }}>Selecione seu perfil para continuar</p>
+
+      {/* TELA DE LOGIN */}
+      {modo === 'login' && (
+        <div style={{
+          minHeight:'calc(100vh - 74px)',
+          position:'relative',
+          display:'flex',
+          alignItems:'center',
+          justifyContent:'center',
+          padding:'24px 16px',
+        }}>
+          {/* FOTO DE FUNDO */}
+          <div style={{
+            position:'absolute', inset:0,
+            backgroundImage:'url(/batalhao.jpg)',
+            backgroundSize:'cover',
+            backgroundPosition:'center top',
+            filter:'brightness(0.35) saturate(0.8)',
+          }} />
+          {/* OVERLAY AZUL */}
+          <div style={{
+            position:'absolute', inset:0,
+            background:'linear-gradient(160deg, rgba(13,35,64,0.72) 0%, rgba(30,77,123,0.55) 100%)',
+          }} />
+
+          {/* CARD DE LOGIN */}
+          <div style={{
+            position:'relative', zIndex:1,
+            width:'100%', maxWidth:420,
+            background:'#fff',
+            borderRadius:16,
+            boxShadow:'0 20px 60px rgba(0,0,0,0.35)',
+            overflow:'hidden',
+          }}>
+            {/* TOPO DO CARD */}
+            <div style={{ background:'linear-gradient(135deg,#0d2340,#1e4d7b)', padding:'28px 32px 24px', textAlign:'center' }}>
+              <img src="/logo.jpeg" alt="32 BPM" style={{ height:56, width:56, objectFit:'contain', marginBottom:12 }} />
+              <h1 style={{ color:'#fff', fontWeight:700, fontSize:18, margin:0, letterSpacing:0.2 }}>Acesso ao Sistema</h1>
+              <p style={{ color:'#8db4d8', fontSize:12, fontWeight:400, margin:'6px 0 0' }}>
+                Sistema restrito ao uso do efetivo do 32º BPM
+              </p>
             </div>
-            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:16 }}>
-              <LoginPolicial onLogin={p => { setUsuarioSel(p); setModo('policial'); }} />
-              <div style={{ background:'#fff', borderRadius:14, padding:22, boxShadow:'0 4px 20px #00000012' }}>
-                <div style={{ fontSize:30, marginBottom:10 }}>🗂️</div>
-                <h2 style={{ color:'#1a3a5c', fontWeight:800, fontSize:15, marginBottom:4 }}>Sou Gestor</h2>
-                <p style={{ color:'#6b8099', fontSize:12, marginBottom:14 }}>Aprovar solicitações e gerenciar efetivo</p>
-                <label style={lbl}>Senha de acesso</label>
-                <input type="password" value={senhaGestor} onChange={e => setSenhaGestor(e.target.value)} onKeyDown={e => e.key==='Enter'&&loginGestor()} placeholder="••••" style={{ ...inp, marginBottom:6 }} />
-                {erroSenha && <p style={{ color:'#B71C1C', fontSize:12, marginBottom:4 }}>Senha incorreta.</p>}
-                <button onClick={loginGestor} style={{ ...btnPrimary, marginTop:8 }}>Entrar como Gestor</button>
-              </div>
+
+            {/* ABAS */}
+            <div style={{ display:'flex', borderBottom:'2px solid #f0f2f5' }}>
+              {[
+                { id:'policial', label:'👮 Sou Policial' },
+                { id:'gestor', label:'🗂️ Sou Gestor' },
+              ].map(a => (
+                <button key={a.id} onClick={() => setAbaLogin(a.id)} style={{
+                  flex:1, padding:'14px 8px',
+                  fontWeight: abaLogin === a.id ? 700 : 500,
+                  fontSize:13,
+                  cursor:'pointer',
+                  border:'none',
+                  borderBottom: abaLogin === a.id ? '3px solid #1a3a5c' : '3px solid transparent',
+                  background:'#fff',
+                  color: abaLogin === a.id ? '#1a3a5c' : '#6b8099',
+                  transition:'all 0.15s',
+                  marginBottom:'-2px',
+                }}>
+                  {a.label}
+                </button>
+              ))}
             </div>
-          </>
-        )}
-        {modo === 'policial' && usuarioSel && <TelaSolicitacao usuario={usuarioSel} />}
-        {modo === 'gestor' && gestorLogado && <TelaGestor gestorLogado={gestorLogado} />}
-      </div>
+
+            {/* CONTEÚDO DAS ABAS */}
+            <div style={{ padding:'24px 32px 28px' }}>
+              {abaLogin === 'policial' && (
+                <LoginPolicial onLogin={p => { setUsuarioSel(p); setModo('policial'); }} />
+              )}
+              {abaLogin === 'gestor' && (
+                <div>
+                  <p style={{ color:'#6b8099', fontSize:13, fontWeight:400, marginBottom:20, marginTop:0 }}>
+                    Acesso restrito a gestores autorizados.
+                  </p>
+                  <label style={lbl}>Senha de acesso</label>
+                  <input
+                    type="password"
+                    value={senhaGestor}
+                    onChange={e => setSenhaGestor(e.target.value)}
+                    onKeyDown={e => e.key === 'Enter' && loginGestor()}
+                    placeholder="••••••"
+                    style={{ ...inp, marginBottom:6 }}
+                  />
+                  {erroSenha && <p style={{ color:'#B71C1C', fontSize:12, marginBottom:4 }}>Senha incorreta. Tente novamente.</p>}
+                  <button onClick={loginGestor} style={{ ...btnPrimary, marginTop:12, letterSpacing:0.5, textTransform:'uppercase', fontSize:13 }}>
+                    Entrar
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* RODAPÉ DO CARD */}
+            <div style={{ borderTop:'1px solid #f0f2f5', padding:'12px 32px', textAlign:'center' }}>
+              <span style={{ fontSize:11, color:'#aab', fontWeight:400 }}>
+                Polícia Militar do Estado do Rio de Janeiro · 32º BPM
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* TELAS INTERNAS */}
+      {modo !== 'login' && (
+        <div style={{ maxWidth:740, margin:'28px auto', padding:'0 14px' }}>
+          {modo === 'policial' && usuarioSel && <TelaSolicitacao usuario={usuarioSel} />}
+          {modo === 'gestor' && gestorLogado && <TelaGestor gestorLogado={gestorLogado} />}
+        </div>
+      )}
     </div>
   );
 }
