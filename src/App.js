@@ -325,7 +325,9 @@ function Dashboard({ solicitacoes, policiais, onAtualizarPolicial, onRemoverPoli
   const desbalanceado = maxDia > 0 && (maxDia - Math.min(...totalPorDia.filter(v=>v>0))) >= 3;
   const semSecao = policiais.filter(p => !p.secao || p.secao === '');
   const retornosProximos = policiais.filter(p => p.situacao === 'Férias' && p.ferias_fim && diasParaRetorno(p.ferias_fim) !== null && diasParaRetorno(p.ferias_fim) <= 3 && diasParaRetorno(p.ferias_fim) >= 0);
-  const ltsProximos = policiais.filter(p => (p.sit_sanitaria||'Apto A') === 'LTS' && p.ferias_fim && diasParaRetorno(p.ferias_fim) !== null && diasParaRetorno(p.ferias_fim) <= 3 && diasParaRetorno(p.ferias_fim) >= 0);
+  const ltsProximos = policiais.filter(p => (p.sit_sanitaria||'Apto A') === 'LTS' && p.ss_fim && diasParaRetorno(p.ss_fim) !== null && diasParaRetorno(p.ss_fim) <= 3 && diasParaRetorno(p.ss_fim) >= 0);
+  const aptoBProximos = policiais.filter(p => (p.sit_sanitaria||'Apto A') === 'Apto B' && p.ss_fim && diasParaRetorno(p.ss_fim) !== null && diasParaRetorno(p.ss_fim) <= 3 && diasParaRetorno(p.ss_fim) >= 0);
+  const aptoCProximos = policiais.filter(p => (p.sit_sanitaria||'Apto A') === 'Apto C' && p.ss_fim && diasParaRetorno(p.ss_fim) !== null && diasParaRetorno(p.ss_fim) <= 3 && diasParaRetorno(p.ss_fim) >= 0);
   const aptoAComRestricao = policiais.filter(p => (p.sit_sanitaria||'Apto A') === 'Apto A' && temRestricao(p));
   const aptoASemRestricao = policiais.filter(p => (p.sit_sanitaria||'Apto A') === 'Apto A' && !temRestricao(p));
   const ssCards = [
@@ -357,7 +359,21 @@ function Dashboard({ solicitacoes, policiais, onAtualizarPolicial, onRemoverPoli
       {ltsProximos.length > 0 && (
         <div style={{ background:'#F3E5F5', border:'2px solid #CE93D8', borderRadius:10, padding:'12px 16px', marginBottom:14 }}>
           <div style={{ fontWeight:800, color:'#6A1B9A', fontSize:13, marginBottom:8 }}>🟣 LTS Sanitário encerrando em até 3 dias:</div>
-          {ltsProximos.map(p => { const dias = diasParaRetorno(p.ferias_fim); return (<div key={p.id} style={{ display:'flex', gap:8, alignItems:'center', marginBottom:4 }}><span style={{ fontWeight:700, color:'#1a3a5c', fontSize:12 }}>{p.patente} {p.nome}</span><span style={{ background:dias===0?'#6A1B9A':'#AB47BC', color:'#fff', borderRadius:6, padding:'1px 8px', fontSize:11, fontWeight:800 }}>{dias===0?'Retorna hoje!':dias===1?'Retorna amanhã!':`${dias} dias`}</span></div>); })}
+          {ltsProximos.map(p => { const dias = diasParaRetorno(p.ss_fim); return (<div key={p.id} style={{ display:'flex', gap:8, alignItems:'center', marginBottom:4 }}><span style={{ fontWeight:700, color:'#1a3a5c', fontSize:12 }}>{p.patente} {p.nome}</span><span style={{ background:dias===0?'#6A1B9A':'#AB47BC', color:'#fff', borderRadius:6, padding:'1px 8px', fontSize:11, fontWeight:800 }}>{dias===0?'Encerra hoje!':dias===1?'Encerra amanhã!':`${dias} dias`}</span></div>); })}
+        </div>
+      )}
+
+      {aptoBProximos.length > 0 && (
+        <div style={{ background:'#FFF8E1', border:'2px solid #FFD54F', borderRadius:10, padding:'12px 16px', marginBottom:14 }}>
+          <div style={{ fontWeight:800, color:'#F9A825', fontSize:13, marginBottom:8 }}>🟡 Apto B encerrando em até 3 dias:</div>
+          {aptoBProximos.map(p => { const dias = diasParaRetorno(p.ss_fim); return (<div key={p.id} style={{ display:'flex', gap:8, alignItems:'center', marginBottom:4 }}><span style={{ fontWeight:700, color:'#1a3a5c', fontSize:12 }}>{p.patente} {p.nome}</span><span style={{ background:dias===0?'#F9A825':dias<=1?'#F57F17':'#FFA000', color:'#fff', borderRadius:6, padding:'1px 8px', fontSize:11, fontWeight:800 }}>{dias===0?'Encerra hoje!':dias===1?'Encerra amanhã!':`${dias} dias`}</span></div>); })}
+        </div>
+      )}
+
+      {aptoCProximos.length > 0 && (
+        <div style={{ background:'#FFEBEE', border:'2px solid #EF9A9A', borderRadius:10, padding:'12px 16px', marginBottom:14 }}>
+          <div style={{ fontWeight:800, color:'#B71C1C', fontSize:13, marginBottom:8 }}>🔴 Apto C encerrando em até 3 dias:</div>
+          {aptoCProximos.map(p => { const dias = diasParaRetorno(p.ss_fim); return (<div key={p.id} style={{ display:'flex', gap:8, alignItems:'center', marginBottom:4 }}><span style={{ fontWeight:700, color:'#1a3a5c', fontSize:12 }}>{p.patente} {p.nome}</span><span style={{ background:dias===0?'#B71C1C':'#E53935', color:'#fff', borderRadius:6, padding:'1px 8px', fontSize:11, fontWeight:800 }}>{dias===0?'Encerra hoje!':dias===1?'Encerra amanhã!':`${dias} dias`}</span></div>); })}
         </div>
       )}
 
@@ -509,6 +525,162 @@ function CalendarioFolgas({ solicitacoes }) {
         </table>
       </div>
       {filtradas.length === 0 && <p style={{ color:'#aab', fontSize:13, textAlign:'center', marginTop:20 }}>Nenhuma folga aprovada nesta semana.</p>}
+    </div>
+  );
+}
+
+// ========== TELA DE SERVIÇO ==========
+function TelaServico({ solicitacoes, policiais }) {
+  const hoje = new Date().toISOString().split('T')[0];
+  const diaSemanaHoje = DIAS[new Date().getDay() === 0 ? 6 : new Date().getDay() - 1];
+  const [dataSelecionada, setDataSelecionada] = useState(hoje);
+  const [secaoFiltro, setSecaoFiltro] = useState('todas');
+
+  const diaSemana = DIAS[new Date(dataSelecionada + 'T12:00:00').getDay() === 0 ? 6 : new Date(dataSelecionada + 'T12:00:00').getDay() - 1];
+
+  // Folgas aprovadas naquele dia (semana contém a data selecionada e dia da semana bate)
+  const folgasNoDia = solicitacoes.filter(s =>
+    s.status === 'aprovado' &&
+    s.dia === diaSemana &&
+    s.semana <= dataSelecionada &&
+    (() => {
+      const inicioSemana = new Date(s.semana + 'T00:00:00');
+      const fimSemana = new Date(inicioSemana);
+      fimSemana.setDate(fimSemana.getDate() + 6);
+      const data = new Date(dataSelecionada + 'T00:00:00');
+      return data >= inicioSemana && data <= fimSemana;
+    })()
+  );
+
+  const policiaisfiltrados = secaoFiltro === 'todas' ? policiais : policiais.filter(p => p.secao === secaoFiltro);
+
+  const deServico = policiaisfiltrados.filter(p => {
+    const temFolga = folgasNoDia.find(s => s.policial_id === p.id);
+    const afastado = (p.situacao || 'Pronto') !== 'Pronto';
+    return !temFolga && !afastado;
+  });
+
+  const deFolga = policiaisfiltrados.filter(p => folgasNoDia.find(s => s.policial_id === p.id));
+
+  const afastados = policiaisfiltrados.filter(p => {
+    const temFolga = folgasNoDia.find(s => s.policial_id === p.id);
+    return !temFolga && (p.situacao || 'Pronto') !== 'Pronto';
+  });
+
+  const totalEfetivo = policiaisfiltrados.length;
+  const pctServico = totalEfetivo > 0 ? Math.round((deServico.length / totalEfetivo) * 100) : 0;
+
+  return (
+    <div>
+      <h3 style={{ fontSize:15, fontWeight:800, color:'#1a3a5c', marginBottom:14 }}>🪖 Efetivo de Serviço</h3>
+
+      {/* FILTROS */}
+      <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8, marginBottom:14 }}>
+        <div>
+          <label style={lbl}>Data</label>
+          <input type="date" value={dataSelecionada} onChange={e => setDataSelecionada(e.target.value)} style={inp} />
+        </div>
+        <div>
+          <label style={lbl}>Seção</label>
+          <select value={secaoFiltro} onChange={e => setSecaoFiltro(e.target.value)} style={inp}>
+            <option value="todas">Todas as seções</option>
+            {SECOES.map(s => <option key={s}>{s}</option>)}
+          </select>
+        </div>
+      </div>
+
+      {/* DIA DA SEMANA */}
+      <div style={{ background:'linear-gradient(135deg,#0d2340,#1e4d7b)', borderRadius:10, padding:'12px 16px', marginBottom:14, display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+        <div>
+          <div style={{ color:'#8db4d8', fontSize:11, fontWeight:600 }}>DIA SELECIONADO</div>
+          <div style={{ color:'#fff', fontSize:16, fontWeight:800 }}>{diaSemana}-feira · {new Date(dataSelecionada + 'T12:00:00').toLocaleDateString('pt-BR')}</div>
+        </div>
+        <div style={{ textAlign:'right' }}>
+          <div style={{ color:'#8db4d8', fontSize:11, fontWeight:600 }}>DISPONÍVEIS</div>
+          <div style={{ color:'#fff', fontSize:22, fontWeight:900 }}>{deServico.length} <span style={{ fontSize:13, fontWeight:400 }}>/ {totalEfetivo}</span></div>
+        </div>
+      </div>
+
+      {/* CARDS DE RESUMO */}
+      <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:10, marginBottom:14 }}>
+        <div style={{ background:'#E8F5E9', borderRadius:10, padding:'12px 8px', textAlign:'center', border:'2px solid #A5D6A7' }}>
+          <div style={{ fontSize:26, fontWeight:900, color:'#1B5E20' }}>{deServico.length}</div>
+          <div style={{ fontSize:11, color:'#1B5E20', fontWeight:700 }}>🟢 De Serviço</div>
+          <div style={{ fontSize:10, color:'#6b8099', marginTop:2 }}>{pctServico}% do efetivo</div>
+        </div>
+        <div style={{ background:'#E3F2FD', borderRadius:10, padding:'12px 8px', textAlign:'center', border:'2px solid #90CAF9' }}>
+          <div style={{ fontSize:26, fontWeight:900, color:'#0D47A1' }}>{deFolga.length}</div>
+          <div style={{ fontSize:11, color:'#0D47A1', fontWeight:700 }}>🌙 De Folga</div>
+        </div>
+        <div style={{ background:'#FFEBEE', borderRadius:10, padding:'12px 8px', textAlign:'center', border:'2px solid #EF9A9A' }}>
+          <div style={{ fontSize:26, fontWeight:900, color:'#B71C1C' }}>{afastados.length}</div>
+          <div style={{ fontSize:11, color:'#B71C1C', fontWeight:700 }}>🚨 Afastados</div>
+        </div>
+      </div>
+
+      {/* DE SERVIÇO */}
+      {deServico.length > 0 && (
+        <Card>
+          <h4 style={{ fontSize:13, fontWeight:800, color:'#1B5E20', marginBottom:10 }}>🟢 De Serviço ({deServico.length})</h4>
+          <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
+            {deServico.map(p => (
+              <div key={p.id} style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'8px 10px', background:'#f8fafc', borderRadius:8, border:'1px solid #e0e8f0' }}>
+                <div>
+                  <span style={{ fontWeight:700, color:'#1a3a5c', fontSize:13 }}>{p.patente} {p.nome}</span>
+                  <span style={{ color:'#6b8099', fontSize:11, marginLeft:8 }}>Mat. {p.matricula}</span>
+                </div>
+                <div style={{ display:'flex', gap:6, alignItems:'center' }}>
+                  {p.secao && <span style={{ background:'#e8f0fe', color:'#3d5a9e', borderRadius:6, padding:'2px 8px', fontSize:11, fontWeight:700 }}>{p.secao}</span>}
+                  <SSBadge p={p} />
+                </div>
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
+
+      {/* DE FOLGA */}
+      {deFolga.length > 0 && (
+        <Card>
+          <h4 style={{ fontSize:13, fontWeight:800, color:'#0D47A1', marginBottom:10 }}>🌙 De Folga/Concessão ({deFolga.length})</h4>
+          <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
+            {deFolga.map(p => {
+              const folga = folgasNoDia.find(s => s.policial_id === p.id);
+              return (
+                <div key={p.id} style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'8px 10px', background:'#f0f6ff', borderRadius:8, border:'1px solid #d0dce8' }}>
+                  <div>
+                    <span style={{ fontWeight:700, color:'#1a3a5c', fontSize:13 }}>{p.patente} {p.nome}</span>
+                    <span style={{ color:'#6b8099', fontSize:11, marginLeft:8 }}>Mat. {p.matricula}</span>
+                  </div>
+                  <MotivoBadge motivo={folga?.motivo || 'Folga'} />
+                </div>
+              );
+            })}
+          </div>
+        </Card>
+      )}
+
+      {/* AFASTADOS */}
+      {afastados.length > 0 && (
+        <Card>
+          <h4 style={{ fontSize:13, fontWeight:800, color:'#B71C1C', marginBottom:10 }}>🚨 Afastados ({afastados.length})</h4>
+          <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
+            {afastados.map(p => (
+              <div key={p.id} style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'8px 10px', background:'#fff5f5', borderRadius:8, border:'1px solid #EF9A9A' }}>
+                <div>
+                  <span style={{ fontWeight:700, color:'#1a3a5c', fontSize:13 }}>{p.patente} {p.nome}</span>
+                  <span style={{ color:'#6b8099', fontSize:11, marginLeft:8 }}>Mat. {p.matricula}</span>
+                </div>
+                <SituacaoBadge situacao={p.situacao || 'Pronto'} />
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
+
+      {deServico.length === 0 && deFolga.length === 0 && afastados.length === 0 && (
+        <p style={{ color:'#aab', fontSize:13, textAlign:'center', padding:20 }}>Nenhum policial encontrado para os filtros selecionados.</p>
+      )}
     </div>
   );
 }
@@ -953,6 +1125,7 @@ function TelaGestor({ gestorLogado }) {
     { id:'solicitacoes', label:'📋 Solicitações' },
     { id:'trocas', label:`🔄 Trocas${trocasPendentes.length > 0 ? ` (${trocasPendentes.length})` : ''}` },
     { id:'calendario', label:'📅 Calendário' },
+    { id:'servico', label:'🪖 Serviço' },
     { id:'estatisticas', label:'📈 Estatísticas' },
     { id:'efetivo', label:'👮 Efetivo' },
     { id:'gestores', label:'🗝️ Gestores' },
@@ -1130,6 +1303,10 @@ function TelaGestor({ gestorLogado }) {
         </Card>
       )}
 
+      {aba === 'servico' && (
+        <TelaServico solicitacoes={solicitacoes} policiais={policiais} />
+      )}
+
       {aba === 'estatisticas' && (
         <Dashboard
           solicitacoes={solicitacoes}
@@ -1213,11 +1390,20 @@ function TelaGestor({ gestorLogado }) {
                       {p.ferias_fim && diasParaRetorno(p.ferias_fim) !== null && (<div style={{ gridColumn:'1/-1' }}><span style={{ background:diasParaRetorno(p.ferias_fim)<=3?'#B71C1C':'#1B5E20', color:'#fff', borderRadius:6, padding:'2px 10px', fontSize:12, fontWeight:800 }}>{diasParaRetorno(p.ferias_fim)===0?'Retorna hoje!':diasParaRetorno(p.ferias_fim)<0?'Férias vencidas!':diasParaRetorno(p.ferias_fim)<=3?`⚠️ Retorna em ${diasParaRetorno(p.ferias_fim)} dias`:`Retorna em ${diasParaRetorno(p.ferias_fim)} dias`}</span></div>)}
                     </div>
                   )}
-                  {p.sit_sanitaria === 'LTS' && (
-                    <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:6, marginTop:8, background:'#F3E5F5', borderRadius:8, padding:'10px' }}>
-                      <div><label style={{ ...lbl, fontSize:10 }}>Início do LTS</label><input type="date" value={p.ferias_inicio||''} onChange={e => atualizarPolicial(p.id,'ferias_inicio',e.target.value)} style={{ ...inp, fontSize:12, padding:'6px 8px' }} /></div>
-                      <div><label style={{ ...lbl, fontSize:10 }}>Fim do LTS</label><input type="date" value={p.ferias_fim||''} onChange={e => atualizarPolicial(p.id,'ferias_fim',e.target.value)} style={{ ...inp, fontSize:12, padding:'6px 8px' }} /></div>
-                      {p.ferias_fim && diasParaRetorno(p.ferias_fim) !== null && (<div style={{ gridColumn:'1/-1' }}><span style={{ background:diasParaRetorno(p.ferias_fim)<=3?'#6A1B9A':'#1B5E20', color:'#fff', borderRadius:6, padding:'2px 10px', fontSize:12, fontWeight:800 }}>{diasParaRetorno(p.ferias_fim)===0?'Retorna hoje!':diasParaRetorno(p.ferias_fim)<0?'LTS vencido!':diasParaRetorno(p.ferias_fim)<=3?`⚠️ Retorna em ${diasParaRetorno(p.ferias_fim)} dias`:`Retorna em ${diasParaRetorno(p.ferias_fim)} dias`}</span></div>)}
+                  {(p.sit_sanitaria === 'Apto B' || p.sit_sanitaria === 'Apto C' || p.sit_sanitaria === 'LTS') && (
+                    <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:6, marginTop:8, background: p.sit_sanitaria==='Apto B'?'#FFF8E1':p.sit_sanitaria==='Apto C'?'#FFEBEE':'#F3E5F5', borderRadius:8, padding:'10px' }}>
+                      <div style={{ gridColumn:'1/-1', fontSize:11, fontWeight:800, color: p.sit_sanitaria==='Apto B'?'#F9A825':p.sit_sanitaria==='Apto C'?'#B71C1C':'#6A1B9A', marginBottom:4 }}>
+                        {p.sit_sanitaria==='Apto B' ? '🟡' : p.sit_sanitaria==='Apto C' ? '🔴' : '🟣'} Período do {p.sit_sanitaria}
+                      </div>
+                      <div><label style={{ ...lbl, fontSize:10 }}>Data de Início</label><input type="date" value={p.ss_inicio||''} onChange={e => atualizarPolicial(p.id,'ss_inicio',e.target.value)} style={{ ...inp, fontSize:12, padding:'6px 8px' }} /></div>
+                      <div><label style={{ ...lbl, fontSize:10 }}>Data de Fim</label><input type="date" value={p.ss_fim||''} onChange={e => atualizarPolicial(p.id,'ss_fim',e.target.value)} style={{ ...inp, fontSize:12, padding:'6px 8px' }} /></div>
+                      {p.ss_fim && diasParaRetorno(p.ss_fim) !== null && (
+                        <div style={{ gridColumn:'1/-1' }}>
+                          <span style={{ background:diasParaRetorno(p.ss_fim)<=3?(p.sit_sanitaria==='Apto B'?'#F9A825':p.sit_sanitaria==='Apto C'?'#B71C1C':'#6A1B9A'):'#1B5E20', color:'#fff', borderRadius:6, padding:'2px 10px', fontSize:12, fontWeight:800 }}>
+                            {diasParaRetorno(p.ss_fim)===0?'Encerra hoje!':diasParaRetorno(p.ss_fim)<0?`${p.sit_sanitaria} vencido!`:diasParaRetorno(p.ss_fim)<=3?`⚠️ Encerra em ${diasParaRetorno(p.ss_fim)} dias`:`Encerra em ${diasParaRetorno(p.ss_fim)} dias`}
+                          </span>
+                        </div>
+                      )}
                     </div>
                   )}
                   <div style={{ marginTop:8, display:'flex', gap:6, flexWrap:'wrap', alignItems:'center' }}>
