@@ -532,7 +532,6 @@ function CalendarioFolgas({ solicitacoes }) {
 // ========== TELA DE SERVIÇO ==========
 function TelaServico({ solicitacoes, policiais }) {
   const hoje = new Date().toISOString().split('T')[0];
-  const diaSemanaHoje = DIAS[new Date().getDay() === 0 ? 6 : new Date().getDay() - 1];
   const [dataSelecionada, setDataSelecionada] = useState(hoje);
   const [secaoFiltro, setSecaoFiltro] = useState('todas');
 
