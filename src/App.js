@@ -1098,8 +1098,21 @@ function TelaSolicitacao({ usuario }) {
     if (!email || !validarEmail(email)) { setMsg({ tipo:'erro', texto:'Informe um email válido (ex: seu@email.com).' }); return; }
     const check = rateLimiterSolicitacao.podeExecutar();
     if (!check.permitido) { setMsg({ tipo:'erro', texto:`Aguarde ${check.proxemaEmMs}s antes de enviar nova solicitação.` }); return; }
+    const isCHR = usuario.restricao === 'CHR';
     const jaExiste = minhas.find(s => s.semana === semana && s.motivo === motivo && s.status !== 'recusado');
-    if (jaExiste) { setMsg({ tipo:'erro', texto:`Você já possui uma ${motivo} solicitada para esta semana.` }); return; }
+    if (jaExiste) {
+      // CHR pode ter 2 concessões
+      if (motivo === 'Concessão' && isCHR) {
+        const concessoesSemana = minhas.filter(s => s.semana === semana && s.motivo === 'Concessão' && s.status !== 'recusado');
+        if (concessoesSemana.length >= 2) {
+          setMsg({ tipo:'erro', texto:'Você já possui 2 concessões solicitadas para esta semana (limite CHR).' });
+          return;
+        }
+      } else {
+        setMsg({ tipo:'erro', texto:`Você já possui uma ${motivo} solicitada para esta semana.` });
+        return;
+      }
+    }
     setEnviando(true);
     const { error } = await supabase.from('solicitacoes').insert({ policial_id:usuario.id, policial_nome:usuario.nome, matricula:usuario.matricula, patente:usuario.patente, secao:usuario.secao||'—', dia, semana, motivo, status:'pendente', email_policial:email });
     setEnviando(false);
