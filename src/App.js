@@ -315,7 +315,14 @@ function gerarPDF(solicitacoes, policiais, semanaAtual) {
       const dodia = aprovadas.filter(s => s.dia === dia);
       const isDiaSemUtil = dia === 'Sábado' || dia === 'Domingo';
 
-      if (dodia.length === 0) {
+      // Policiais de serviço = prontos sem folga aprovada naquele dia
+      const deServicoDia = policiais.filter(p => {
+        const temFolga = dodia.find(s => s.policial_id === p.id);
+        const afastado = (p.situacao||'Pronto') !== 'Pronto';
+        return !temFolga && !afastado;
+      });
+
+      if (dodia.length === 0 && deServicoDia.length === 0) {
         if (y > pageH - 30) { doc.addPage(); cabecalhoPagina('QUADRO OPERACIONAL DETALHADO (continuação)'); y = 22; }
         doc.setFillColor(isDiaSemUtil ? 245 : 235, isDiaSemUtil ? 245 : 238, isDiaSemUtil ? 245 : 242);
         doc.roundedRect(10, y, pageW-20, 9, 1, 1, 'F');
@@ -340,41 +347,83 @@ function gerarPDF(solicitacoes, policiais, semanaAtual) {
       doc.setTextColor(255,255,255); doc.setFontSize(9); doc.setFont('helvetica','bold');
       doc.text(dia.toUpperCase(), 15, y+8);
       doc.setFontSize(8); doc.setFont('helvetica','normal');
-      doc.text(`${dodia.length} solicitação${dodia.length !== 1 ? 'ões' : ''}  |  Folgas: ${dodia.filter(s=>s.motivo==='Folga').length}  |  Concessões: ${dodia.filter(s=>s.motivo==='Concessão').length}`, pageW-15, y+8, { align:'right' });
+      doc.text(`De Folga: ${dodia.length}  |  De Serviço: ${deServicoDia.length}`, pageW-15, y+8, { align:'right' });
       y += 13;
 
-      doc.autoTable({
-        startY: y,
-        head: [['Seção', 'Patente / Nome', 'Tipo']],
-        body: dodia.map(s => [
-          s.secao && s.secao !== '—' ? s.secao : 'Não vinculada',
-          `${s.patente} ${s.policial_nome}`,
-          s.motivo,
-        ]),
-        theme: 'grid',
-        headStyles: { fillColor:[50,90,140], textColor:255, fontStyle:'bold', fontSize:7, cellPadding:2 },
-        bodyStyles: { fontSize:7.5, cellPadding:2 },
-        columnStyles: {
-          0: { cellWidth:32, fontStyle:'bold' },
-          2: { cellWidth:22, halign:'center' },
-        },
-        didParseCell: (data) => {
-          if (data.section === 'body' && data.column.index === 2) {
-            if (data.cell.raw === 'Folga') {
-              data.cell.styles.textColor = [13,71,161];
-              data.cell.styles.fontStyle = 'bold';
-            } else {
-              data.cell.styles.textColor = [106,27,154];
+      // TABELA DE FOLGA
+      if (dodia.length > 0) {
+        doc.setFillColor(227,242,253); doc.roundedRect(10, y, pageW-20, 7, 1, 1, 'F');
+        doc.setTextColor(13,71,161); doc.setFontSize(7); doc.setFont('helvetica','bold');
+        doc.text(`🌙 DE FOLGA / CONCESSÃO (${dodia.length})`, 15, y+5);
+        y += 8;
+        doc.autoTable({
+          startY: y,
+          head: [['Seção', 'Patente / Nome', 'Tipo']],
+          body: dodia.map(s => [
+            s.secao && s.secao !== '—' ? s.secao : 'Não vinculada',
+            `${s.patente} ${s.policial_nome}`,
+            s.motivo,
+          ]),
+          theme: 'grid',
+          headStyles: { fillColor:[13,71,161], textColor:255, fontStyle:'bold', fontSize:7, cellPadding:2 },
+          bodyStyles: { fontSize:7, cellPadding:2 },
+          columnStyles: {
+            0: { cellWidth:32, fontStyle:'bold' },
+            2: { cellWidth:22, halign:'center' },
+          },
+          didParseCell: (data) => {
+            if (data.section === 'body' && data.column.index === 2) {
+              data.cell.styles.textColor = data.cell.raw === 'Folga' ? [13,71,161] : [106,27,154];
               data.cell.styles.fontStyle = 'bold';
             }
-          }
-          if (data.section === 'body' && data.row.index % 2 === 0) {
-            data.cell.styles.fillColor = [248,250,252];
-          }
-        },
-        margin: { left:10, right:10 },
-      });
-      y = doc.lastAutoTable.finalY + 8;
+            if (data.section === 'body' && data.row.index % 2 === 0) {
+              data.cell.styles.fillColor = [248,250,252];
+            }
+          },
+          margin: { left:10, right:10 },
+        });
+        y = doc.lastAutoTable.finalY + 4;
+      }
+
+      // TABELA DE SERVIÇO em 2 colunas
+      if (deServicoDia.length > 0) {
+        if (y > pageH - 40) { doc.addPage(); cabecalhoPagina('QUADRO OPERACIONAL DETALHADO (continuação)'); y = 22; }
+        doc.setFillColor(232,245,233); doc.roundedRect(10, y, pageW-20, 7, 1, 1, 'F');
+        doc.setTextColor(27,94,32); doc.setFontSize(7); doc.setFont('helvetica','bold');
+        doc.text(`🟢 DE SERVIÇO (${deServicoDia.length})`, 15, y+5);
+        y += 8;
+
+        const metade = Math.ceil(deServicoDia.length/2);
+        const col1 = deServicoDia.slice(0, metade);
+        const col2 = deServicoDia.slice(metade);
+        const maxRows = Math.max(col1.length, col2.length);
+        const bodyServico = Array.from({length: maxRows}, (_, i) => [
+          col1[i] ? `${col1[i].patente} ${col1[i].nome.split(' ').slice(0,2).join(' ')}` : '',
+          col1[i] ? (col1[i].secao || '—') : '',
+          col2[i] ? `${col2[i].patente} ${col2[i].nome.split(' ').slice(0,2).join(' ')}` : '',
+          col2[i] ? (col2[i].secao || '—') : '',
+        ]);
+
+        doc.autoTable({
+          startY: y,
+          head: [['Policial', 'Seção', 'Policial', 'Seção']],
+          body: bodyServico,
+          theme: 'grid',
+          headStyles: { fillColor:[27,94,32], textColor:255, fontStyle:'bold', fontSize:7, cellPadding:2 },
+          bodyStyles: { fontSize:7, cellPadding:2 },
+          columnStyles: {
+            1: { cellWidth:20, halign:'center' },
+            3: { cellWidth:20, halign:'center' },
+          },
+          didParseCell: (data) => {
+            if (data.section === 'body' && data.row.index % 2 === 0) {
+              data.cell.styles.fillColor = [248,252,248];
+            }
+          },
+          margin: { left:10, right:10 },
+        });
+        y = doc.lastAutoTable.finalY + 10;
+      }
     });
   }
 
