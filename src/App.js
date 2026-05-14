@@ -354,7 +354,7 @@ function gerarPDF(solicitacoes, policiais, semanaAtual) {
       if (dodia.length > 0) {
         doc.setFillColor(227,242,253); doc.roundedRect(10, y, pageW-20, 7, 1, 1, 'F');
         doc.setTextColor(13,71,161); doc.setFontSize(7); doc.setFont('helvetica','bold');
-        doc.text(`🌙 DE FOLGA / CONCESSÃO (${dodia.length})`, 15, y+5);
+        doc.text(`DE FOLGA / CONCESSAO (${dodia.length})`, 15, y+5);
         y += 8;
         doc.autoTable({
           startY: y,
@@ -390,7 +390,7 @@ function gerarPDF(solicitacoes, policiais, semanaAtual) {
         if (y > pageH - 40) { doc.addPage(); cabecalhoPagina('QUADRO OPERACIONAL DETALHADO (continuação)'); y = 22; }
         doc.setFillColor(232,245,233); doc.roundedRect(10, y, pageW-20, 7, 1, 1, 'F');
         doc.setTextColor(27,94,32); doc.setFontSize(7); doc.setFont('helvetica','bold');
-        doc.text(`🟢 DE SERVIÇO (${deServicoDia.length})`, 15, y+5);
+        doc.text(`DE SERVICO (${deServicoDia.length})`, 15, y+5);
         y += 8;
 
         const metade = Math.ceil(deServicoDia.length/2);
