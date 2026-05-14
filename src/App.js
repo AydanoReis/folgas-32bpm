@@ -160,7 +160,7 @@ function Spinner() {
   return <div style={{ textAlign:'center', padding:40, color:'#6b8099', fontSize:15 }}>⏳ Carregando...</div>;
 }
 
-// ========== GERADOR DE PDF ==========
+// ========== GERADOR DE PDF PROFISSIONAL ==========
 function gerarPDF(solicitacoes, policiais, semanaAtual) {
   const aprovadas = solicitacoes.filter(s => s.status === 'aprovado');
   const pendentes = solicitacoes.filter(s => s.status === 'pendente');
@@ -170,140 +170,383 @@ function gerarPDF(solicitacoes, policiais, semanaAtual) {
   const fimSemana = new Date(semanaAtual);
   fimSemana.setDate(fimSemana.getDate() + 6);
   const periodoStr = `${semanaAtual.toLocaleDateString('pt-BR')} a ${fimSemana.toLocaleDateString('pt-BR')}`;
-  const hoje = new Date().toLocaleDateString('pt-BR');
+  const hojeStr = new Date().toLocaleDateString('pt-BR');
+  const hojeHora = new Date().toLocaleString('pt-BR', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' });
+  const isoInicio = semanaAtual.toISOString().split('T')[0];
+  const isoFim = fimSemana.toISOString().split('T')[0];
+  const prontos = policiais.filter(p => (p.situacao||'Pronto') === 'Pronto');
+  const afastados = policiais.filter(p => (p.situacao||'Pronto') !== 'Pronto');
+  const semFolga = prontos.filter(p => !solicitacoes.find(s => s.policial_id === p.id && s.semana >= isoInicio && s.semana <= isoFim && s.status !== 'recusado'));
   const contPorDia = DIAS.map(dia => ({ dia, count: aprovadas.filter(s => s.dia === dia).length }));
   const diaMaisAtivo = contPorDia.reduce((a,b) => a.count >= b.count ? a : b, contPorDia[0]);
   const contPorSecao = SECOES.map(secao => ({ secao, count: aprovadas.filter(s => s.secao === secao).length })).filter(s => s.count > 0).sort((a,b) => b.count - a.count);
   const secaoMais = contPorSecao[0];
   const statusOp = pendentes.length === 0 ? 'NORMAL' : pendentes.length <= 3 ? 'ATENÇÃO' : 'CRÍTICO';
   const corStatusOp = statusOp === 'NORMAL' ? [27,94,32] : statusOp === 'ATENÇÃO' ? [123,88,0] : [183,28,28];
-  const isoInicio = semanaAtual.toISOString().split('T')[0];
-  const isoFim = fimSemana.toISOString().split('T')[0];
-  const prontos = policiais.filter(p => (p.situacao||'Pronto') === 'Pronto');
-  const semFolga = prontos.filter(p => !solicitacoes.find(s => s.policial_id === p.id && s.semana >= isoInicio && s.semana <= isoFim && s.status !== 'recusado'));
+  const maxFolgasDia = Math.max(...contPorDia.map(d => d.count), 1);
+
   const doc = new jsPDF();
   const pageW = doc.internal.pageSize.getWidth();
   const pageH = doc.internal.pageSize.getHeight();
-  doc.setFillColor(13,35,64); doc.rect(0,0,pageW,55,'F');
-  doc.setTextColor(255,255,255);
+
+  function rodape(pagina, total) {
+    doc.setDrawColor(200,210,220);
+    doc.line(10, pageH-14, pageW-10, pageH-14);
+    doc.setTextColor(150,160,170); doc.setFontSize(7); doc.setFont('helvetica','normal');
+    doc.text('PMERJ · 32º Batalhão de Polícia Militar · Sistema de Controle de Folgas — PCSV', pageW/2, pageH-9, { align:'center' });
+    doc.text(`Emitido em ${hojeHora}`, 10, pageH-9);
+    doc.text(`Pág. ${pagina}${total ? ` / ${total}` : ''}`, pageW-10, pageH-9, { align:'right' });
+  }
+
+  function cabecalhoPagina(titulo) {
+    doc.setFillColor(13,35,64); doc.rect(0,0,pageW,14,'F');
+    doc.setFillColor(30,77,123); doc.rect(0,14,pageW,4,'F');
+    doc.setTextColor(255,255,255); doc.setFontSize(10); doc.setFont('helvetica','bold');
+    doc.text(titulo, pageW/2, 10, { align:'center' });
+  }
+
+  // =====================
+  // PÁGINA 1 — CAPA
+  // =====================
+  doc.setFillColor(13,35,64); doc.rect(0,0,pageW,62,'F');
+  doc.setFillColor(30,77,123); doc.rect(0,62,pageW,3,'F');
+  doc.setFillColor(255,200,0); doc.rect(0,65,pageW,1,'F');
+
+  doc.setTextColor(180,200,220); doc.setFontSize(8); doc.setFont('helvetica','normal');
+  doc.text('POLÍCIA MILITAR DO ESTADO DO RIO DE JANEIRO', pageW/2, 12, { align:'center' });
+  doc.setTextColor(255,255,255); doc.setFontSize(17); doc.setFont('helvetica','bold');
+  doc.text('32º BATALHÃO DE POLÍCIA MILITAR', pageW/2, 24, { align:'center' });
   doc.setFontSize(11); doc.setFont('helvetica','normal');
-  doc.text('POLÍCIA MILITAR DO ESTADO DO RIO DE JANEIRO', pageW/2, 14, { align:'center' });
-  doc.setFontSize(18); doc.setFont('helvetica','bold');
-  doc.text('32º BATALHÃO DE POLÍCIA MILITAR', pageW/2, 25, { align:'center' });
-  doc.setFontSize(13); doc.setFont('helvetica','normal');
-  doc.text('CONTROLE SEMANAL DE FOLGAS — PCSV', pageW/2, 35, { align:'center' });
-  doc.setFontSize(10);
-  doc.text(`Período: ${periodoStr}   |   Emitido: ${hoje}`, pageW/2, 44, { align:'center' });
-  doc.text('Responsável: PCSV / Expediente Semanal', pageW/2, 51, { align:'center' });
-  let y = 65;
+  doc.text('RELATÓRIO SEMANAL DE CONTROLE DE FOLGAS', pageW/2, 34, { align:'center' });
+  doc.setFillColor(255,200,0); doc.rect(pageW/2-30,38,60,0.5,'F');
+  doc.setTextColor(180,200,220); doc.setFontSize(9);
+  doc.text(`Período: ${periodoStr}`, pageW/2, 46, { align:'center' });
+  doc.text(`PCSV / Expediente Semanal · Emitido em ${hojeStr}`, pageW/2, 54, { align:'center' });
+
+  // 4 CARDS
+  let y = 74;
   const cards = [
-    { label:'Solicitações', valor:solicitacoes.length, cor:[13,35,64] },
-    { label:'Aprovadas', valor:aprovadas.length, cor:[27,94,32] },
-    { label:'Pendentes', valor:pendentes.length, cor:[123,88,0] },
-    { label:'Recusadas', valor:recusadas.length, cor:[183,28,28] },
+    { label:'TOTAL', valor:solicitacoes.length, cor:[13,35,64], sub:'solicitações' },
+    { label:'APROVADAS', valor:aprovadas.length, cor:[27,94,32], sub:'folgas/concessões' },
+    { label:'PENDENTES', valor:pendentes.length, cor:[123,88,0], sub:'aguardando' },
+    { label:'RECUSADAS', valor:recusadas.length, cor:[183,28,28], sub:'não autorizadas' },
   ];
-  const cardW = (pageW - 20 - 9) / 4;
+  const cardW = (pageW - 24) / 4;
   cards.forEach((c, i) => {
-    const x = 10 + i * (cardW + 3);
-    doc.setFillColor(...c.cor); doc.rect(x, y, cardW, 22, 'F');
+    const x = 10 + i * (cardW + (14/3));
+    doc.setFillColor(...c.cor); doc.roundedRect(x, y, cardW, 28, 2, 2, 'F');
     doc.setTextColor(255,255,255);
-    doc.setFontSize(20); doc.setFont('helvetica','bold');
-    doc.text(String(c.valor), x + cardW/2, y + 13, { align:'center' });
-    doc.setFontSize(8); doc.setFont('helvetica','normal');
-    doc.text(c.label.toUpperCase(), x + cardW/2, y + 19, { align:'center' });
+    doc.setFontSize(22); doc.setFont('helvetica','bold');
+    doc.text(String(c.valor), x + cardW/2, y + 15, { align:'center' });
+    doc.setFontSize(7); doc.setFont('helvetica','bold');
+    doc.text(c.label, x + cardW/2, y + 21, { align:'center' });
+    doc.setFontSize(6); doc.setFont('helvetica','normal'); doc.setTextColor(220,220,220);
+    doc.text(c.sub, x + cardW/2, y + 26, { align:'center' });
   });
-  y += 30;
-  doc.setFillColor(240,244,248); doc.rect(10,y,pageW-20,48,'F');
-  doc.setDrawColor(200,210,220); doc.rect(10,y,pageW-20,48,'S');
-  doc.setTextColor(13,35,64); doc.setFontSize(11); doc.setFont('helvetica','bold');
-  doc.text('RESUMO EXECUTIVO', 16, y+8);
-  doc.setFontSize(9); doc.setFont('helvetica','normal'); doc.setTextColor(40,40,40);
-  [
-    `• Dia com maior concentração: ${diaMaisAtivo.count > 0 ? `${diaMaisAtivo.dia}-feira (${diaMaisAtivo.count} folga${diaMaisAtivo.count>1?'s':''})` : 'Nenhum'}`,
-    `• Seção mais impactada: ${secaoMais ? `${secaoMais.secao} (${secaoMais.count} folga${secaoMais.count>1?'s':''})` : 'Nenhuma'}`,
-    `• Total de folgas regulares: ${folgas.length}`,
-    `• Total de concessões: ${concessoes.length}`,
-    `• Prontos sem solicitação: ${semFolga.length}`,
-  ].forEach((item, i) => { doc.text(item, 16, y + 16 + i*6); });
-  doc.setFillColor(...corStatusOp); doc.rect(pageW-70,y+6,55,14,'F');
-  doc.setTextColor(255,255,255); doc.setFontSize(10); doc.setFont('helvetica','bold');
-  doc.text('SITUAÇÃO OPERACIONAL', pageW-42.5, y+11, { align:'center' });
-  doc.setFontSize(12); doc.text(statusOp, pageW-42.5, y+18, { align:'center' });
-  doc.setTextColor(120,130,140); doc.setFontSize(8); doc.setFont('helvetica','normal');
-  doc.text('32º BPM — Sistema Interno de Controle de Folgas', pageW/2, pageH-8, { align:'center' });
-  doc.text('Página 1', pageW-12, pageH-8, { align:'right' });
+
+  // SITUAÇÃO OPERACIONAL
+  y += 34;
+  doc.setFillColor(...corStatusOp); doc.roundedRect(10, y, pageW-20, 14, 2, 2, 'F');
+  doc.setTextColor(255,255,255); doc.setFontSize(8); doc.setFont('helvetica','normal');
+  doc.text('SITUAÇÃO OPERACIONAL', pageW/2, y+5, { align:'center' });
+  doc.setFontSize(13); doc.setFont('helvetica','bold');
+  doc.text(statusOp, pageW/2, y+12, { align:'center' });
+
+  // RESUMO EXECUTIVO
+  y += 20;
+  doc.setFillColor(240,244,248); doc.roundedRect(10, y, pageW-20, 52, 2, 2, 'F');
+  doc.setDrawColor(200,210,220); doc.roundedRect(10, y, pageW-20, 52, 2, 2, 'S');
+  doc.setFillColor(13,35,64); doc.roundedRect(10, y, pageW-20, 9, 2, 2, 'F');
+  doc.rect(10, y+5, pageW-20, 4, 'F');
+  doc.setTextColor(255,255,255); doc.setFontSize(8); doc.setFont('helvetica','bold');
+  doc.text('RESUMO EXECUTIVO', 16, y+6.5);
+
+  const insights = [
+    { icon:'►', texto:`Dia com maior concentração: ${diaMaisAtivo.count > 0 ? `${diaMaisAtivo.dia} (${diaMaisAtivo.count} solicitação${diaMaisAtivo.count>1?'s':''})` : 'Nenhum'}`, cor:[13,35,64] },
+    { icon:'►', texto:`Seção mais impactada: ${secaoMais ? `${secaoMais.secao} com ${secaoMais.count} solicitação${secaoMais.count>1?'s':''}` : 'Nenhuma'}`, cor:[13,35,64] },
+    { icon:'►', texto:`Folgas regulares: ${folgas.length}   |   Concessões: ${concessoes.length}`, cor:[13,35,64] },
+    { icon:'►', texto:`Prontos sem solicitação esta semana: ${semFolga.length} de ${prontos.length}`, cor:[13,35,64] },
+    { icon:'►', texto:`Efetivo total: ${policiais.length}   |   Prontos: ${prontos.length}   |   Afastados: ${afastados.length}`, cor:[13,35,64] },
+  ];
+  insights.forEach((ins, i) => {
+    doc.setTextColor(...ins.cor); doc.setFontSize(8); doc.setFont('helvetica','normal');
+    doc.text(`${ins.icon}  ${ins.texto}`, 16, y + 16 + i * 7);
+  });
+
+  // CAPACIDADE OPERACIONAL
+  y += 58;
+  const opCards = [
+    { l:'Efetivo Total', v:policiais.length, c:[13,35,64] },
+    { l:'Prontos p/ Serviço', v:prontos.length, c:[27,94,32] },
+    { l:'Afastados', v:afastados.length, c:[183,28,28] },
+    { l:'Folgas esta semana', v:aprovadas.length, c:[0,77,153] },
+    { l:'Folgas regulares', v:folgas.length, c:[13,71,161] },
+    { l:'Concessões', v:concessoes.length, c:[106,27,154] },
+  ];
+  const opW = (pageW - 24) / 3;
+  opCards.forEach((c, i) => {
+    const row = Math.floor(i/3);
+    const col = i % 3;
+    const x = 10 + col * (opW + 4);
+    const yy = y + row * 20;
+    doc.setFillColor(248,250,252); doc.roundedRect(x, yy, opW, 16, 1, 1, 'F');
+    doc.setDrawColor(...c.c); doc.roundedRect(x, yy, opW, 16, 1, 1, 'S');
+    doc.setFillColor(...c.c); doc.rect(x, yy, 3, 16, 'F');
+    doc.setTextColor(...c.c); doc.setFontSize(14); doc.setFont('helvetica','bold');
+    doc.text(String(c.v), x + opW/2 + 2, yy + 10, { align:'center' });
+    doc.setTextColor(100,110,120); doc.setFontSize(6); doc.setFont('helvetica','normal');
+    doc.text(c.l.toUpperCase(), x + opW/2 + 2, yy + 14.5, { align:'center' });
+  });
+
+  rodape(1);
+
+  // =====================
+  // PÁGINA 2 — QUADRO POR DIA
+  // =====================
   doc.addPage();
-  doc.setFillColor(13,35,64); doc.rect(0,0,pageW,16,'F');
-  doc.setTextColor(255,255,255); doc.setFontSize(11); doc.setFont('helvetica','bold');
-  doc.text('QUADRO OPERACIONAL DETALHADO', pageW/2, 10, { align:'center' });
+  cabecalhoPagina('QUADRO OPERACIONAL DETALHADO — DISTRIBUIÇÃO POR DIA');
   y = 22;
+
   if (aprovadas.length === 0) {
-    doc.setTextColor(100,100,100); doc.setFontSize(11); doc.setFont('helvetica','normal');
-    doc.text('Nenhuma folga aprovada neste período.', pageW/2, y+10, { align:'center' });
+    doc.setTextColor(150,150,150); doc.setFontSize(11); doc.setFont('helvetica','normal');
+    doc.text('Nenhuma folga aprovada neste período.', pageW/2, y+20, { align:'center' });
   } else {
     DIAS.forEach(dia => {
       const dodia = aprovadas.filter(s => s.dia === dia);
-      if (y > 250) { doc.addPage(); y = 20; }
+      const isDiaSemUtil = dia === 'Sábado' || dia === 'Domingo';
+
       if (dodia.length === 0) {
-        doc.setFillColor(230,235,240); doc.rect(10,y,pageW-20,10,'F');
-        doc.setTextColor(100,110,120); doc.setFontSize(9); doc.setFont('helvetica','bold');
-        doc.text(`${dia.toUpperCase()}-FEIRA`, 14, y+6.5);
-        doc.setFont('helvetica','normal'); doc.text('Sem registros', pageW-14, y+6.5, { align:'right' });
-        y += 13;
-      } else {
-        doc.setFillColor(30,77,123); doc.rect(10,y,pageW-20,10,'F');
-        doc.setTextColor(255,255,255); doc.setFontSize(10); doc.setFont('helvetica','bold');
-        doc.text(`${dia.toUpperCase()}-FEIRA`, 14, y+6.5);
-        doc.text(`${dodia.length} solicitação${dodia.length>1?'s':''}`, pageW-14, y+6.5, { align:'right' });
+        if (y > pageH - 30) { doc.addPage(); cabecalhoPagina('QUADRO OPERACIONAL DETALHADO (continuação)'); y = 22; }
+        doc.setFillColor(isDiaSemUtil ? 245 : 235, isDiaSemUtil ? 245 : 238, isDiaSemUtil ? 245 : 242);
+        doc.roundedRect(10, y, pageW-20, 9, 1, 1, 'F');
+        doc.setTextColor(isDiaSemUtil ? 180 : 120, isDiaSemUtil ? 180 : 130, isDiaSemUtil ? 180 : 140);
+        doc.setFontSize(8); doc.setFont('helvetica','bold');
+        doc.text(dia.toUpperCase(), 15, y+6);
+        doc.setFont('helvetica','normal'); doc.setFontSize(7);
+        doc.text('Sem registros', pageW-15, y+6, { align:'right' });
         y += 12;
-        doc.autoTable({ startY:y, head:[['Seção','Policial','Tipo']], body:dodia.map(s=>[s.secao&&s.secao!=='—'?s.secao:'Não vinculada',`${s.patente} ${s.policial_nome}`,s.motivo]), theme:'grid', headStyles:{ fillColor:[50,100,150], textColor:255, fontStyle:'bold', fontSize:8 }, bodyStyles:{ fontSize:8 }, columnStyles:{ 0:{ cellWidth:35 }, 2:{ cellWidth:25, halign:'center' } }, alternateRowStyles:{ fillColor:[245,248,252] }, margin:{ left:10, right:10 } });
-        y = doc.lastAutoTable.finalY + 6;
+        return;
       }
+
+      if (y > pageH - 50) { doc.addPage(); cabecalhoPagina('QUADRO OPERACIONAL DETALHADO (continuação)'); y = 22; }
+
+      // Cabeçalho do dia com barra de intensidade
+      const intensidade = dodia.length / maxFolgasDia;
+      const r = Math.round(13 + (30-13) * (1-intensidade));
+      const g = Math.round(35 + (77-35) * (1-intensidade));
+      const b = Math.round(64 + (123-64) * (1-intensidade));
+      doc.setFillColor(r, g, b); doc.roundedRect(10, y, pageW-20, 11, 1, 1, 'F');
+      doc.setFillColor(255,200,0); doc.rect(10, y, Math.max(3,(pageW-20)*intensidade), 2, 'F');
+      doc.setTextColor(255,255,255); doc.setFontSize(9); doc.setFont('helvetica','bold');
+      doc.text(dia.toUpperCase(), 15, y+8);
+      doc.setFontSize(8); doc.setFont('helvetica','normal');
+      doc.text(`${dodia.length} solicitação${dodia.length !== 1 ? 'ões' : ''}  |  Folgas: ${dodia.filter(s=>s.motivo==='Folga').length}  |  Concessões: ${dodia.filter(s=>s.motivo==='Concessão').length}`, pageW-15, y+8, { align:'right' });
+      y += 13;
+
+      doc.autoTable({
+        startY: y,
+        head: [['Seção', 'Patente / Nome', 'Tipo']],
+        body: dodia.map(s => [
+          s.secao && s.secao !== '—' ? s.secao : 'Não vinculada',
+          `${s.patente} ${s.policial_nome}`,
+          s.motivo,
+        ]),
+        theme: 'grid',
+        headStyles: { fillColor:[50,90,140], textColor:255, fontStyle:'bold', fontSize:7, cellPadding:2 },
+        bodyStyles: { fontSize:7.5, cellPadding:2 },
+        columnStyles: {
+          0: { cellWidth:32, fontStyle:'bold' },
+          2: { cellWidth:22, halign:'center' },
+        },
+        didParseCell: (data) => {
+          if (data.section === 'body' && data.column.index === 2) {
+            if (data.cell.raw === 'Folga') {
+              data.cell.styles.textColor = [13,71,161];
+              data.cell.styles.fontStyle = 'bold';
+            } else {
+              data.cell.styles.textColor = [106,27,154];
+              data.cell.styles.fontStyle = 'bold';
+            }
+          }
+          if (data.section === 'body' && data.row.index % 2 === 0) {
+            data.cell.styles.fillColor = [248,250,252];
+          }
+        },
+        margin: { left:10, right:10 },
+      });
+      y = doc.lastAutoTable.finalY + 8;
     });
   }
-  doc.setTextColor(120,130,140); doc.setFontSize(8); doc.setFont('helvetica','normal');
-  doc.text('32º BPM — Sistema Interno de Controle de Folgas', pageW/2, pageH-8, { align:'center' });
-  doc.text('Página 2', pageW-12, pageH-8, { align:'right' });
+
+  rodape(2);
+
+  // =====================
+  // PÁGINA 3 — ESTATÍSTICAS
+  // =====================
   doc.addPage();
-  doc.setFillColor(13,35,64); doc.rect(0,0,pageW,16,'F');
-  doc.setTextColor(255,255,255); doc.setFontSize(11); doc.setFont('helvetica','bold');
-  doc.text('ESTATÍSTICAS E MATRIZ DE DISTRIBUIÇÃO', pageW/2, 10, { align:'center' });
+  cabecalhoPagina('ESTATÍSTICAS, SITUAÇÃO DO EFETIVO E MATRIZ DE DISTRIBUIÇÃO');
   y = 22;
-  if (policiais && policiais.length > 0) {
-    doc.setFillColor(50,100,150); doc.rect(10,y,pageW-20,8,'F');
-    doc.setTextColor(255,255,255); doc.setFontSize(9); doc.setFont('helvetica','bold');
-    doc.text('SITUAÇÃO SANITÁRIA DO EFETIVO', 14, y+5.5); y += 10;
-    const aptoAC = policiais.filter(p=>(p.sit_sanitaria||'Apto A')==='Apto A'&&temRestricao(p)).length;
-    const aptoAS = policiais.filter(p=>(p.sit_sanitaria||'Apto A')==='Apto A'&&!temRestricao(p)).length;
-    doc.autoTable({ startY:y, head:[['Situação Sanitária','Total']], body:[['Apto A (sem restrição)',String(aptoAS)],['Apto A (com restrição)',String(aptoAC)],...['Apto B','Apto C','LTS'].map(ss=>[ss,String(policiais.filter(p=>(p.sit_sanitaria||'Apto A')===ss).length)])], theme:'grid', headStyles:{ fillColor:[50,100,150], textColor:255, fontStyle:'bold', fontSize:8 }, bodyStyles:{ fontSize:8 }, alternateRowStyles:{ fillColor:[245,248,252] }, margin:{ left:10, right:10 } });
-    y = doc.lastAutoTable.finalY + 6;
-    doc.setFillColor(50,100,150); doc.rect(10,y,pageW-20,8,'F');
-    doc.setTextColor(255,255,255); doc.setFontSize(9); doc.setFont('helvetica','bold');
-    doc.text('SITUAÇÃO DO EFETIVO', 14, y+5.5); y += 10;
-    doc.autoTable({ startY:y, head:[['Situação','Total']], body:SITUACOES.map(s=>[s,String(policiais.filter(p=>(p.situacao||'Pronto')===s).length)]), theme:'grid', headStyles:{ fillColor:[50,100,150], textColor:255, fontStyle:'bold', fontSize:8 }, bodyStyles:{ fontSize:8 }, alternateRowStyles:{ fillColor:[245,248,252] }, margin:{ left:10, right:10 } });
-    y = doc.lastAutoTable.finalY + 6;
-    if (semFolga.length > 0) {
-      if (y > 200) { doc.addPage(); y = 20; }
-      doc.setFillColor(13,35,64); doc.rect(10,y,pageW-20,8,'F');
-      doc.setTextColor(255,255,255); doc.setFontSize(9); doc.setFont('helvetica','bold');
-      doc.text(`PRONTOS SEM SOLICITAÇÃO ESTA SEMANA (${semFolga.length})`, 14, y+5.5); y += 10;
-      doc.autoTable({ startY:y, head:[['Patente','Nome','Matrícula','Seção']], body:semFolga.map(p=>[p.patente,p.nome,p.matricula,p.secao||'—']), theme:'grid', headStyles:{ fillColor:[13,35,64], textColor:255, fontStyle:'bold', fontSize:8 }, bodyStyles:{ fontSize:8 }, alternateRowStyles:{ fillColor:[245,248,252] }, margin:{ left:10, right:10 } });
-      y = doc.lastAutoTable.finalY + 6;
-    }
+
+  // SITUAÇÃO SANITÁRIA COM CORES
+  doc.setFillColor(30,77,123); doc.roundedRect(10,y,pageW-20,8,1,1,'F');
+  doc.setTextColor(255,255,255); doc.setFontSize(8); doc.setFont('helvetica','bold');
+  doc.text('SITUAÇÃO SANITÁRIA DO EFETIVO', 15, y+5.5);
+  y += 10;
+
+  const aptoAS = policiais.filter(p=>(p.sit_sanitaria||'Apto A')==='Apto A'&&!temRestricao(p)).length;
+  const aptoAC = policiais.filter(p=>(p.sit_sanitaria||'Apto A')==='Apto A'&&temRestricao(p)).length;
+  const aptoB = policiais.filter(p=>(p.sit_sanitaria||'Apto A')==='Apto B').length;
+  const aptoC = policiais.filter(p=>(p.sit_sanitaria||'Apto A')==='Apto C').length;
+  const lts = policiais.filter(p=>(p.sit_sanitaria||'Apto A')==='LTS').length;
+
+  const ssData = [
+    { label:'Apto A — Sem Restrição', total:aptoAS, cor:[21,101,192], bg:[227,242,253] },
+    { label:'Apto A — Com Restrição', total:aptoAC, cor:[230,81,0], bg:[255,243,224] },
+    { label:'Apto B', total:aptoB, cor:[249,168,37], bg:[255,248,225] },
+    { label:'Apto C', total:aptoC, cor:[183,28,28], bg:[255,235,238] },
+    { label:'LTS Sanitário', total:lts, cor:[106,27,154], bg:[243,229,245] },
+  ];
+  const ssW = (pageW-24)/ssData.length;
+  ssData.forEach((s, i) => {
+    const x = 10 + i*(ssW+1);
+    doc.setFillColor(...s.bg); doc.roundedRect(x, y, ssW, 18, 1, 1, 'F');
+    doc.setDrawColor(...s.cor); doc.roundedRect(x, y, ssW, 18, 1, 1, 'S');
+    doc.setFillColor(...s.cor); doc.rect(x, y, ssW, 2.5, 'F');
+    doc.setTextColor(...s.cor); doc.setFontSize(14); doc.setFont('helvetica','bold');
+    doc.text(String(s.total), x+ssW/2, y+12, { align:'center' });
+    doc.setFontSize(5.5); doc.setFont('helvetica','normal'); doc.setTextColor(80,80,80);
+    doc.text(s.label.toUpperCase(), x+ssW/2, y+17, { align:'center' });
+  });
+  y += 22;
+
+  // SITUAÇÃO DO EFETIVO + PRONTOS SEM SOLICITAÇÃO lado a lado
+  const colW = (pageW-24)/2;
+
+  // Coluna esquerda — Situação
+  doc.setFillColor(30,77,123); doc.roundedRect(10,y,colW,8,1,1,'F');
+  doc.setTextColor(255,255,255); doc.setFontSize(8); doc.setFont('helvetica','bold');
+  doc.text('SITUAÇÃO DO EFETIVO', 15, y+5.5);
+
+  const sitBody = SITUACOES.map(s => {
+    const total = policiais.filter(p=>(p.situacao||'Pronto')===s).length;
+    return [s, String(total)];
+  }).filter(r => parseInt(r[1]) > 0);
+
+  doc.autoTable({
+    startY: y+9,
+    head: [['Situação','Total']],
+    body: sitBody,
+    theme: 'grid',
+    headStyles: { fillColor:[50,90,140], textColor:255, fontStyle:'bold', fontSize:7, cellPadding:2 },
+    bodyStyles: { fontSize:7.5, cellPadding:2 },
+    columnStyles: { 1: { halign:'center', fontStyle:'bold' } },
+    didParseCell: (data) => {
+      if (data.section === 'body' && data.cell.raw === 'Pronto') data.cell.styles.textColor = [27,94,32];
+      if (data.section === 'body' && data.row.index % 2 === 0) data.cell.styles.fillColor = [248,250,252];
+    },
+    margin: { left:10, right: pageW/2+2 },
+  });
+  const yAposSit = doc.lastAutoTable.finalY;
+
+  // Coluna direita — Prontos sem solicitação em 2 colunas
+  doc.setFillColor(13,35,64); doc.roundedRect(pageW/2+2, y, colW, 8, 1, 1, 'F');
+  doc.setTextColor(255,255,255); doc.setFontSize(8); doc.setFont('helvetica','bold');
+  doc.text(`PRONTOS SEM SOLICITAÇÃO (${semFolga.length})`, pageW/2+7, y+5.5);
+
+  if (semFolga.length > 0) {
+    const metade = Math.ceil(semFolga.length/2);
+    const col1 = semFolga.slice(0,metade).map(p=>[`${p.patente} ${p.nome.split(' ').slice(0,2).join(' ')}`, p.secao||'—']);
+    const col2 = semFolga.slice(metade).map(p=>[`${p.patente} ${p.nome.split(' ').slice(0,2).join(' ')}`, p.secao||'—']);
+    const maxRows = Math.max(col1.length, col2.length);
+    const bodyDuplo = Array.from({length:maxRows}, (_,i) => [
+      col1[i]?col1[i][0]:'', col1[i]?col1[i][1]:'',
+      col2[i]?col2[i][0]:'', col2[i]?col2[i][1]:'',
+    ]);
+    doc.autoTable({
+      startY: y+9,
+      head: [['Nome','Seção','Nome','Seção']],
+      body: bodyDuplo,
+      theme: 'grid',
+      headStyles: { fillColor:[13,35,64], textColor:255, fontStyle:'bold', fontSize:6, cellPadding:1.5 },
+      bodyStyles: { fontSize:6, cellPadding:1.5 },
+      columnStyles: { 1:{ cellWidth:14, halign:'center' }, 3:{ cellWidth:14, halign:'center' } },
+      didParseCell: (data) => {
+        if (data.section === 'body' && data.row.index % 2 === 0) data.cell.styles.fillColor = [248,250,252];
+      },
+      margin: { left: pageW/2+2, right:10 },
+    });
   }
+
+  y = Math.max(yAposSit, doc.lastAutoTable ? doc.lastAutoTable.finalY : y) + 8;
+
+  // MATRIZ DE DISTRIBUIÇÃO COM CORES POR INTENSIDADE
   if (aprovadas.length > 0) {
-    if (y > 180) { doc.addPage(); y = 20; }
-    doc.setFillColor(50,100,150); doc.rect(10,y,pageW-20,8,'F');
-    doc.setTextColor(255,255,255); doc.setFontSize(9); doc.setFont('helvetica','bold');
-    doc.text('MATRIZ DE DISTRIBUIÇÃO POR SEÇÃO E DIA', 14, y+5.5); y += 10;
+    if (y > pageH - 60) { doc.addPage(); cabecalhoPagina('MATRIZ DE DISTRIBUIÇÃO'); y = 22; }
+
+    doc.setFillColor(30,77,123); doc.roundedRect(10,y,pageW-20,8,1,1,'F');
+    doc.setTextColor(255,255,255); doc.setFontSize(8); doc.setFont('helvetica','bold');
+    doc.text('MATRIZ DE DISTRIBUIÇÃO POR SEÇÃO E DIA', 15, y+5.5);
+    y += 10;
+
     const secoesComFolga = [...new Set(aprovadas.map(s => s.secao))].sort();
-    const bodyMatriz = secoesComFolga.map(secao => [secao, ...DIAS.map(dia => { const c = aprovadas.filter(s=>s.secao===secao&&s.dia===dia).length; return c>0?String(c):'—'; }), String(aprovadas.filter(s=>s.secao===secao).length)]);
-    bodyMatriz.push(['TOTAL', ...DIAS.map(dia => { const c = aprovadas.filter(s=>s.dia===dia).length; return c>0?String(c):'—'; }), String(aprovadas.length)]);
-    doc.autoTable({ startY:y, head:[['Seção',...DIAS.map(d=>d.substring(0,3)),'Total']], body:bodyMatriz, theme:'grid', headStyles:{ fillColor:[13,35,64], textColor:255, fontStyle:'bold', fontSize:7 }, bodyStyles:{ fontSize:7 }, alternateRowStyles:{ fillColor:[245,248,252] }, didParseCell:(data)=>{ if(data.row.index===bodyMatriz.length-1){ data.cell.styles.fontStyle='bold'; data.cell.styles.fillColor=[220,228,236]; } }, margin:{ left:10, right:10 } });
+    const maxCelula = Math.max(...secoesComFolga.map(sec => Math.max(...DIAS.map(dia => aprovadas.filter(s=>s.secao===sec&&s.dia===dia).length))), 1);
+
+    const bodyMatriz = secoesComFolga.map(secao => [
+      secao,
+      ...DIAS.map(dia => {
+        const c = aprovadas.filter(s=>s.secao===secao&&s.dia===dia).length;
+        return c > 0 ? String(c) : '—';
+      }),
+      String(aprovadas.filter(s=>s.secao===secao).length),
+    ]);
+    bodyMatriz.push([
+      'TOTAL',
+      ...DIAS.map(dia => {
+        const c = aprovadas.filter(s=>s.dia===dia).length;
+        return c > 0 ? String(c) : '—';
+      }),
+      String(aprovadas.length),
+    ]);
+
+    doc.autoTable({
+      startY: y,
+      head: [['Seção', ...DIAS.map(d=>d.substring(0,3)), 'Total']],
+      body: bodyMatriz,
+      theme: 'grid',
+      headStyles: { fillColor:[13,35,64], textColor:255, fontStyle:'bold', fontSize:7, cellPadding:2, halign:'center' },
+      bodyStyles: { fontSize:7, cellPadding:2, halign:'center' },
+      columnStyles: { 0:{ halign:'left', fontStyle:'bold', cellWidth:28 } },
+      didParseCell: (data) => {
+        if (data.section === 'body') {
+          const isTotal = data.row.index === bodyMatriz.length - 1;
+          if (isTotal) {
+            data.cell.styles.fillColor = [220,228,240];
+            data.cell.styles.fontStyle = 'bold';
+            data.cell.styles.textColor = [13,35,64];
+            return;
+          }
+          if (data.column.index > 0 && data.column.index < 8) {
+            const val = parseInt(data.cell.raw);
+            if (!isNaN(val) && val > 0) {
+              const intensidade = val / maxCelula;
+              const r = Math.round(255 - intensidade * (255-13));
+              const g = Math.round(255 - intensidade * (255-71));
+              const b = Math.round(255 - intensidade * (255-161));
+              data.cell.styles.fillColor = [r, g, b];
+              data.cell.styles.textColor = intensidade > 0.5 ? [255,255,255] : [13,35,64];
+              data.cell.styles.fontStyle = 'bold';
+            }
+          }
+          if (data.row.index % 2 === 0 && data.column.index === 0) {
+            data.cell.styles.fillColor = [248,250,252];
+          }
+        }
+      },
+      margin: { left:10, right:10 },
+    });
   }
-  doc.setTextColor(120,130,140); doc.setFontSize(8); doc.setFont('helvetica','normal');
-  doc.text('32º BPM — Sistema Interno de Controle de Folgas', pageW/2, pageH-8, { align:'center' });
-  doc.text('Página 3', pageW-12, pageH-8, { align:'right' });
+
+  rodape(3);
   doc.save(`relatorio-32bpm-${periodoStr.replace(/\//g,'-').replace(/ /g,'')}.pdf`);
 }
 
