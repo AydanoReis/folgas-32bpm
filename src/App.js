@@ -1979,7 +1979,68 @@ function TelaGestor({ gestorLogado }) {
                       </div>
                       <div><label style={{ ...lbl, fontSize:10 }}>Data de Início</label><input type="date" value={p.ss_inicio||''} onChange={e => atualizarPolicial(p.id,'ss_inicio',e.target.value)} style={{ ...inp, fontSize:12, padding:'6px 8px' }} /></div>
                       <div><label style={{ ...lbl, fontSize:10 }}>Data de Fim</label><input type="date" value={p.ss_fim||''} onChange={e => atualizarPolicial(p.id,'ss_fim',e.target.value)} style={{ ...inp, fontSize:12, padding:'6px 8px' }} /></div>
-                      {p.ss_fim && diasParaRetorno(p.ss_fim) !== null && (
-                        <div style={{ gridColumn:'1/-1' }}>
-                          <span style={{ background:diasParaRetorno(p.ss_fim)<=3?(p.sit_sanitaria==='Apto B'?'#F9A825':p.sit_sanitaria==='Apto C'?'#B71C1C':'#6A1B9A'):'#1B5E20', color:'#fff', borderRadius:6, padding:'2px 10px', fontSize:12, fontWeight:800 }}>
-                            {diasPara
+{p.ss_fim && diasParaRetorno(p.ss_fim) !== null && (
+                            <div style={{ gridColumn: '1/-1' }}>
+                              <span style={{ background:diasParaRetorno(p.ss_fim)<=3?(p.sit_sanitaria==='Apto B'?'#F9A825':p.sit_sanitaria==='Apto C'?'#B71C1C':'#6A1B9A'):'#1B5E20', color:'#fff', borderRadius:6, padding:'2px 10px', fontSize:12, fontWeight:800 }}>
+                                {diasParaRetorno(p.ss_fim) === 0 ? 'Encerra hoje!' : diasParaRetorno(p.ss_fim) < 0 ? 'Vencido!' : `Encerra em ${diasParaRetorno(p.ss_fim)} dias`}
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                      <button onClick={() => resetarSenhaPolicial(p.id, p.nome)} style={{ ...btnSm, background: '#f0f4f8', color: '#6b8099' }}>🔑 Resetar Senha</button>
+                      {isPrincipal && <button onClick={() => removerPolicial(p.id)} style={{ ...btnSm, background: '#FFEBEE', color: '#B71C1C' }}>🗑️ Remover</button>}
+                    </div>
+                  </div>
+                </Card>
+              ))}
+              {paginadasEfetivo.totalPaginas > 1 && <ComponentePaginacao paginaAtual={paginaEfetivo} totalPaginas={paginadasEfetivo.totalPaginas} onMudarPagina={setPaginaEfetivo} />}
+            </>
+          )}
+        </>
+      )}
+
+      {aba === 'gestores' && (
+        <Card>
+           <h3 style={{ fontSize: 15, fontWeight: 800, color: '#1a3a5c', marginBottom: 16 }}>🗝️ Gestão de Acessos</h3>
+           <p style={{ fontSize: 12, color: '#6b8099' }}>Apenas o Administrador Principal pode gerenciar outros gestores. (Aba em construção)</p>
+        </Card>
+      )}
+      
+      <button onClick={() => { limparSessao(); window.location.reload(); }} style={{ ...btnPrimary, background: '#f0f4f8', color: '#B71C1C', marginTop: 30 }}>🚪 Sair do Sistema</button>
+    </div>
+  );
+}
+
+// ========== COMPONENTE PRINCIPAL (APP) ==========
+export default function App() {
+  const [user, setUser] = useState(null);
+  const [tipoUser, setTipoUser] = useState(null);
+
+  useEffect(() => {
+    const sessao = carregarSessao();
+    if (sessao) {
+      setUser(sessao.dados);
+      setTipoUser(sessao.tipo);
+    }
+  }, []);
+
+  if (!user) {
+    return (
+      <div style={{ maxWidth: 500, margin: '40px auto', padding: 20 }}>
+        <h1 style={{ textAlign: 'center', color: '#1a3a5c' }}>32º BPM - Sistema de Folgas</h1>
+        <Card>
+          <LoginPolicial onLogin={(u) => { setUser(u); setTipoUser('policial'); }} />
+        </Card>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ maxWidth: 800, margin: '0 auto', padding: '20px 10px' }}>
+      {tipoUser === 'gestor' ? <TelaGestor gestorLogado={user} /> : <TelaSolicitacao usuario={user} />}
+    </div>
+  );
+}
