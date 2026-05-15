@@ -1979,38 +1979,100 @@ function TelaGestor({ gestorLogado }) {
                       </div>
                       <div><label style={{ ...lbl, fontSize:10 }}>Data de Início</label><input type="date" value={p.ss_inicio||''} onChange={e => atualizarPolicial(p.id,'ss_inicio',e.target.value)} style={{ ...inp, fontSize:12, padding:'6px 8px' }} /></div>
                       <div><label style={{ ...lbl, fontSize:10 }}>Data de Fim</label><input type="date" value={p.ss_fim||''} onChange={e => atualizarPolicial(p.id,'ss_fim',e.target.value)} style={{ ...inp, fontSize:12, padding:'6px 8px' }} /></div>
-{p.ss_fim && diasParaRetorno(p.ss_fim) !== null && (
-                            <div style={{ gridColumn: '1/-1' }}>
-                              <span style={{ background:diasParaRetorno(p.ss_fim)<=3?(p.sit_sanitaria==='Apto B'?'#F9A825':p.sit_sanitaria==='Apto C'?'#B71C1C':'#6A1B9A'):'#1B5E20', color:'#fff', borderRadius:6, padding:'2px 10px', fontSize:12, fontWeight:800 }}>
-                                {diasParaRetorno(p.ss_fim) === 0 ? 'Encerra hoje!' : diasParaRetorno(p.ss_fim) < 0 ? 'Vencido!' : `Encerra em ${diasParaRetorno(p.ss_fim)} dias`}
-                              </span>
-                            </div>
-                          )}
+                      {p.ss_fim && diasParaRetorno(p.ss_fim) !== null && (
+                        <div style={{ gridColumn:'1/-1' }}>
+                          <span style={{ background:diasParaRetorno(p.ss_fim)<=3?(p.sit_sanitaria==='Apto B'?'#F9A825':p.sit_sanitaria==='Apto C'?'#B71C1C':'#6A1B9A'):'#1B5E20', color:'#fff', borderRadius:6, padding:'2px 10px', fontSize:12, fontWeight:800 }}>
+                            {diasParaRetorno(p.ss_fim) === 0 ? 'Encerra hoje!' : diasParaRetorno(p.ss_fim) < 0 ? 'Vencido!' : `Encerra em ${diasParaRetorno(p.ss_fim)} dias`}
+                          </span>
                         </div>
                       )}
                     </div>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                      <button onClick={() => resetarSenhaPolicial(p.id, p.nome)} style={{ ...btnSm, background: '#f0f4f8', color: '#6b8099' }}>🔑 Resetar Senha</button>
-                      {isPrincipal && <button onClick={() => removerPolicial(p.id)} style={{ ...btnSm, background: '#FFEBEE', color: '#B71C1C' }}>🗑️ Remover</button>}
-                    </div>
-                  </div>
-                </Card>
-              ))}
-              {paginadasEfetivo.totalPaginas > 1 && <ComponentePaginacao paginaAtual={paginaEfetivo} totalPaginas={paginadasEfetivo.totalPaginas} onMudarPagina={setPaginaEfetivo} />}
-            </>
-          )}
+                  )}
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  <button onClick={() => resetarSenhaPolicial(p.id, p.nome)} style={{ ...btnSm, background: '#f0f4f8', color: '#6b8099' }}>🔑 Resetar Senha</button>
+                  {isPrincipal && <button onClick={() => removerPolicial(p.id)} style={{ ...btnSm, background: '#FFEBEE', color: '#B71C1C' }}>🗑️ Remover</button>}
+                </div>
+              </div>
+            </Card>
+          ))}
+          {paginadasEfetivo.totalPaginas > 1 && <ComponentePaginacao paginaAtual={paginaEfetivo} totalPaginas={paginadasEfetivo.totalPaginas} onMudarPagina={setPaginaEfetivo} />}
+        </>
+      )}
 
-          {aba === 'gestores' && (
+      {aba === 'gestores' && (
+        <>
+          <h3 style={{ fontSize: 15, fontWeight: 800, color: '#1a3a5c', marginBottom: 16 }}>🗝️ Gestão de Acessos</h3>
+          
+          <Card>
+            <h4 style={{ fontSize: 14, fontWeight: 800, color: '#1a3a5c', marginBottom: 12 }}>Alterar Minha Senha</h4>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10, alignItems: 'end' }}>
+              <div><label style={lbl}>Senha Atual</label><input type="password" value={senhaAtual} onChange={e => setSenhaAtual(e.target.value)} style={inp} /></div>
+              <div><label style={lbl}>Nova Senha</label><input type="password" value={novaSenha} onChange={e => setNovaSenha(e.target.value)} style={inp} /></div>
+              <div><label style={lbl}>Confirmar Nova</label><input type="password" value={confirmaSenha} onChange={e => setConfirmaSenha(e.target.value)} style={inp} /></div>
+            </div>
+            {msgSenha && <div style={{ marginTop: 10, color: msgSenha.tipo === 'erro' ? '#B71C1C' : '#1B5E20', fontSize: 12, fontWeight: 800 }}>{msgSenha.texto}</div>}
+            <button onClick={alterarMinhaSenha} style={{ ...btnPrimary, marginTop: 12 }}>Atualizar Senha</button>
+          </Card>
+
+          {isPrincipal && (
             <Card>
-               <h3 style={{ fontSize: 15, fontWeight: 800, color: '#1a3a5c', marginBottom: 16 }}>🗝️ Gestão de Acessos</h3>
-               <p style={{ fontSize: 12, color: '#6b8099' }}>Apenas o Administrador Principal pode gerenciar outros gestores. (Aba em construção)</p>
+              <h4 style={{ fontSize: 14, fontWeight: 800, color: '#1a3a5c', marginBottom: 12 }}>Adicionar Novo Gestor</h4>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                <div style={{ gridColumn: '1/-1' }}><label style={lbl}>Nome Completo</label><input value={novoGestorNome} onChange={e => setNovoGestorNome(e.target.value)} style={inp} /></div>
+                <div><label style={lbl}>Matrícula</label><input value={novoGestorMatricula} onChange={e => setNovoGestorMatricula(e.target.value)} style={inp} /></div>
+                <div><label style={lbl}>Senha Inicial</label><input type="password" value={novoGestorSenha} onChange={e => setNovoGestorSenha(e.target.value)} style={inp} /></div>
+                <div><label style={lbl}>Nível de Acesso</label>
+                  <select value={novoGestorNivel} onChange={e => setNovoGestorNivel(e.target.value)} style={inp}>
+                    <option value="gestor">Gestor Padrão</option>
+                    <option value="master">Gestor Master</option>
+                  </select>
+                </div>
+                <div><label style={lbl}>Função</label>
+                  <select value={novoGestorFuncao} onChange={e => setNovoGestorFuncao(e.target.value)} style={inp}>
+                    {FUNCOES_GESTOR.map(f => <option key={f} value={f}>{f || '— Nenhuma —'}</option>)}
+                  </select>
+                </div>
+              </div>
+              {msgGestor && <div style={{ marginTop: 10, color: msgGestor.tipo === 'erro' ? '#B71C1C' : '#1B5E20', fontSize: 12, fontWeight: 800 }}>{msgGestor.texto}</div>}
+              <button onClick={adicionarGestor} style={{ ...btnPrimary, marginTop: 12 }}>Cadastrar Gestor</button>
             </Card>
           )}
-          
-          <button onClick={() => { limparSessao(); window.location.reload(); }} style={{ ...btnPrimary, background: '#f0f4f8', color: '#B71C1C', marginTop: 30 }}>🚪 Sair do Sistema</button>
-        </div>
-      );
-    }
+
+          <h4 style={{ fontSize: 14, fontWeight: 800, color: '#1a3a5c', margin: '20px 0 10px' }}>Gestores Cadastrados</h4>
+          {gestores.map(g => (
+            <Card key={g.id}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
+                <div>
+                  <div style={{ fontWeight: 800, color: '#1a3a5c', fontSize: 14 }}>{g.nome}</div>
+                  <div style={{ color: '#6b8099', fontSize: 12, marginTop: 2 }}>Mat. {g.matricula}</div>
+                </div>
+                <div style={{ display: 'flex', gap: 6 }}>
+                  <span style={{ background: nivelLabel(g).bg, color: nivelLabel(g).color, padding: '3px 8px', borderRadius: 6, fontSize: 11, fontWeight: 800 }}>{nivelLabel(g).label}</span>
+                  {g.funcao && <span style={{ background: '#e8f0fe', color: '#3d5a9e', padding: '3px 8px', borderRadius: 6, fontSize: 11, fontWeight: 800 }}>{g.funcao}</span>}
+                </div>
+              </div>
+              {isPrincipal && !g.principal && (
+                <div style={{ display: 'flex', gap: 10, marginTop: 12, flexWrap: 'wrap' }}>
+                  <select value={g.nivel} onChange={e => alterarNivelGestor(g.id, e.target.value)} style={{ ...inp, width: 'auto', flex: 1, padding: '6px 8px', fontSize: 12 }}>
+                    <option value="gestor">Nível: Padrão</option>
+                    <option value="master">Nível: Master</option>
+                  </select>
+                  <select value={g.funcao || ''} onChange={e => alterarFuncaoGestor(g.id, e.target.value)} style={{ ...inp, width: 'auto', flex: 1, padding: '6px 8px', fontSize: 12 }}>
+                    {FUNCOES_GESTOR.map(f => <option key={f} value={f}>{f || '— Função —'}</option>)}
+                  </select>
+                  <button onClick={() => removerGestor(g.id)} style={{ ...btnSm, background: '#FFEBEE', color: '#B71C1C' }}>Remover</button>
+                </div>
+              )}
+            </Card>
+          ))}
+        </>
+      )}
+      
+      <button onClick={() => { limparSessao(); window.location.reload(); }} style={{ ...btnPrimary, background: '#f0f4f8', color: '#B71C1C', marginTop: 30 }}>🚪 Sair do Sistema</button>
+    </div>
+  );
+}
 
 // ========== COMPONENTE PRINCIPAL (APP) ==========
 export default function App() {
