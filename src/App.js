@@ -626,185 +626,184 @@ function gerarPDF(solicitacoes, policiais, semanaAtual) {
   rodape(3);
   doc.save(`relatorio-32bpm-${periodoStr.replace(/\//g,'-').replace(/ /g,'')}.pdf`);
 }
-
 // ========== DASHBOARD (ORIGINAL COMPLETO) ==========
 function Dashboard({ solicitacoes, policiais, onAtualizarPolicial, onRemoverPolicial, semanaAtual }) {
-  const aprovadas = solicitacoes.filter(s => s.status === 'aprovado');
-  const total = solicitacoes.length;
-  const totalAprovadas = aprovadas.length;
-  const totalPendentes = solicitacoes.filter(s => s.status === 'pendente').length;
-  const totalRecusadas = solicitacoes.filter(s => s.status === 'recusado').length;
-  const totalFolgas = aprovadas.filter(s => s.motivo === 'Folga').length;
-  const totalConcessoes = aprovadas.filter(s => s.motivo === 'Concessão').length;
-  const porDia = DIAS.map(dia => ({ dia:dia.substring(0,3), Folgas:aprovadas.filter(s=>s.dia===dia&&s.motivo==='Folga').length, Concessões:aprovadas.filter(s=>s.dia===dia&&s.motivo==='Concessão').length }));
-  const porSecao = SECOES.map(secao => ({ secao, total:aprovadas.filter(s=>s.secao===secao).length })).filter(s=>s.total>0).sort((a,b)=>b.total-a.total);
-  const totalPorDia = porDia.map(d => d.Folgas + d.Concessões);
-  const maxDia = Math.max(...totalPorDia);
-  const mediaDia = totalPorDia.reduce((a,b)=>a+b,0) / 7;
-  const diaCritico = porDia.find(d => (d.Folgas+d.Concessões) === maxDia && maxDia > 0);
-  const desbalanceado = maxDia > 0 && (maxDia - Math.min(...totalPorDia.filter(v=>v>0))) >= 3;
-  const semSecao = policiais.filter(p => !p.secao || p.secao === '');
-  const retornosProximos = policiais.filter(p => p.situacao === 'Férias' && p.ferias_fim && diasParaRetorno(p.ferias_fim) !== null && diasParaRetorno(p.ferias_fim) <= 3 && diasParaRetorno(p.ferias_fim) >= 0);
-  const ltsProximos = policiais.filter(p => (p.sit_sanitaria||'Apto A') === 'LTS' && p.ss_fim && diasParaRetorno(p.ss_fim) !== null && diasParaRetorno(p.ss_fim) <= 3 && diasParaRetorno(p.ss_fim) >= 0);
-  const aptoBProximos = policiais.filter(p => (p.sit_sanitaria||'Apto A') === 'Apto B' && p.ss_fim && diasParaRetorno(p.ss_fim) !== null && diasParaRetorno(p.ss_fim) <= 3 && diasParaRetorno(p.ss_fim) >= 0);
-  const aptoCProximos = policiais.filter(p => (p.sit_sanitaria||'Apto A') === 'Apto C' && p.ss_fim && diasParaRetorno(p.ss_fim) !== null && diasParaRetorno(p.ss_fim) <= 3 && diasParaRetorno(p.ss_fim) >= 0);
-  const aptoAComRestricao = policiais.filter(p => (p.sit_sanitaria||'Apto A') === 'Apto A' && temRestricao(p));
-  const aptoASemRestricao = policiais.filter(p => (p.sit_sanitaria||'Apto A') === 'Apto A' && !temRestricao(p));
-  const ssCards = [
-    { label:'Apto A', total:aptoASemRestricao.length, cor:'#1565C0', emoji:'🔵' },
-    ...(aptoAComRestricao.length > 0 ? [{ label:'Apto A c/ Restrição', total:aptoAComRestricao.length, cor:'#E65100', emoji:'🟠' }] : []),
-    { label:'Apto B', total:policiais.filter(p=>(p.sit_sanitaria||'Apto A')==='Apto B').length, cor:'#F9A825', emoji:'🟡' },
-    { label:'Apto C', total:policiais.filter(p=>(p.sit_sanitaria||'Apto A')==='Apto C').length, cor:'#B71C1C', emoji:'🔴' },
-    { label:'LTS', total:policiais.filter(p=>(p.sit_sanitaria||'Apto A')==='LTS').length, cor:'#6A1B9A', emoji:'🟣' },
-  ];
-  const sitData = SITUACOES.map(s => ({ name:s, value:policiais.filter(p=>(p.situacao||'Pronto')===s).length })).filter(s=>s.value>0);
-  const fimSemana = new Date(semanaAtual);
-  fimSemana.setDate(fimSemana.getDate() + 6);
-  const isoInicio = semanaAtual.toISOString().split('T')[0];
-  const isoFim = fimSemana.toISOString().split('T')[0];
-  const prontos = policiais.filter(p => (p.situacao||'Pronto') === 'Pronto');
-  const semFolga = prontos.filter(p => !solicitacoes.find(s => s.policial_id === p.id && s.semana >= isoInicio && s.semana <= isoFim && s.status !== 'recusado'));
+  const aprovadas = solicitacoes.filter(s => s.status === 'aprovado');
+  const total = solicitacoes.length;
+  const totalAprovadas = aprovadas.length;
+  const totalPendentes = solicitacoes.filter(s => s.status === 'pendente').length;
+  const totalRecusadas = solicitacoes.filter(s => s.status === 'recusado').length;
+  const totalFolgas = aprovadas.filter(s => s.motivo === 'Folga').length;
+  const totalConcessoes = aprovadas.filter(s => s.motivo === 'Concessão').length;
+  const porDia = DIAS.map(dia => ({ dia:dia.substring(0,3), Folgas:aprovadas.filter(s=>s.dia===dia&&s.motivo==='Folga').length, Concessões:aprovadas.filter(s=>s.dia===dia&&s.motivo==='Concessão').length }));
+  const porSecao = SECOES.map(secao => ({ secao, total:aprovadas.filter(s=>s.secao===secao).length })).filter(s=>s.total>0).sort((a,b)=>b.total-a.total);
+  const totalPorDia = porDia.map(d => d.Folgas + d.Concessões);
+  const maxDia = Math.max(...totalPorDia);
+  const mediaDia = totalPorDia.reduce((a,b)=>a+b,0) / 7;
+  const diaCritico = porDia.find(d => (d.Folgas+d.Concessões) === maxDia && maxDia > 0);
+  const desbalanceado = maxDia > 0 && (maxDia - Math.min(...totalPorDia.filter(v=>v>0))) >= 3;
+  const semSecao = policiais.filter(p => !p.secao || p.secao === '');
+  const retornosProximos = policiais.filter(p => p.situacao === 'Férias' && p.ferias_fim && diasParaRetorno(p.ferias_fim) !== null && diasParaRetorno(p.ferias_fim) <= 3 && diasParaRetorno(p.ferias_fim) >= 0);
+  const ltsProximos = policiais.filter(p => (p.sit_sanitaria||'Apto A') === 'LTS' && p.ss_fim && diasParaRetorno(p.ss_fim) !== null && diasParaRetorno(p.ss_fim) <= 3 && diasParaRetorno(p.ss_fim) >= 0);
+  const aptoBProximos = policiais.filter(p => (p.sit_sanitaria||'Apto A') === 'Apto B' && p.ss_fim && diasParaRetorno(p.ss_fim) !== null && diasParaRetorno(p.ss_fim) <= 3 && diasParaRetorno(p.ss_fim) >= 0);
+  const aptoCProximos = policiais.filter(p => (p.sit_sanitaria||'Apto A') === 'Apto C' && p.ss_fim && diasParaRetorno(p.ss_fim) !== null && diasParaRetorno(p.ss_fim) <= 3 && diasParaRetorno(p.ss_fim) >= 0);
+  const aptoAComRestricao = policiais.filter(p => (p.sit_sanitaria||'Apto A') === 'Apto A' && temRestricao(p));
+  const aptoASemRestricao = policiais.filter(p => (p.sit_sanitaria||'Apto A') === 'Apto A' && !temRestricao(p));
+  const ssCards = [
+    { label:'Apto A', total:aptoASemRestricao.length, cor:'#1565C0', emoji:'🔵' },
+    ...(aptoAComRestricao.length > 0 ? [{ label:'Apto A c/ Restrição', total:aptoAComRestricao.length, cor:'#E65100', emoji:'🟠' }] : []),
+    { label:'Apto B', total:policiais.filter(p=>(p.sit_sanitaria||'Apto A')==='Apto B').length, cor:'#F9A825', emoji:'🟡' },
+    { label:'Apto C', total:policiais.filter(p=>(p.sit_sanitaria||'Apto A')==='Apto C').length, cor:'#B71C1C', emoji:'🔴' },
+    { label:'LTS', total:policiais.filter(p=>(p.sit_sanitaria||'Apto A')==='LTS').length, cor:'#6A1B9A', emoji:'🟣' },
+  ];
+  const sitData = SITUACOES.map(s => ({ name:s, value:policiais.filter(p=>(p.situacao||'Pronto')===s).length })).filter(s=>s.value>0);
+  const fimSemana = new Date(semanaAtual);
+  fimSemana.setDate(fimSemana.getDate() + 6);
+  const isoInicio = semanaAtual.toISOString().split('T')[0];
+  const isoFim = fimSemana.toISOString().split('T')[0];
+  const prontos = policiais.filter(p => (p.situacao||'Pronto') === 'Pronto');
+  const semFolga = prontos.filter(p => !solicitacoes.find(s => s.policial_id === p.id && s.semana >= isoInicio && s.semana <= isoFim && s.status !== 'recusado'));
 
-  return (
-    <div>
-      <h3 style={{ fontSize:15, fontWeight:800, color:'#1a3a5c', marginBottom:16 }}>📈 Dashboard de Estatísticas</h3>
+  return (
+    <div>
+      <h3 style={{ fontSize:15, fontWeight:800, color:'#1a3a5c', marginBottom:16 }}>📈 Dashboard de Estatísticas</h3>
 
-      {retornosProximos.length > 0 && (
-        <div style={{ background:'#FFF3E0', border:'2px solid #FFB74D', borderRadius:10, padding:'12px 16px', marginBottom:14 }}>
-          <div style={{ fontWeight:800, color:'#E65100', fontSize:13, marginBottom:8 }}>⏰ Férias encerrando em até 3 dias:</div>
-          {retornosProximos.map(p => { const dias = diasParaRetorno(p.ferias_fim); return (<div key={p.id} style={{ display:'flex', gap:8, alignItems:'center', marginBottom:4 }}><span style={{ fontWeight:700, color:'#1a3a5c', fontSize:12 }}>{p.patente} {p.nome}</span><span style={{ background:dias===0?'#B71C1C':dias<=1?'#E65100':'#F9A825', color:'#fff', borderRadius:6, padding:'1px 8px', fontSize:11, fontWeight:800 }}>{dias===0?'Retorna hoje!':dias===1?'Retorna amanhã!':`${dias} dias`}</span></div>); })}
-        </div>
-      )}
+      {retornosProximos.length > 0 && (
+        <div style={{ background:'#FFF3E0', border:'2px solid #FFB74D', borderRadius:10, padding:'12px 16px', marginBottom:14 }}>
+          <div style={{ fontWeight:800, color:'#E65100', fontSize:13, marginBottom:8 }}>⏰ Férias encerrando em até 3 dias:</div>
+          {retornosProximos.map(p => { const dias = diasParaRetorno(p.ferias_fim); return (<div key={p.id} style={{ display:'flex', gap:8, alignItems:'center', marginBottom:4 }}><span style={{ fontWeight:700, color:'#1a3a5c', fontSize:12 }}>{p.patente} {p.nome}</span><span style={{ background:dias===0?'#B71C1C':dias<=1?'#E65100':'#F9A825', color:'#fff', borderRadius:6, padding:'1px 8px', fontSize:11, fontWeight:800 }}>{dias===0?'Retorna hoje!':dias===1?'Retorna amanhã!':`${dias} dias`}</span></div>); })}
+        </div>
+      )}
 
-      {ltsProximos.length > 0 && (
-        <div style={{ background:'#F3E5F5', border:'2px solid #CE93D8', borderRadius:10, padding:'12px 16px', marginBottom:14 }}>
-          <div style={{ fontWeight:800, color:'#6A1B9A', fontSize:13, marginBottom:8 }}>🟣 LTS Sanitário encerrando em até 3 dias:</div>
-          {ltsProximos.map(p => { const dias = diasParaRetorno(p.ss_fim); return (<div key={p.id} style={{ display:'flex', gap:8, alignItems:'center', marginBottom:4 }}><span style={{ fontWeight:700, color:'#1a3a5c', fontSize:12 }}>{p.patente} {p.nome}</span><span style={{ background:dias===0?'#6A1B9A':'#AB47BC', color:'#fff', borderRadius:6, padding:'1px 8px', fontSize:11, fontWeight:800 }}>{dias===0?'Encerra hoje!':dias===1?'Encerra amanhã!':`${dias} dias`}</span></div>); })}
-        </div>
-      )}
+      {ltsProximos.length > 0 && (
+        <div style={{ background:'#F3E5F5', border:'2px solid #CE93D8', borderRadius:10, padding:'12px 16px', marginBottom:14 }}>
+          <div style={{ fontWeight:800, color:'#6A1B9A', fontSize:13, marginBottom:8 }}>🟣 LTS Sanitário encerrando em até 3 dias:</div>
+          {ltsProximos.map(p => { const dias = diasParaRetorno(p.ss_fim); return (<div key={p.id} style={{ display:'flex', gap:8, alignItems:'center', marginBottom:4 }}><span style={{ fontWeight:700, color:'#1a3a5c', fontSize:12 }}>{p.patente} {p.nome}</span><span style={{ background:dias===0?'#6A1B9A':'#AB47BC', color:'#fff', borderRadius:6, padding:'1px 8px', fontSize:11, fontWeight:800 }}>{dias===0?'Encerra hoje!':dias===1?'Encerra amanhã!':`${dias} dias`}</span></div>); })}
+        </div>
+      )}
 
-      {aptoBProximos.length > 0 && (
-        <div style={{ background:'#FFF8E1', border:'2px solid #FFD54F', borderRadius:10, padding:'12px 16px', marginBottom:14 }}>
-          <div style={{ fontWeight:800, color:'#F9A825', fontSize:13, marginBottom:8 }}>🟡 Apto B encerrando em até 3 dias:</div>
-          {aptoBProximos.map(p => { const dias = diasParaRetorno(p.ss_fim); return (<div key={p.id} style={{ display:'flex', gap:8, alignItems:'center', marginBottom:4 }}><span style={{ fontWeight:700, color:'#1a3a5c', fontSize:12 }}>{p.patente} {p.nome}</span><span style={{ background:dias===0?'#F9A825':dias<=1?'#F57F17':'#FFA000', color:'#fff', borderRadius:6, padding:'1px 8px', fontSize:11, fontWeight:800 }}>{dias===0?'Encerra hoje!':dias===1?'Encerra amanhã!':`${dias} dias`}</span></div>); })}
-        </div>
-      )}
+      {aptoBProximos.length > 0 && (
+        <div style={{ background:'#FFF8E1', border:'2px solid #FFD54F', borderRadius:10, padding:'12px 16px', marginBottom:14 }}>
+          <div style={{ fontWeight:800, color:'#F9A825', fontSize:13, marginBottom:8 }}>🟡 Apto B encerrando em até 3 dias:</div>
+          {aptoBProximos.map(p => { const dias = diasParaRetorno(p.ss_fim); return (<div key={p.id} style={{ display:'flex', gap:8, alignItems:'center', marginBottom:4 }}><span style={{ fontWeight:700, color:'#1a3a5c', fontSize:12 }}>{p.patente} {p.nome}</span><span style={{ background:dias===0?'#F9A825':dias<=1?'#F57F17':'#FFA000', color:'#fff', borderRadius:6, padding:'1px 8px', fontSize:11, fontWeight:800 }}>{dias===0?'Encerra hoje!':dias===1?'Encerra amanhã!':`${dias} dias`}</span></div>); })}
+        </div>
+      )}
 
-      {aptoCProximos.length > 0 && (
-        <div style={{ background:'#FFEBEE', border:'2px solid #EF9A9A', borderRadius:10, padding:'12px 16px', marginBottom:14 }}>
-          <div style={{ fontWeight:800, color:'#B71C1C', fontSize:13, marginBottom:8 }}>🔴 Apto C encerrando em até 3 dias:</div>
-          {aptoCProximos.map(p => { const dias = diasParaRetorno(p.ss_fim); return (<div key={p.id} style={{ display:'flex', gap:8, alignItems:'center', marginBottom:4 }}><span style={{ fontWeight:700, color:'#1a3a5c', fontSize:12 }}>{p.patente} {p.nome}</span><span style={{ background:dias===0?'#B71C1C':'#E53935', color:'#fff', borderRadius:6, padding:'1px 8px', fontSize:11, fontWeight:800 }}>{dias===0?'Encerra hoje!':dias===1?'Encerra amanhã!':`${dias} dias`}</span></div>); })}
-        </div>
-      )}
+      {aptoCProximos.length > 0 && (
+        <div style={{ background:'#FFEBEE', border:'2px solid #EF9A9A', borderRadius:10, padding:'12px 16px', marginBottom:14 }}>
+          <div style={{ fontWeight:800, color:'#B71C1C', fontSize:13, marginBottom:8 }}>🔴 Apto C encerrando em até 3 dias:</div>
+          {aptoCProximos.map(p => { const dias = diasParaRetorno(p.ss_fim); return (<div key={p.id} style={{ display:'flex', gap:8, alignItems:'center', marginBottom:4 }}><span style={{ fontWeight:700, color:'#1a3a5c', fontSize:12 }}>{p.patente} {p.nome}</span><span style={{ background:dias===0?'#B71C1C':'#E53935', color:'#fff', borderRadius:6, padding:'1px 8px', fontSize:11, fontWeight:800 }}>{dias===0?'Encerra hoje!':dias===1?'Encerra amanhã!':`${dias} dias`}</span></div>); })}
+        </div>
+      )}
 
-      {semSecao.length > 0 && (
-        <div style={{ background:'#FFEBEE', border:'2px solid #EF9A9A', borderRadius:10, padding:'12px 16px', marginBottom:14 }}>
-          <div style={{ fontWeight:800, color:'#B71C1C', fontSize:13, marginBottom:8 }}>⚠️ {semSecao.length} policial(is) sem seção definida:</div>
-          {semSecao.map(p => (
-            <div key={p.id} style={{ display:'flex', gap:8, alignItems:'center', flexWrap:'wrap', marginBottom:6, background:'#fff', borderRadius:8, padding:'6px 10px', border:'1px solid #EF9A9A' }}>
-              <span style={{ fontWeight:700, color:'#B71C1C', fontSize:12, flex:1 }}>{p.patente} {p.nome}</span>
-              <select defaultValue="" onChange={e => { if(e.target.value) onAtualizarPolicial(p.id,'secao',e.target.value); }} style={{ fontSize:12, padding:'4px 6px', borderRadius:6, border:'1px solid #d0dce8', color:'#1a3a5c', background:'#f8fafc' }}>
-                <option value="" disabled>— Atribuir seção —</option>
-                {SECOES.map(s => <option key={s}>{s}</option>)}
-              </select>
-              <button onClick={() => onRemoverPolicial(p.id)} style={{ background:'#FFEBEE', color:'#B71C1C', border:'none', borderRadius:6, padding:'4px 8px', fontSize:12, fontWeight:700, cursor:'pointer' }}>🗑️</button>
-            </div>
-          ))}
-        </div>
-      )}
+      {semSecao.length > 0 && (
+        <div style={{ background:'#FFEBEE', border:'2px solid #EF9A9A', borderRadius:10, padding:'12px 16px', marginBottom:14 }}>
+          <div style={{ fontWeight:800, color:'#B71C1C', fontSize:13, marginBottom:8 }}>⚠️ {semSecao.length} policial(is) sem seção definida:</div>
+          {semSecao.map(p => (
+            <div key={p.id} style={{ display:'flex', gap:8, alignItems:'center', flexWrap:'wrap', marginBottom:6, background:'#fff', borderRadius:8, padding:'6px 10px', border:'1px solid #EF9A9A' }}>
+              <span style={{ fontWeight:700, color:'#B71C1C', fontSize:12, flex:1 }}>{p.patente} {p.nome}</span>
+              <select defaultValue="" onChange={e => { if(e.target.value) onAtualizarPolicial(p.id,'secao',e.target.value); }} style={{ fontSize:12, padding:'4px 6px', borderRadius:6, border:'1px solid #d0dce8', color:'#1a3a5c', background:'#f8fafc' }}>
+                <option value="" disabled>— Atribuir seção —</option>
+                {SECOES.map(s => <option key={s}>{s}</option>)}
+              </select>
+              <button onClick={() => onRemoverPolicial(p.id)} style={{ background:'#FFEBEE', color:'#B71C1C', border:'none', borderRadius:6, padding:'4px 8px', fontSize:12, fontWeight:700, cursor:'pointer' }}>🗑️</button>
+            </div>
+          ))}
+        </div>
+      )}
 
-      {semFolga.length > 0 && (
-        <div style={{ background:'#E3F2FD', border:'2px solid #90CAF9', borderRadius:10, padding:'12px 16px', marginBottom:14 }}>
-          <div style={{ fontWeight:800, color:'#0D47A1', fontSize:13, marginBottom:8 }}>📋 {semFolga.length} policial(is) Pronto(s) sem solicitação esta semana:</div>
-          <div style={{ display:'flex', flexWrap:'wrap', gap:6 }}>
-            {semFolga.map(p => <span key={p.id} style={{ background:'#fff', color:'#0D47A1', borderRadius:6, padding:'2px 8px', fontSize:11, fontWeight:700, border:'1px solid #90CAF9' }}>{p.patente} {p.nome.split(' ').slice(0,2).join(' ')}</span>)}
-          </div>
-        </div>
-      )}
+      {semFolga.length > 0 && (
+        <div style={{ background:'#E3F2FD', border:'2px solid #90CAF9', borderRadius:10, padding:'12px 16px', marginBottom:14 }}>
+          <div style={{ fontWeight:800, color:'#0D47A1', fontSize:13, marginBottom:8 }}>📋 {semFolga.length} policial(is) Pronto(s) sem solicitação esta semana:</div>
+          <div style={{ display:'flex', flexWrap:'wrap', gap:6 }}>
+            {semFolga.map(p => <span key={p.id} style={{ background:'#fff', color:'#0D47A1', borderRadius:6, padding:'2px 8px', fontSize:11, fontWeight:700, border:'1px solid #90CAF9' }}>{p.patente} {p.nome.split(' ').slice(0,2).join(' ')}</span>)}
+          </div>
+        </div>
+      )}
 
-      {aprovadas.length > 0 && (
-        <Card>
-          <h4 style={{ fontSize:13, fontWeight:800, color:'#1a3a5c', marginBottom:12 }}>🔍 Insights Automáticos</h4>
-          <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
-            {diaCritico && <div style={{ background:'#FFEBEE', borderRadius:8, padding:'8px 12px', display:'flex', gap:8, alignItems:'center' }}><span style={{ fontSize:16 }}>🔴</span><span style={{ fontSize:13, color:'#B71C1C', fontWeight:700 }}>Dia crítico: <strong>{diaCritico.dia}</strong> com {diaCritico.Folgas+diaCritico.Concessões} folgas ({Math.round(((diaCritico.Folgas+diaCritico.Concessões)/totalAprovadas)*100)}% do total)</span></div>}
-            {desbalanceado && <div style={{ background:'#FFF8E1', borderRadius:8, padding:'8px 12px', display:'flex', gap:8, alignItems:'center' }}><span style={{ fontSize:16 }}>⚠️</span><span style={{ fontSize:13, color:'#7B5800', fontWeight:700 }}>Desbalanceamento detectado: distribuição irregular entre os dias da semana</span></div>}
-            {porSecao.length > 0 && <div style={{ background:'#E8F5E9', borderRadius:8, padding:'8px 12px', display:'flex', gap:8, alignItems:'center' }}><span style={{ fontSize:16 }}>📊</span><span style={{ fontSize:13, color:'#1B5E20', fontWeight:700 }}>Seção mais ativa: <strong>{porSecao[0].secao}</strong> ({Math.round((porSecao[0].total/totalAprovadas)*100)}% das folgas)</span></div>}
-            <div style={{ background:'#E3F2FD', borderRadius:8, padding:'8px 12px', display:'flex', gap:8, alignItems:'center' }}><span style={{ fontSize:16 }}>📈</span><span style={{ fontSize:13, color:'#0D47A1', fontWeight:700 }}>Média de {mediaDia.toFixed(1)} folgas por dia da semana</span></div>
-          </div>
-        </Card>
-      )}
+      {aprovadas.length > 0 && (
+        <Card>
+          <h4 style={{ fontSize:13, fontWeight:800, color:'#1a3a5c', marginBottom:12 }}>🔍 Insights Automáticos</h4>
+          <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+            {diaCritico && <div style={{ background:'#FFEBEE', borderRadius:8, padding:'8px 12px', display:'flex', gap:8, alignItems:'center' }}><span style={{ fontSize:16 }}>🔴</span><span style={{ fontSize:13, color:'#B71C1C', fontWeight:700 }}>Dia crítico: <strong>{diaCritico.dia}</strong> com {diaCritico.Folgas+diaCritico.Concessões} folgas ({Math.round(((diaCritico.Folgas+diaCritico.Concessões)/totalAprovadas)*100)}% do total)</span></div>}
+            {desbalanceado && <div style={{ background:'#FFF8E1', borderRadius:8, padding:'8px 12px', display:'flex', gap:8, alignItems:'center' }}><span style={{ fontSize:16 }}>⚠️</span><span style={{ fontSize:13, color:'#7B5800', fontWeight:700 }}>Desbalanceamento detectado: distribuição irregular entre os dias da semana</span></div>}
+            {porSecao.length > 0 && <div style={{ background:'#E8F5E9', borderRadius:8, padding:'8px 12px', display:'flex', gap:8, alignItems:'center' }}><span style={{ fontSize:16 }}>📊</span><span style={{ fontSize:13, color:'#1B5E20', fontWeight:700 }}>Seção mais ativa: <strong>{porSecao[0].secao}</strong> ({Math.round((porSecao[0].total/totalAprovadas)*100)}% das folgas)</span></div>}
+            <div style={{ background:'#E3F2FD', borderRadius:8, padding:'8px 12px', display:'flex', gap:8, alignItems:'center' }}><span style={{ fontSize:16 }}>📈</span><span style={{ fontSize:13, color:'#0D47A1', fontWeight:700 }}>Média de {mediaDia.toFixed(1)} folgas por dia da semana</span></div>
+          </div>
+        </Card>
+      )}
 
-      <Card>
-        <h4 style={{ fontSize:13, fontWeight:800, color:'#1a3a5c', marginBottom:12 }}>⚙️ Capacidade Operacional</h4>
-        <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:10 }}>
-          {[
-            { l:'Total do Efetivo', v:policiais.length, c:'#1a3a5c' },
-            { l:'Prontos p/ Serviço', v:prontos.length, c:'#1B5E20' },
-            { l:'Afastados', v:policiais.filter(p=>(p.situacao||'Pronto')!=='Pronto').length, c:'#B71C1C' },
-            { l:'Com Restrição', v:policiais.filter(p=>temRestricao(p)).length, c:'#E65100' },
-            { l:'Sem folga esta semana', v:semFolga.length, c:'#0D47A1' },
-            { l:'LTS Sanitário', v:policiais.filter(p=>(p.sit_sanitaria||'Apto A')==='LTS').length, c:'#6A1B9A' },
-          ].map(s => <div key={s.l} style={{ background:'#f8fafc', borderRadius:10, padding:'12px 8px', textAlign:'center', border:'1px solid #e0e8f0' }}><div style={{ fontSize:22, fontWeight:900, color:s.c }}>{s.v}</div><div style={{ fontSize:10, color:'#6b8099', fontWeight:700 }}>{s.l}</div></div>)}
-        </div>
-      </Card>
+      <Card>
+        <h4 style={{ fontSize:13, fontWeight:800, color:'#1a3a5c', marginBottom:12 }}>⚙️ Capacidade Operacional</h4>
+        <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:10 }}>
+          {[
+            { l:'Total do Efetivo', v:policiais.length, c:'#1a3a5c' },
+            { l:'Prontos p/ Serviço', v:prontos.length, c:'#1B5E20' },
+            { l:'Afastados', v:policiais.filter(p=>(p.situacao||'Pronto')!=='Pronto').length, c:'#B71C1C' },
+            { l:'Com Restrição', v:policiais.filter(p=>temRestricao(p)).length, c:'#E65100' },
+            { l:'Sem folga esta semana', v:semFolga.length, c:'#0D47A1' },
+            { l:'LTS Sanitário', v:policiais.filter(p=>(p.sit_sanitaria||'Apto A')==='LTS').length, c:'#6A1B9A' },
+          ].map(s => <div key={s.l} style={{ background:'#f8fafc', borderRadius:10, padding:'12px 8px', textAlign:'center', border:'1px solid #e0e8f0' }}><div style={{ fontSize:22, fontWeight:900, color:s.c }}>{s.v}</div><div style={{ fontSize:10, color:'#6b8099', fontWeight:700 }}>{s.l}</div></div>)}
+        </div>
+      </Card>
 
-      {policiais.filter(p => (p.situacao||'Pronto') !== 'Pronto').length > 0 && (
-        <Card>
-          <h4 style={{ fontSize:13, fontWeight:800, color:'#1a3a5c', marginBottom:12 }}>🚨 Policiais Afastados</h4>
-          {SITUACOES.filter(sit => sit !== 'Pronto').map(sit => {
-            const afastados = policiais.filter(p => (p.situacao||'Pronto') === sit);
-            if (afastados.length === 0) return null;
-            return (
-              <div key={sit} style={{ marginBottom:12 }}>
-                <div style={{ fontWeight:800, color:'#B71C1C', fontSize:12, marginBottom:6, background:'#FFEBEE', borderRadius:6, padding:'4px 10px', display:'inline-block' }}>{sit} ({afastados.length})</div>
-                {afastados.map(p => { const dias = diasParaRetorno(p.ferias_fim); return (
-                  <div key={p.id} style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'5px 0', borderBottom:'1px solid #f0f4f8', flexWrap:'wrap', gap:6 }}>
-                    <span style={{ fontWeight:700, color:'#1a3a5c', fontSize:12 }}>{p.patente} {p.nome}</span>
-                    <div style={{ display:'flex', gap:6, alignItems:'center' }}>
-                      {p.ferias_fim && <span style={{ color:'#6b8099', fontSize:11 }}>{p.ferias_inicio?new Date(p.ferias_inicio+'T00:00:00').toLocaleDateString('pt-BR'):'—'} → {new Date(p.ferias_fim+'T00:00:00').toLocaleDateString('pt-BR')}</span>}
-                      {dias!==null&&dias>=0&&<span style={{ background:dias<=3?'#B71C1C':'#1B5E20', color:'#fff', borderRadius:6, padding:'1px 8px', fontSize:11, fontWeight:800 }}>{dias===0?'Retorna hoje!':dias===1?'1 dia':`${dias} dias`}</span>}
-                      {dias!==null&&dias<0&&<span style={{ background:'#7B5800', color:'#fff', borderRadius:6, padding:'1px 8px', fontSize:11, fontWeight:800 }}>Vencido</span>}
-                    </div>
-                  </div>
-                ); })}
-              </div>
-            );
-          })}
-        </Card>
-      )}
+      {policiais.filter(p => (p.situacao||'Pronto') !== 'Pronto').length > 0 && (
+        <Card>
+          <h4 style={{ fontSize:13, fontWeight:800, color:'#1a3a5c', marginBottom:12 }}>🚨 Policiais Afastados</h4>
+          {SITUACOES.filter(sit => sit !== 'Pronto').map(sit => {
+            const afastados = policiais.filter(p => (p.situacao||'Pronto') === sit);
+            if (afastados.length === 0) return null;
+            return (
+              <div key={sit} style={{ marginBottom:12 }}>
+                <div style={{ fontWeight:800, color:'#B71C1C', fontSize:12, marginBottom:6, background:'#FFEBEE', borderRadius:6, padding:'4px 10px', display:'inline-block' }}>{sit} ({afastados.length})</div>
+                {afastados.map(p => { const dias = diasParaRetorno(p.ferias_fim); return (
+                  <div key={p.id} style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'5px 0', borderBottom:'1px solid #f0f4f8', flexWrap:'wrap', gap:6 }}>
+                    <span style={{ fontWeight:700, color:'#1a3a5c', fontSize:12 }}>{p.patente} {p.nome}</span>
+                    <div style={{ display:'flex', gap:6, alignItems:'center' }}>
+                      {p.ferias_fim && <span style={{ color:'#6b8099', fontSize:11 }}>{p.ferias_inicio?new Date(p.ferias_inicio+'T00:00:00').toLocaleDateString('pt-BR'):'—'} → {new Date(p.ferias_fim+'T00:00:00').toLocaleDateString('pt-BR')}</span>}
+                      {dias!==null&&dias>=0&&<span style={{ background:dias<=3?'#B71C1C':'#1B5E20', color:'#fff', borderRadius:6, padding:'1px 8px', fontSize:11, fontWeight:800 }}>{dias===0?'Retorna hoje!':dias===1?'1 dia':`${dias} dias`}</span>}
+                      {dias!==null&&dias<0&&<span style={{ background:'#7B5800', color:'#fff', borderRadius:6, padding:'1px 8px', fontSize:11, fontWeight:800 }}>Vencido</span>}
+                    </div>
+                  </div>
+                ); })}
+              </div>
+            );
+          })}
+        </Card>
+      )}
 
-      <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:10, marginBottom:20 }}>
-        {[{l:'Total',v:total,c:'#1a3a5c'},{l:'Folgas aprovadas',v:totalFolgas,c:'#0D47A1'},{l:'Concessões aprovadas',v:totalConcessoes,c:'#6A1B9A'},{l:'Pendentes',v:totalPendentes,c:'#7B5800'},{l:'Recusadas',v:totalRecusadas,c:'#B71C1C'},{l:'Total aprovadas',v:totalAprovadas,c:'#1B5E20'}]
-          .map(s => <div key={s.l} style={{ background:'#fff', borderRadius:10, padding:'14px 10px', boxShadow:'0 2px 8px #00000012', textAlign:'center' }}><div style={{ fontSize:26, fontWeight:900, color:s.c }}>{s.v}</div><div style={{ fontSize:11, color:'#6b8099', fontWeight:700 }}>{s.l}</div></div>)}
-      </div>
+      <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:10, marginBottom:20 }}>
+        {[{l:'Total',v:total,c:'#1a3a5c'},{l:'Folgas aprovadas',v:totalFolgas,c:'#0D47A1'},{l:'Concessões aprovadas',v:totalConcessoes,c:'#6A1B9A'},{l:'Pendentes',v:totalPendentes,c:'#7B5800'},{l:'Recusadas',v:totalRecusadas,c:'#B71C1C'},{l:'Total aprovadas',v:totalAprovadas,c:'#1B5E20'}]
+          .map(s => <div key={s.l} style={{ background:'#fff', borderRadius:10, padding:'14px 10px', boxShadow:'0 2px 8px #00000012', textAlign:'center' }}><div style={{ fontSize:26, fontWeight:900, color:s.c }}>{s.v}</div><div style={{ fontSize:11, color:'#6b8099', fontWeight:700 }}>{s.l}</div></div>)}
+      </div>
 
-      <Card>
-        <h4 style={{ fontSize:13, fontWeight:800, color:'#1a3a5c', marginBottom:14 }}>Situação Sanitária do Efetivo</h4>
-        <div style={{ display:'flex', gap:10, flexWrap:'wrap' }}>
-          {ssCards.map(s => <div key={s.label} style={{ flex:1, minWidth:90, background:s.cor+'18', borderRadius:10, padding:'12px 8px', textAlign:'center', border:`2px solid ${s.cor}` }}><div style={{ fontSize:22 }}>{s.emoji}</div><div style={{ fontSize:20, fontWeight:900, color:s.cor }}>{s.total}</div><div style={{ fontSize:10, color:'#6b8099', fontWeight:700 }}>{s.label}</div></div>)}
-        </div>
-      </Card>
+      <Card>
+        <h4 style={{ fontSize:13, fontWeight:800, color:'#1a3a5c', marginBottom:14 }}>Situação Sanitária do Efetivo</h4>
+        <div style={{ display:'flex', gap:10, flexWrap:'wrap' }}>
+          {ssCards.map(s => <div key={s.label} style={{ flex:1, minWidth:90, background:s.cor+'18', borderRadius:10, padding:'12px 8px', textAlign:'center', border:`2px solid ${s.cor}` }}><div style={{ fontSize:22 }}>{s.emoji}</div><div style={{ fontSize:20, fontWeight:900, color:s.cor }}>{s.total}</div><div style={{ fontSize:10, color:'#6b8099', fontWeight:700 }}>{s.label}</div></div>)}
+        </div>
+      </Card>
 
-      <Card>
-        <h4 style={{ fontSize:13, fontWeight:800, color:'#1a3a5c', marginBottom:14 }}>Situação do Efetivo</h4>
-        <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
-          {sitData.map(s => <div key={s.name} style={{ background:s.name==='Pronto'?'#E8F5E9':'#FFEBEE', borderRadius:8, padding:'8px 14px', textAlign:'center' }}><div style={{ fontSize:18, fontWeight:900, color:s.name==='Pronto'?'#1B5E20':'#B71C1C' }}>{s.value}</div><div style={{ fontSize:11, color:'#6b8099', fontWeight:700 }}>{s.name}</div></div>)}
-        </div>
-      </Card>
+      <Card>
+        <h4 style={{ fontSize:13, fontWeight:800, color:'#1a3a5c', marginBottom:14 }}>Situação do Efetivo</h4>
+        <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
+          {sitData.map(s => <div key={s.name} style={{ background:s.name==='Pronto'?'#E8F5E9':'#FFEBEE', borderRadius:8, padding:'8px 14px', textAlign:'center' }}><div style={{ fontSize:18, fontWeight:900, color:s.name==='Pronto'?'#1B5E20':'#B71C1C' }}>{s.value}</div><div style={{ fontSize:11, color:'#6b8099', fontWeight:700 }}>{s.name}</div></div>)}
+        </div>
+      </Card>
 
-      <Card>
-        <h4 style={{ fontSize:13, fontWeight:800, color:'#1a3a5c', marginBottom:14 }}>Folgas aprovadas por dia da semana</h4>
-        {aprovadas.length === 0 ? <p style={{ color:'#aab', fontSize:13 }}>Nenhuma folga aprovada ainda.</p>
-          : <ResponsiveContainer width="100%" height={200}><BarChart data={porDia} margin={{ top:5, right:10, left:-20, bottom:5 }}><CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" /><XAxis dataKey="dia" tick={{ fontSize:11 }} /><YAxis tick={{ fontSize:11 }} allowDecimals={false} /><Tooltip /><Bar dataKey="Folgas" fill="#0D47A1" radius={[4,4,0,0]} /><Bar dataKey="Concessões" fill="#6A1B9A" radius={[4,4,0,0]} /></BarChart></ResponsiveContainer>}
-      </Card>
+      <Card>
+        <h4 style={{ fontSize:13, fontWeight:800, color:'#1a3a5c', marginBottom:14 }}>Folgas aprovadas por dia da semana</h4>
+        {aprovadas.length === 0 ? <p style={{ color:'#aab', fontSize:13 }}>Nenhuma folga aprovada ainda.</p>
+          : <ResponsiveContainer width="100%" height={200}><BarChart data={porDia} margin={{ top:5, right:10, left:-20, bottom:5 }}><CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" /><XAxis dataKey="dia" tick={{ fontSize:11 }} /><YAxis tick={{ fontSize:11 }} allowDecimals={false} /><Tooltip /><Bar dataKey="Folgas" fill="#0D47A1" radius={[4,4,0,0]} /><Bar dataKey="Concessões" fill="#6A1B9A" radius={[4,4,0,0]} /></BarChart></ResponsiveContainer>}
+      </Card>
 
-      <Card>
-        <h4 style={{ fontSize:13, fontWeight:800, color:'#1a3a5c', marginBottom:14 }}>Distribuição por seção (%)</h4>
-        {porSecao.length === 0 ? <p style={{ color:'#aab', fontSize:13 }}>Nenhuma folga aprovada ainda.</p>
-          : <><ResponsiveContainer width="100%" height={220}><PieChart><Pie data={porSecao} dataKey="total" nameKey="secao" cx="50%" cy="50%" outerRadius={80} label={({ secao, total }) => `${secao} ${Math.round((total/totalAprovadas)*100)}%`} labelLine={false} fontSize={9}>{porSecao.map((_,i) => <Cell key={i} fill={CORES_GRAFICO[i%CORES_GRAFICO.length]} />)}</Pie><Tooltip formatter={(v,n) => [`${v} folgas (${Math.round((v/totalAprovadas)*100)}%)`, n]} /></PieChart></ResponsiveContainer><div style={{ display:'flex', flexWrap:'wrap', gap:6, marginTop:8 }}>{porSecao.map((s,i) => <span key={s.secao} style={{ background:CORES_GRAFICO[i%CORES_GRAFICO.length], color:'#fff', borderRadius:6, padding:'2px 8px', fontSize:11, fontWeight:700 }}>{s.secao}: {s.total} ({Math.round((s.total/totalAprovadas)*100)}%)</span>)}</div></>}
-      </Card>
-    </div>
-  );
+      <Card>
+        <h4 style={{ fontSize:13, fontWeight:800, color:'#1a3a5c', marginBottom:14 }}>Distribuição por seção (%)</h4>
+        {porSecao.length === 0 ? <p style={{ color:'#aab', fontSize:13 }}>Nenhuma folga aprovada ainda.</p>
+          : <><ResponsiveContainer width="100%" height={220}><PieChart><Pie data={porSecao} dataKey="total" nameKey="secao" cx="50%" cy="50%" outerRadius={80} label={({ secao, total }) => `${secao} ${Math.round((total/totalAprovadas)*100)}%`} labelLine={false} fontSize={9}>{porSecao.map((_,i) => <Cell key={i} fill={CORES_GRAFICO[i%CORES_GRAFICO.length]} />)}</Pie><Tooltip formatter={(v,n) => [`${v} folgas (${Math.round((v/totalAprovadas)*100)}%)`, n]} /></PieChart></ResponsiveContainer><div style={{ display:'flex', flexWrap:'wrap', gap:6, marginTop:8 }}>{porSecao.map((s,i) => <span key={s.secao} style={{ background:CORES_GRAFICO[i%CORES_GRAFICO.length], color:'#fff', borderRadius:6, padding:'2px 8px', fontSize:11, fontWeight:700 }}>{s.secao}: {s.total} ({Math.round((s.total/totalAprovadas)*100)}%)</span>)}</div></>}
+      </Card>
+    </div>
+  );
 }
 
 // ========== CALENDÁRIO (ORIGINAL COMPLETO) ==========
