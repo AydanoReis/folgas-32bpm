@@ -1,1259 +1,1958 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from './supabaseClient';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line } from 'recharts';
+import emailjs from '@emailjs/browser';
+import jsPDF from 'jspdf';
+import 'jspdf-autotable';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
+import {
+  paginar,
+  validarEmail,
+  validarMatricula,
+  validarSenha,
+  rateLimiterSolicitacao,
+  rateLimiterAprovacao,
+  registrarHistorico,
+  exportarParaCSV,
+  exportarParaExcel,
+  formatarDataHora,
+  CORES_STATUS,
+  ComponentePaginacao,
+  DetalhesPolicialCard,
+} from './utils';
 
-// ============================================================
-// ESTILOS GLOBAIS
-// ============================================================
-const AZUL = '#0d2340';
-const AZUL2 = '#1a3a5c';
-const AZUL3 = '#1e4d7b';
-const DOURADO = '#FFD700';
-const VERDE = '#1B5E20';
-const VERMELHO = '#B71C1C';
-const ROXO = '#6A1B9A';
-const LARANJA = '#E65100';
-const CINZA = '#f0f2f5';
+const EMAILJS_SERVICE_ID = 'service_97rq307';
+const EMAILJS_TEMPLATE_ID = 'template_y0wm9hp';
+const EMAILJS_PUBLIC_KEY = 'VmM8b5g2hP9fKqsm-';
 
-const inp = { width:'100%', padding:'10px 12px', borderRadius:8, border:'1.5px solid #d0dce8', fontSize:14, color:'#1a3a5c', background:'#f8fafc', boxSizing:'border-box', outline:'none', fontFamily:'inherit' };
-const lbl = { display:'block', fontSize:11, fontWeight:700, color:'#4a6580', marginBottom:5, textTransform:'uppercase', letterSpacing:0.5 };
-const btnPrimary = { display:'block', width:'100%', padding:'12px', background:`linear-gradient(135deg,${AZUL},${AZUL3})`, color:'#fff', border:'none', borderRadius:8, fontWeight:700, fontSize:14, cursor:'pointer', marginTop:12, fontFamily:'inherit', letterSpacing:0.5 };
-const btnSm = { padding:'6px 13px', borderRadius:7, fontWeight:600, fontSize:12, cursor:'pointer', border:'none', fontFamily:'inherit' };
+const DIAS = ['Segunda','Terça','Quarta','Quinta','Sexta','Sábado','Domingo'];
+const SECOES = ['P1','P3','P4','P5','Conferência','Tesouraria','Secretaria','Almoxarifado','SMT','SMB','Rancho','Ordenança','AJD','PCSV','Ed. Física','Técnica','Obra','Faxina','Gabinete Médico','Gabinete Odontológico'];
+const MOTIVOS = ['Folga','Concessão'];
+const SIT_SANITARIA_LTS = ['Apto A','Apto B','Apto C','LTS'];
+const SITUACOES = ['Pronto','Férias','LE','LTSPF','LTS','LP','Núpcias','Luto'];
+const RESTRICOES = ['Sem restrição','SP','CD','CRD','CHR'];
+const FUNCOES_GESTOR = ['','Comandante','SubComandante','Comandante de Cia','Chefe da P1','Brigada','Sargenteante'];
+
+const COR_SS = { 'Apto A':'#1565C0', 'Apto B':'#F9A825', 'Apto C':'#B71C1C', 'LTS':'#6A1B9A' };
+const EMOJI_SS = { 'Apto A':'🔵', 'Apto B':'🟡', 'Apto C':'🔴', 'LTS':'🟣' };
+const CORES_GRAFICO = ['#1a3a5c','#2E7D32','#6A1B9A','#0D47A1','#B71C1C','#E65100','#00695C','#4A148C','#880E4F','#1B5E20','#F57F17','#37474F','#1565C0','#283593','#4E342E','#33691E','#006064','#01579B'];
+
+const AUTO_REFRESH_INTERVAL = 120000; // 2 minutos
+const POR_PAGINA = 15;
+
+// ========== CONTADOR DE FOLGAS ==========
+function contarFolgas(solicitacoes, policialId) {
+  const agora = new Date();
+  const anoAtual = agora.getFullYear();
+  const mesAtual = agora.getMonth();
+  const aprovadas = solicitacoes.filter(s => s.policial_id === policialId && s.status === 'aprovado');
+  const folgas = aprovadas.filter(s => s.motivo === 'Folga');
+  const concessoes = aprovadas.filter(s => s.motivo === 'Concessão');
+  const folgasAno = folgas.filter(s => s.semana && new Date(s.semana).getFullYear() === anoAtual);
+  const folgasMes = folgas.filter(s => {
+    if (!s.semana) return false;
+    const d = new Date(s.semana);
+    return d.getFullYear() === anoAtual && d.getMonth() === mesAtual;
+  });
+  const concessoesAno = concessoes.filter(s => s.semana && new Date(s.semana).getFullYear() === anoAtual);
+  return { folgasAno: folgasAno.length, folgasMes: folgasMes.length, concessoesAno: concessoesAno.length };
+}
+
+function ContadorFolgas({ solicitacoes, policialId, compact = false }) {
+  const { folgasAno, folgasMes, concessoesAno } = contarFolgas(solicitacoes, policialId);
+  const mesNome = new Date().toLocaleDateString('pt-BR', { month: 'long' });
+  if (compact) {
+    return (
+      <div style={{ display:'flex', gap:6, flexWrap:'wrap', marginTop:4 }}>
+        <span style={{ background:'#E3F2FD', color:'#0D47A1', borderRadius:6, padding:'2px 8px', fontSize:11, fontWeight:800 }}>🌙 {folgasMes} folga{folgasMes !== 1 ? 's' : ''} este mês</span>
+        <span style={{ background:'#EDE7F6', color:'#4527A0', borderRadius:6, padding:'2px 8px', fontSize:11, fontWeight:800 }}>📅 {folgasAno} no ano</span>
+        {concessoesAno > 0 && <span style={{ background:'#F3E5F5', color:'#6A1B9A', borderRadius:6, padding:'2px 8px', fontSize:11, fontWeight:800 }}>🎖️ {concessoesAno} concessão{concessoesAno !== 1 ? 'ões' : ''} no ano</span>}
+      </div>
+    );
+  }
+  return (
+    <div style={{ display:'grid', gridTemplateColumns:'repeat(3, 1fr)', gap:8, margin:'12px 0' }}>
+      <div style={{ background:'#E3F2FD', borderRadius:10, padding:'10px 8px', textAlign:'center' }}>
+        <div style={{ fontSize:22, fontWeight:900, color:'#0D47A1' }}>{folgasMes}</div>
+        <div style={{ fontSize:10, color:'#1565C0', fontWeight:700 }}>🌙 Folgas em {mesNome}</div>
+      </div>
+      <div style={{ background:'#EDE7F6', borderRadius:10, padding:'10px 8px', textAlign:'center' }}>
+        <div style={{ fontSize:22, fontWeight:900, color:'#4527A0' }}>{folgasAno}</div>
+        <div style={{ fontSize:10, color:'#4527A0', fontWeight:700 }}>📅 Folgas no ano</div>
+      </div>
+      <div style={{ background:'#F3E5F5', borderRadius:10, padding:'10px 8px', textAlign:'center' }}>
+        <div style={{ fontSize:22, fontWeight:900, color:'#6A1B9A' }}>{concessoesAno}</div>
+        <div style={{ fontSize:10, color:'#6A1B9A', fontWeight:700 }}>🎖️ Concessões no ano</div>
+      </div>
+    </div>
+  );
+}
+
+const inp = { width:'100%', padding:'10px 12px', borderRadius:8, border:'1.5px solid #d0dce8', fontSize:14, color:'#1a3a5c', background:'#f8fafc', boxSizing:'border-box', outline:'none' };
+const lbl = { display:'block', fontSize:11, fontWeight:800, color:'#4a6580', marginBottom:5, textTransform:'uppercase', letterSpacing:0.5 };
+const btnPrimary = { display:'block', width:'100%', padding:'12px', background:'linear-gradient(135deg,#0d2340,#1e4d7b)', color:'#fff', border:'none', borderRadius:8, fontWeight:800, fontSize:14, cursor:'pointer', marginTop:12 };
+const btnSm = { padding:'6px 13px', borderRadius:7, fontWeight:700, fontSize:12, cursor:'pointer', border:'none' };
+
+function getInicioSemana(date) {
+  const d = new Date(date);
+  const day = d.getDay();
+  const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+  d.setDate(diff);
+  d.setHours(0,0,0,0);
+  return d;
+}
+function formatarSemana(inicio) {
+  const fim = new Date(inicio);
+  fim.setDate(fim.getDate() + 6);
+  return `${inicio.toLocaleDateString('pt-BR')} a ${fim.toLocaleDateString('pt-BR')}`;
+}
+function diasParaRetorno(fimStr) {
+  if (!fimStr) return null;
+  const hoje = new Date();
+  hoje.setHours(0,0,0,0);
+  const fim = new Date(fimStr + 'T00:00:00');
+  return Math.ceil((fim - hoje) / (1000*60*60*24));
+}
+function temRestricao(p) {
+  return p.restricao && p.restricao !== 'Sem restrição';
+}
+function nivelLabel(g) {
+  if (g.principal) return { label:'PRINCIPAL', bg:'#0d2340', color:'#fff' };
+  if (g.nivel === 'master') return { label:'MASTER', bg:'#1B5E20', color:'#fff' };
+  return { label:'GESTOR', bg:'#f0f4f8', color:'#6b8099' };
+}
+function salvarSessao(tipo, dados) {
+  try { sessionStorage.setItem('sessao_tipo', tipo); sessionStorage.setItem('sessao_dados', JSON.stringify(dados)); } catch(e) {}
+}
+function carregarSessao() {
+  try { const tipo = sessionStorage.getItem('sessao_tipo'); const dados = sessionStorage.getItem('sessao_dados'); return tipo && dados ? { tipo, dados: JSON.parse(dados) } : null; } catch(e) { return null; }
+}
+function limparSessao() {
+  try { sessionStorage.removeItem('sessao_tipo'); sessionStorage.removeItem('sessao_dados'); } catch(e) {}
+}
 
 function Card({ children, style }) {
-  return <div style={{ background:'#fff', borderRadius:12, padding:'16px 18px', boxShadow:'0 2px 12px #00000012', marginBottom:12, ...style }}>{children}</div>;
+  return <div style={{ background:'#fff', borderRadius:12, padding:'16px 18px', boxShadow:'0 2px 12px #00000012', marginBottom:10, ...style }}>{children}</div>;
+}
+function Badge({ status }) {
+  const s = CORES_STATUS[status] || CORES_STATUS.pendente;
+  return <span style={{ background:s.bg, color:s.text, border:`1px solid ${s.border}`, padding:'3px 10px', borderRadius:20, fontSize:11, fontWeight:800, textTransform:'uppercase', letterSpacing:1 }}>{status}</span>;
+}
+function MotivoBadge({ motivo }) {
+  const cor = motivo === 'Concessão' ? { bg:'#F3E5F5', text:'#6A1B9A', border:'#CE93D8' } : { bg:'#E3F2FD', text:'#0D47A1', border:'#90CAF9' };
+  return <span style={{ background:cor.bg, color:cor.text, border:`1px solid ${cor.border}`, padding:'3px 10px', borderRadius:20, fontSize:11, fontWeight:800 }}>{motivo}</span>;
+}
+function SSBadge({ p }) {
+  const ss = p.sit_sanitaria || 'Apto A';
+  const cor = COR_SS[ss] || '#888';
+  const emoji = EMOJI_SS[ss] || '⚪';
+  const comRestricao = temRestricao(p) && ss === 'Apto A';
+  return (
+    <span style={{ background: comRestricao ? '#E65100' : cor, color:'#fff', borderRadius:6, padding:'2px 8px', fontSize:11, fontWeight:800 }}>
+      {comRestricao ? '🟠' : emoji} {comRestricao ? `Apto A (${p.restricao})` : ss}
+    </span>
+  );
+}
+function SituacaoBadge({ situacao }) {
+  const cor = situacao === 'Pronto' ? { bg:'#E8F5E9', text:'#1B5E20' } : { bg:'#FFEBEE', text:'#B71C1C' };
+  return <span style={{ background:cor.bg, color:cor.text, borderRadius:6, padding:'2px 8px', fontSize:11, fontWeight:800 }}>{situacao}</span>;
 }
 function Spinner() {
-  return <div style={{ textAlign:'center', padding:40, color:'#6b8099', fontSize:15 }}>⏳ Carregando...</div>;
-}
-function StatCard({ label, value, color=AZUL, icon, sub }) {
-  return (
-    <div style={{ background:'#fff', borderRadius:12, padding:'16px 12px', boxShadow:'0 2px 12px #00000012', textAlign:'center', border:`2px solid ${color}18` }}>
-      {icon && <div style={{ fontSize:22, marginBottom:4 }}>{icon}</div>}
-      <div style={{ fontSize:28, fontWeight:900, color }}>{value}</div>
-      <div style={{ fontSize:11, color:'#6b8099', fontWeight:600, marginTop:2 }}>{label}</div>
-      {sub && <div style={{ fontSize:10, color:'#aab', marginTop:2 }}>{sub}</div>}
-    </div>
-  );
+  return <div style={{ textAlign:'center', padding:40, color:'#6b8099', fontSize:15 }}>⏳ Carregando...</div>;
 }
 
-const CORES_GRAD = ['#0D47A1','#1565C0','#1976D2','#1E88E5','#42A5F5','#E65100','#F57C00','#FB8C00','#FFA726','#B71C1C','#C62828'];
-const CORES_APT = { 'Apto A':'#1B5E20', 'Apto B':'#F9A825', 'Apto C':'#B71C1C', 'LTS':'#6A1B9A', 'CD/CRD':'#E65100' };
+// ========== GERADOR DE PDF PROFISSIONAL ==========
+function gerarPDF(solicitacoes, policiais, semanaAtual) {
+  const aprovadas = solicitacoes.filter(s => s.status === 'aprovado');
+  const pendentes = solicitacoes.filter(s => s.status === 'pendente');
+  const recusadas = solicitacoes.filter(s => s.status === 'recusado');
+  const folgas = aprovadas.filter(s => s.motivo === 'Folga');
+  const concessoes = aprovadas.filter(s => s.motivo === 'Concessão');
+  const fimSemana = new Date(semanaAtual);
+  fimSemana.setDate(fimSemana.getDate() + 6);
+  const periodoStr = `${semanaAtual.toLocaleDateString('pt-BR')} a ${fimSemana.toLocaleDateString('pt-BR')}`;
+  const hojeStr = new Date().toLocaleDateString('pt-BR');
+  const hojeHora = new Date().toLocaleString('pt-BR', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' });
+  const isoInicio = semanaAtual.toISOString().split('T')[0];
+  const isoFim = fimSemana.toISOString().split('T')[0];
+  const prontos = policiais.filter(p => (p.situacao||'Pronto') === 'Pronto');
+  const afastados = policiais.filter(p => (p.situacao||'Pronto') !== 'Pronto');
+  const semFolga = prontos.filter(p => !solicitacoes.find(s => s.policial_id === p.id && s.semana >= isoInicio && s.semana <= isoFim && s.status !== 'recusado'));
+  const contPorDia = DIAS.map(dia => ({ dia, count: aprovadas.filter(s => s.dia === dia).length }));
+  const diaMaisAtivo = contPorDia.reduce((a,b) => a.count >= b.count ? a : b, contPorDia[0]);
+  const contPorSecao = SECOES.map(secao => ({ secao, count: aprovadas.filter(s => s.secao === secao).length })).filter(s => s.count > 0).sort((a,b) => b.count - a.count);
+  const secaoMais = contPorSecao[0];
+  const statusOp = pendentes.length === 0 ? 'NORMAL' : pendentes.length <= 3 ? 'ATENÇÃO' : 'CRÍTICO';
+  const corStatusOp = statusOp === 'NORMAL' ? [27,94,32] : statusOp === 'ATENÇÃO' ? [123,88,0] : [183,28,28];
+  const maxFolgasDia = Math.max(...contPorDia.map(d => d.count), 1);
 
-// ============================================================
-// TELA DE LOGIN
-// ============================================================
-function TelaLogin({ onLogin }) {
-  const [matricula, setMatricula] = useState('');
-  const [senha, setSenha] = useState('');
-  const [erro, setErro] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [abaLogin, setAbaLogin] = useState('comando');
+  const doc = new jsPDF();
+  const pageW = doc.internal.pageSize.getWidth();
+  const pageH = doc.internal.pageSize.getHeight();
 
-  async function entrar() {
-    if (!matricula || !senha) { setErro('Preencha todos os campos.'); return; }
-    setLoading(true); setErro('');
-    const { data, error } = await supabase.from('usuarios_secao').select('*').eq('matricula', matricula.trim());
-    setLoading(false);
-    if (error || !data || data.length === 0) { setErro('Usuário não encontrado.'); return; }
-    const usuario = data[0];
-    if (usuario.senha !== senha.trim()) { setErro('Senha incorreta.'); return; }
-    onLogin(usuario);
-  }
+  function rodape(pagina, total) {
+    doc.setDrawColor(200,210,220);
+    doc.line(10, pageH-14, pageW-10, pageH-14);
+    doc.setTextColor(150,160,170); doc.setFontSize(7); doc.setFont('helvetica','normal');
+    doc.text('PMERJ · 32º Batalhão de Polícia Militar · Sistema de Controle de Folgas — PCSV', pageW/2, pageH-9, { align:'center' });
+    doc.text(`Emitido em ${hojeHora}`, 10, pageH-9);
+    doc.text(`Pág. ${pagina}${total ? ` / ${total}` : ''}`, pageW-10, pageH-9, { align:'right' });
+  }
 
-  return (
-    <div style={{ minHeight:'100vh', position:'relative', display:'flex', alignItems:'center', justifyContent:'center', padding:'24px 16px' }}>
-      {/* FUNDO */}
-      <div style={{ position:'absolute', inset:0, backgroundImage:'url(/batalhao.jpg)', backgroundSize:'cover', backgroundPosition:'center 30%', filter:'brightness(0.3) saturate(0.7)' }} />
-      <div style={{ position:'absolute', inset:0, background:`linear-gradient(160deg, rgba(13,35,64,0.80) 0%, rgba(30,77,123,0.60) 100%)` }} />
+  function cabecalhoPagina(titulo) {
+    doc.setFillColor(13,35,64); doc.rect(0,0,pageW,14,'F');
+    doc.setFillColor(30,77,123); doc.rect(0,14,pageW,4,'F');
+    doc.setTextColor(255,255,255); doc.setFontSize(10); doc.setFont('helvetica','bold');
+    doc.text(titulo, pageW/2, 10, { align:'center' });
+  }
 
-      {/* CARD */}
-      <div style={{ position:'relative', zIndex:1, width:'100%', maxWidth:400, background:'#fff', borderRadius:16, boxShadow:'0 20px 60px rgba(0,0,0,0.4)', overflow:'hidden' }}>
-        {/* TOPO */}
-        <div style={{ background:`linear-gradient(135deg,${AZUL},${AZUL3})`, padding:'28px 32px 24px', textAlign:'center' }}>
-          <img src="/logo.jpeg" alt="32 BPM" style={{ height:56, width:56, objectFit:'contain', marginBottom:12, borderRadius:8 }} />
-          <h1 style={{ color:'#fff', fontWeight:800, fontSize:17, margin:0 }}>Painel do Comando</h1>
-          <p style={{ color:'#8db4d8', fontSize:12, fontWeight:400, margin:'6px 0 0' }}>32º Batalhão de Polícia Militar</p>
-        </div>
+  // =====================
+  // PÁGINA 1 — CAPA
+  // =====================
+  doc.setFillColor(13,35,64); doc.rect(0,0,pageW,62,'F');
+  doc.setFillColor(30,77,123); doc.rect(0,62,pageW,3,'F');
+  doc.setFillColor(255,200,0); doc.rect(0,65,pageW,1,'F');
 
-        {/* ABAS */}
-        <div style={{ display:'flex', borderBottom:'2px solid #f0f2f5' }}>
-          {[{ id:'comando', label:'🏛️ Comando / Seção' }, { id:'admin', label:'⚙️ Admin' }].map(a => (
-            <button key={a.id} onClick={() => { setAbaLogin(a.id); setErro(''); }} style={{
-              flex:1, padding:'13px 8px', fontWeight: abaLogin===a.id ? 700 : 500, fontSize:12,
-              cursor:'pointer', border:'none', borderBottom: abaLogin===a.id ? `3px solid ${AZUL}` : '3px solid transparent',
-              background:'#fff', color: abaLogin===a.id ? AZUL : '#6b8099', marginBottom:'-2px',
-            }}>{a.label}</button>
-          ))}
-        </div>
+  doc.setTextColor(180,200,220); doc.setFontSize(8); doc.setFont('helvetica','normal');
+  doc.text('POLÍCIA MILITAR DO ESTADO DO RIO DE JANEIRO', pageW/2, 12, { align:'center' });
+  doc.setTextColor(255,255,255); doc.setFontSize(17); doc.setFont('helvetica','bold');
+  doc.text('32º BATALHÃO DE POLÍCIA MILITAR', pageW/2, 24, { align:'center' });
+  doc.setFontSize(11); doc.setFont('helvetica','normal');
+  doc.text('RELATÓRIO SEMANAL DE CONTROLE DE FOLGAS', pageW/2, 34, { align:'center' });
+  doc.setFillColor(255,200,0); doc.rect(pageW/2-30,38,60,0.5,'F');
+  doc.setTextColor(180,200,220); doc.setFontSize(9);
+  doc.text(`Período: ${periodoStr}`, pageW/2, 46, { align:'center' });
+  doc.text(`PCSV / Expediente Semanal · Emitido em ${hojeStr}`, pageW/2, 54, { align:'center' });
 
-        {/* FORM */}
-        <div style={{ padding:'24px 32px 28px' }}>
-          <p style={{ color:'#6b8099', fontSize:13, marginBottom:20, marginTop:0 }}>
-            {abaLogin === 'admin' ? 'Acesso restrito ao administrador do sistema.' : 'Entre com sua matrícula e senha.'}
-          </p>
-          <label style={lbl}>Matrícula</label>
-          <input value={matricula} onChange={e => setMatricula(e.target.value)} placeholder="Ex.: CMT001" style={{ ...inp, marginBottom:12 }} autoComplete="off" />
-          <label style={lbl}>Senha</label>
-          <input type="password" value={senha} onChange={e => setSenha(e.target.value)} onKeyDown={e => e.key==='Enter'&&entrar()} placeholder="••••••" style={{ ...inp, marginBottom:6 }} />
-          {erro && <p style={{ color:VERMELHO, fontSize:12, marginTop:4, marginBottom:0 }}>{erro}</p>}
-          <button onClick={entrar} disabled={loading} style={{ ...btnPrimary, opacity:loading?0.7:1, textTransform:'uppercase' }}>
-            {loading ? 'Verificando...' : 'Entrar'}
-          </button>
-        </div>
+  // 4 CARDS
+  let y = 74;
+  const cards = [
+    { label:'TOTAL', valor:solicitacoes.length, cor:[13,35,64], sub:'solicitações' },
+    { label:'APROVADAS', valor:aprovadas.length, cor:[27,94,32], sub:'folgas/concessões' },
+    { label:'PENDENTES', valor:pendentes.length, cor:[123,88,0], sub:'aguardando' },
+    { label:'RECUSADAS', valor:recusadas.length, cor:[183,28,28], sub:'não autorizadas' },
+  ];
+  const cardW = (pageW - 24) / 4;
+  cards.forEach((c, i) => {
+    const x = 10 + i * (cardW + (14/3));
+    doc.setFillColor(...c.cor); doc.roundedRect(x, y, cardW, 28, 2, 2, 'F');
+    doc.setTextColor(255,255,255);
+    doc.setFontSize(22); doc.setFont('helvetica','bold');
+    doc.text(String(c.valor), x + cardW/2, y + 15, { align:'center' });
+    doc.setFontSize(7); doc.setFont('helvetica','bold');
+    doc.text(c.label, x + cardW/2, y + 21, { align:'center' });
+    doc.setFontSize(6); doc.setFont('helvetica','normal'); doc.setTextColor(220,220,220);
+    doc.text(c.sub, x + cardW/2, y + 26, { align:'center' });
+  });
 
-        {/* RODAPÉ */}
-        <div style={{ borderTop:'1px solid #f0f2f5', padding:'12px 32px', textAlign:'center' }}>
-          <span style={{ fontSize:11, color:'#aab' }}>Polícia Militar do Estado do Rio de Janeiro · 32º BPM</span>
-        </div>
-      </div>
-    </div>
-  );
+  // SITUAÇÃO OPERACIONAL
+  y += 34;
+  doc.setFillColor(...corStatusOp); doc.roundedRect(10, y, pageW-20, 14, 2, 2, 'F');
+  doc.setTextColor(255,255,255); doc.setFontSize(8); doc.setFont('helvetica','normal');
+  doc.text('SITUAÇÃO OPERACIONAL', pageW/2, y+5, { align:'center' });
+  doc.setFontSize(13); doc.setFont('helvetica','bold');
+  doc.text(statusOp, pageW/2, y+12, { align:'center' });
+
+  // RESUMO EXECUTIVO
+  y += 20;
+  doc.setFillColor(240,244,248); doc.roundedRect(10, y, pageW-20, 52, 2, 2, 'F');
+  doc.setDrawColor(200,210,220); doc.roundedRect(10, y, pageW-20, 52, 2, 2, 'S');
+  doc.setFillColor(13,35,64); doc.roundedRect(10, y, pageW-20, 9, 2, 2, 'F');
+  doc.rect(10, y+5, pageW-20, 4, 'F');
+  doc.setTextColor(255,255,255); doc.setFontSize(8); doc.setFont('helvetica','bold');
+  doc.text('RESUMO EXECUTIVO', 16, y+6.5);
+
+  const insights = [
+    { icon:'►', texto:`Dia com maior concentração: ${diaMaisAtivo.count > 0 ? `${diaMaisAtivo.dia} (${diaMaisAtivo.count} solicitação${diaMaisAtivo.count>1?'s':''})` : 'Nenhum'}`, cor:[13,35,64] },
+    { icon:'►', texto:`Seção mais impactada: ${secaoMais ? `${secaoMais.secao} com ${secaoMais.count} solicitação${secaoMais.count>1?'s':''}` : 'Nenhuma'}`, cor:[13,35,64] },
+    { icon:'►', texto:`Folgas regulares: ${folgas.length}   |   Concessões: ${concessoes.length}`, cor:[13,35,64] },
+    { icon:'►', texto:`Prontos sem solicitação esta semana: ${semFolga.length} de ${prontos.length}`, cor:[13,35,64] },
+    { icon:'►', texto:`Efetivo total: ${policiais.length}   |   Prontos: ${prontos.length}   |   Afastados: ${afastados.length}`, cor:[13,35,64] },
+  ];
+  insights.forEach((ins, i) => {
+    doc.setTextColor(...ins.cor); doc.setFontSize(8); doc.setFont('helvetica','normal');
+    doc.text(`${ins.icon}  ${ins.texto}`, 16, y + 16 + i * 7);
+  });
+
+  // CAPACIDADE OPERACIONAL
+  y += 58;
+  const opCards = [
+    { l:'Efetivo Total', v:policiais.length, c:[13,35,64] },
+    { l:'Prontos p/ Serviço', v:prontos.length, c:[27,94,32] },
+    { l:'Afastados', v:afastados.length, c:[183,28,28] },
+    { l:'Folgas esta semana', v:aprovadas.length, c:[0,77,153] },
+    { l:'Folgas regulares', v:folgas.length, c:[13,71,161] },
+    { l:'Concessões', v:concessoes.length, c:[106,27,154] },
+  ];
+  const opW = (pageW - 24) / 3;
+  opCards.forEach((c, i) => {
+    const row = Math.floor(i/3);
+    const col = i % 3;
+    const x = 10 + col * (opW + 4);
+    const yy = y + row * 20;
+    doc.setFillColor(248,250,252); doc.roundedRect(x, yy, opW, 16, 1, 1, 'F');
+    doc.setDrawColor(...c.c); doc.roundedRect(x, yy, opW, 16, 1, 1, 'S');
+    doc.setFillColor(...c.c); doc.rect(x, yy, 3, 16, 'F');
+    doc.setTextColor(...c.c); doc.setFontSize(14); doc.setFont('helvetica','bold');
+    doc.text(String(c.v), x + opW/2 + 2, yy + 10, { align:'center' });
+    doc.setTextColor(100,110,120); doc.setFontSize(6); doc.setFont('helvetica','normal');
+    doc.text(c.l.toUpperCase(), x + opW/2 + 2, yy + 14.5, { align:'center' });
+  });
+
+  rodape(1);
+
+  // =====================
+  // PÁGINA 2 — QUADRO POR DIA
+  // =====================
+  doc.addPage();
+  cabecalhoPagina('QUADRO OPERACIONAL DETALHADO — DISTRIBUIÇÃO POR DIA');
+  y = 22;
+
+  if (aprovadas.length === 0) {
+    doc.setTextColor(150,150,150); doc.setFontSize(11); doc.setFont('helvetica','normal');
+    doc.text('Nenhuma folga aprovada neste período.', pageW/2, y+20, { align:'center' });
+  } else {
+    DIAS.forEach(dia => {
+      const dodia = aprovadas.filter(s => s.dia === dia);
+      const isDiaSemUtil = dia === 'Sábado' || dia === 'Domingo';
+
+      // Policiais de serviço = prontos sem folga aprovada naquele dia
+      const deServicoDia = policiais.filter(p => {
+        const temFolga = dodia.find(s => s.policial_id === p.id);
+        const afastado = (p.situacao||'Pronto') !== 'Pronto';
+        return !temFolga && !afastado;
+      });
+
+      if (dodia.length === 0 && deServicoDia.length === 0) {
+        if (y > pageH - 30) { doc.addPage(); cabecalhoPagina('QUADRO OPERACIONAL DETALHADO (continuação)'); y = 22; }
+        doc.setFillColor(isDiaSemUtil ? 245 : 235, isDiaSemUtil ? 245 : 238, isDiaSemUtil ? 245 : 242);
+        doc.roundedRect(10, y, pageW-20, 9, 1, 1, 'F');
+        doc.setTextColor(isDiaSemUtil ? 180 : 120, isDiaSemUtil ? 180 : 130, isDiaSemUtil ? 180 : 140);
+        doc.setFontSize(8); doc.setFont('helvetica','bold');
+        doc.text(dia.toUpperCase(), 15, y+6);
+        doc.setFont('helvetica','normal'); doc.setFontSize(7);
+        doc.text('Sem registros', pageW-15, y+6, { align:'right' });
+        y += 12;
+        return;
+      }
+
+      if (y > pageH - 50) { doc.addPage(); cabecalhoPagina('QUADRO OPERACIONAL DETALHADO (continuação)'); y = 22; }
+
+      // Cabeçalho do dia com barra de intensidade
+      const intensidade = dodia.length / maxFolgasDia;
+      const r = Math.round(13 + (30-13) * (1-intensidade));
+      const g = Math.round(35 + (77-35) * (1-intensidade));
+      const b = Math.round(64 + (123-64) * (1-intensidade));
+      doc.setFillColor(r, g, b); doc.roundedRect(10, y, pageW-20, 11, 1, 1, 'F');
+      doc.setFillColor(255,200,0); doc.rect(10, y, Math.max(3,(pageW-20)*intensidade), 2, 'F');
+      doc.setTextColor(255,255,255); doc.setFontSize(9); doc.setFont('helvetica','bold');
+      doc.text(dia.toUpperCase(), 15, y+8);
+      doc.setFontSize(8); doc.setFont('helvetica','normal');
+      doc.text(`De Folga: ${dodia.length}  |  De Serviço: ${deServicoDia.length}`, pageW-15, y+8, { align:'right' });
+      y += 13;
+
+      // TABELA DE FOLGA
+      if (dodia.length > 0) {
+        doc.setFillColor(227,242,253); doc.roundedRect(10, y, pageW-20, 7, 1, 1, 'F');
+        doc.setTextColor(13,71,161); doc.setFontSize(7); doc.setFont('helvetica','bold');
+        doc.text(`DE FOLGA / CONCESSAO (${dodia.length})`, 15, y+5);
+        y += 8;
+        doc.autoTable({
+          startY: y,
+          head: [['Seção', 'Patente / Nome', 'Tipo']],
+          body: dodia.map(s => [
+            s.secao && s.secao !== '—' ? s.secao : 'Não vinculada',
+            `${s.patente} ${s.policial_nome}`,
+            s.motivo,
+          ]),
+          theme: 'grid',
+          headStyles: { fillColor:[13,71,161], textColor:255, fontStyle:'bold', fontSize:7, cellPadding:2 },
+          bodyStyles: { fontSize:7, cellPadding:2 },
+          columnStyles: {
+            0: { cellWidth:32, fontStyle:'bold' },
+            2: { cellWidth:22, halign:'center' },
+          },
+          didParseCell: (data) => {
+            if (data.section === 'body' && data.column.index === 2) {
+              data.cell.styles.textColor = data.cell.raw === 'Folga' ? [13,71,161] : [106,27,154];
+              data.cell.styles.fontStyle = 'bold';
+            }
+            if (data.section === 'body' && data.row.index % 2 === 0) {
+              data.cell.styles.fillColor = [248,250,252];
+            }
+          },
+          margin: { left:10, right:10 },
+        });
+        y = doc.lastAutoTable.finalY + 4;
+      }
+
+      // TABELA DE SERVIÇO em 2 colunas
+      if (deServicoDia.length > 0) {
+        if (y > pageH - 40) { doc.addPage(); cabecalhoPagina('QUADRO OPERACIONAL DETALHADO (continuação)'); y = 22; }
+        doc.setFillColor(232,245,233); doc.roundedRect(10, y, pageW-20, 7, 1, 1, 'F');
+        doc.setTextColor(27,94,32); doc.setFontSize(7); doc.setFont('helvetica','bold');
+        doc.text(`DE SERVICO (${deServicoDia.length})`, 15, y+5);
+        y += 8;
+
+        const metade = Math.ceil(deServicoDia.length/2);
+        const col1 = deServicoDia.slice(0, metade);
+        const col2 = deServicoDia.slice(metade);
+        const maxRows = Math.max(col1.length, col2.length);
+        const bodyServico = Array.from({length: maxRows}, (_, i) => [
+          col1[i] ? `${col1[i].patente} ${col1[i].nome.split(' ').slice(0,2).join(' ')}` : '',
+          col1[i] ? (col1[i].secao || '—') : '',
+          col2[i] ? `${col2[i].patente} ${col2[i].nome.split(' ').slice(0,2).join(' ')}` : '',
+          col2[i] ? (col2[i].secao || '—') : '',
+        ]);
+
+        doc.autoTable({
+          startY: y,
+          head: [['Policial', 'Seção', 'Policial', 'Seção']],
+          body: bodyServico,
+          theme: 'grid',
+          headStyles: { fillColor:[27,94,32], textColor:255, fontStyle:'bold', fontSize:7, cellPadding:2 },
+          bodyStyles: { fontSize:7, cellPadding:2 },
+          columnStyles: {
+            1: { cellWidth:20, halign:'center' },
+            3: { cellWidth:20, halign:'center' },
+          },
+          didParseCell: (data) => {
+            if (data.section === 'body' && data.row.index % 2 === 0) {
+              data.cell.styles.fillColor = [248,252,248];
+            }
+          },
+          margin: { left:10, right:10 },
+        });
+        y = doc.lastAutoTable.finalY + 10;
+      }
+    });
+  }
+
+  rodape(2);
+
+  // =====================
+  // PÁGINA 3 — ESTATÍSTICAS
+  // =====================
+  doc.addPage();
+  cabecalhoPagina('ESTATÍSTICAS, SITUAÇÃO DO EFETIVO E MATRIZ DE DISTRIBUIÇÃO');
+  y = 22;
+
+  // SITUAÇÃO SANITÁRIA COM CORES
+  doc.setFillColor(30,77,123); doc.roundedRect(10,y,pageW-20,8,1,1,'F');
+  doc.setTextColor(255,255,255); doc.setFontSize(8); doc.setFont('helvetica','bold');
+  doc.text('SITUAÇÃO SANITÁRIA DO EFETIVO', 15, y+5.5);
+  y += 10;
+
+  const aptoAS = policiais.filter(p=>(p.sit_sanitaria||'Apto A')==='Apto A'&&!temRestricao(p)).length;
+  const aptoAC = policiais.filter(p=>(p.sit_sanitaria||'Apto A')==='Apto A'&&temRestricao(p)).length;
+  const aptoB = policiais.filter(p=>(p.sit_sanitaria||'Apto A')==='Apto B').length;
+  const aptoC = policiais.filter(p=>(p.sit_sanitaria||'Apto A')==='Apto C').length;
+  const lts = policiais.filter(p=>(p.sit_sanitaria||'Apto A')==='LTS').length;
+
+  const ssData = [
+    { label:'Apto A — Sem Restrição', total:aptoAS, cor:[21,101,192], bg:[227,242,253] },
+    { label:'Apto A — Com Restrição', total:aptoAC, cor:[230,81,0], bg:[255,243,224] },
+    { label:'Apto B', total:aptoB, cor:[249,168,37], bg:[255,248,225] },
+    { label:'Apto C', total:aptoC, cor:[183,28,28], bg:[255,235,238] },
+    { label:'LTS Sanitário', total:lts, cor:[106,27,154], bg:[243,229,245] },
+  ];
+  const ssW = (pageW-24)/ssData.length;
+  ssData.forEach((s, i) => {
+    const x = 10 + i*(ssW+1);
+    doc.setFillColor(...s.bg); doc.roundedRect(x, y, ssW, 18, 1, 1, 'F');
+    doc.setDrawColor(...s.cor); doc.roundedRect(x, y, ssW, 18, 1, 1, 'S');
+    doc.setFillColor(...s.cor); doc.rect(x, y, ssW, 2.5, 'F');
+    doc.setTextColor(...s.cor); doc.setFontSize(14); doc.setFont('helvetica','bold');
+    doc.text(String(s.total), x+ssW/2, y+12, { align:'center' });
+    doc.setFontSize(5.5); doc.setFont('helvetica','normal'); doc.setTextColor(80,80,80);
+    doc.text(s.label.toUpperCase(), x+ssW/2, y+17, { align:'center' });
+  });
+  y += 22;
+
+  // SITUAÇÃO DO EFETIVO + PRONTOS SEM SOLICITAÇÃO lado a lado
+  const colW = (pageW-24)/2;
+
+  // Coluna esquerda — Situação
+  doc.setFillColor(30,77,123); doc.roundedRect(10,y,colW,8,1,1,'F');
+  doc.setTextColor(255,255,255); doc.setFontSize(8); doc.setFont('helvetica','bold');
+  doc.text('SITUAÇÃO DO EFETIVO', 15, y+5.5);
+
+  const sitBody = SITUACOES.map(s => {
+    const total = policiais.filter(p=>(p.situacao||'Pronto')===s).length;
+    return [s, String(total)];
+  }).filter(r => parseInt(r[1]) > 0);
+
+  doc.autoTable({
+    startY: y+9,
+    head: [['Situação','Total']],
+    body: sitBody,
+    theme: 'grid',
+    headStyles: { fillColor:[50,90,140], textColor:255, fontStyle:'bold', fontSize:7, cellPadding:2 },
+    bodyStyles: { fontSize:7.5, cellPadding:2 },
+    columnStyles: { 1: { halign:'center', fontStyle:'bold' } },
+    didParseCell: (data) => {
+      if (data.section === 'body' && data.cell.raw === 'Pronto') data.cell.styles.textColor = [27,94,32];
+      if (data.section === 'body' && data.row.index % 2 === 0) data.cell.styles.fillColor = [248,250,252];
+    },
+    margin: { left:10, right: pageW/2+2 },
+  });
+  const yAposSit = doc.lastAutoTable.finalY;
+
+  // Coluna direita — Prontos sem solicitação em 2 colunas
+  doc.setFillColor(13,35,64); doc.roundedRect(pageW/2+2, y, colW, 8, 1, 1, 'F');
+  doc.setTextColor(255,255,255); doc.setFontSize(8); doc.setFont('helvetica','bold');
+  doc.text(`PRONTOS SEM SOLICITAÇÃO (${semFolga.length})`, pageW/2+7, y+5.5);
+
+  if (semFolga.length > 0) {
+    const metade = Math.ceil(semFolga.length/2);
+    const col1 = semFolga.slice(0,metade).map(p=>[`${p.patente} ${p.nome.split(' ').slice(0,2).join(' ')}`, p.secao||'—']);
+    const col2 = semFolga.slice(metade).map(p=>[`${p.patente} ${p.nome.split(' ').slice(0,2).join(' ')}`, p.secao||'—']);
+    const maxRows = Math.max(col1.length, col2.length);
+    const bodyDuplo = Array.from({length:maxRows}, (_,i) => [
+      col1[i]?col1[i][0]:'', col1[i]?col1[i][1]:'',
+      col2[i]?col2[i][0]:'', col2[i]?col2[i][1]:'',
+    ]);
+    doc.autoTable({
+      startY: y+9,
+      head: [['Nome','Seção','Nome','Seção']],
+      body: bodyDuplo,
+      theme: 'grid',
+      headStyles: { fillColor:[13,35,64], textColor:255, fontStyle:'bold', fontSize:6, cellPadding:1.5 },
+      bodyStyles: { fontSize:6, cellPadding:1.5 },
+      columnStyles: { 1:{ cellWidth:14, halign:'center' }, 3:{ cellWidth:14, halign:'center' } },
+      didParseCell: (data) => {
+        if (data.section === 'body' && data.row.index % 2 === 0) data.cell.styles.fillColor = [248,250,252];
+      },
+      margin: { left: pageW/2+2, right:10 },
+    });
+  }
+
+  y = Math.max(yAposSit, doc.lastAutoTable ? doc.lastAutoTable.finalY : y) + 8;
+
+  // MATRIZ DE DISTRIBUIÇÃO COM CORES POR INTENSIDADE
+  if (aprovadas.length > 0) {
+    if (y > pageH - 60) { doc.addPage(); cabecalhoPagina('MATRIZ DE DISTRIBUIÇÃO'); y = 22; }
+
+    doc.setFillColor(30,77,123); doc.roundedRect(10,y,pageW-20,8,1,1,'F');
+    doc.setTextColor(255,255,255); doc.setFontSize(8); doc.setFont('helvetica','bold');
+    doc.text('MATRIZ DE DISTRIBUIÇÃO POR SEÇÃO E DIA', 15, y+5.5);
+    y += 10;
+
+    const secoesComFolga = [...new Set(aprovadas.map(s => s.secao))].sort();
+    const maxCelula = Math.max(...secoesComFolga.map(sec => Math.max(...DIAS.map(dia => aprovadas.filter(s=>s.secao===sec&&s.dia===dia).length))), 1);
+
+    const bodyMatriz = secoesComFolga.map(secao => [
+      secao,
+      ...DIAS.map(dia => {
+        const c = aprovadas.filter(s=>s.secao===secao&&s.dia===dia).length;
+        return c > 0 ? String(c) : '—';
+      }),
+      String(aprovadas.filter(s=>s.secao===secao).length),
+    ]);
+    bodyMatriz.push([
+      'TOTAL',
+      ...DIAS.map(dia => {
+        const c = aprovadas.filter(s=>s.dia===dia).length;
+        return c > 0 ? String(c) : '—';
+      }),
+      String(aprovadas.length),
+    ]);
+
+    doc.autoTable({
+      startY: y,
+      head: [['Seção', ...DIAS.map(d=>d.substring(0,3)), 'Total']],
+      body: bodyMatriz,
+      theme: 'grid',
+      headStyles: { fillColor:[13,35,64], textColor:255, fontStyle:'bold', fontSize:7, cellPadding:2, halign:'center' },
+      bodyStyles: { fontSize:7, cellPadding:2, halign:'center' },
+      columnStyles: { 0:{ halign:'left', fontStyle:'bold', cellWidth:28 } },
+      didParseCell: (data) => {
+        if (data.section === 'body') {
+          const isTotal = data.row.index === bodyMatriz.length - 1;
+          if (isTotal) {
+            data.cell.styles.fillColor = [220,228,240];
+            data.cell.styles.fontStyle = 'bold';
+            data.cell.styles.textColor = [13,35,64];
+            return;
+          }
+          if (data.column.index > 0 && data.column.index < 8) {
+            const val = parseInt(data.cell.raw);
+            if (!isNaN(val) && val > 0) {
+              const intensidade = val / maxCelula;
+              const r = Math.round(255 - intensidade * (255-13));
+              const g = Math.round(255 - intensidade * (255-71));
+              const b = Math.round(255 - intensidade * (255-161));
+              data.cell.styles.fillColor = [r, g, b];
+              data.cell.styles.textColor = intensidade > 0.5 ? [255,255,255] : [13,35,64];
+              data.cell.styles.fontStyle = 'bold';
+            }
+          }
+          if (data.row.index % 2 === 0 && data.column.index === 0) {
+            data.cell.styles.fillColor = [248,250,252];
+          }
+        }
+      },
+      margin: { left:10, right:10 },
+    });
+  }
+
+  rodape(3);
+  doc.save(`relatorio-32bpm-${periodoStr.replace(/\//g,'-').replace(/ /g,'')}.pdf`);
 }
 
-// ============================================================
-// DASHBOARD COMANDANTE
-// ============================================================
-function DashboardComandante() {
-  const [p1, setP1] = useState(null);
-  const [p1apt, setP1apt] = useState(null);
-  const [p1afast, setP1afast] = useState(null);
-  const [p1grad, setP1grad] = useState([]);
-  const [p1hist, setP1hist] = useState([]);
-  const [p1cia, setP1cia] = useState([]);
-  const [p4, setP4] = useState(null);
-  const [p3stats, setP3stats] = useState(null);
-  const [p3ops, setP3ops] = useState([]);
-  const [p2, setP2] = useState(null);
-  const [ajd, setAjd] = useState([]);
-  const [agenda, setAgenda] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [secaoAtiva, setSecaoAtiva] = useState('geral');
+// ========== DASHBOARD (ORIGINAL COMPLETO) ==========
+function Dashboard({ solicitacoes, policiais, onAtualizarPolicial, onRemoverPolicial, semanaAtual }) {
+  const aprovadas = solicitacoes.filter(s => s.status === 'aprovado');
+  const total = solicitacoes.length;
+  const totalAprovadas = aprovadas.length;
+  const totalPendentes = solicitacoes.filter(s => s.status === 'pendente').length;
+  const totalRecusadas = solicitacoes.filter(s => s.status === 'recusado').length;
+  const totalFolgas = aprovadas.filter(s => s.motivo === 'Folga').length;
+  const totalConcessoes = aprovadas.filter(s => s.motivo === 'Concessão').length;
+  const porDia = DIAS.map(dia => ({ dia:dia.substring(0,3), Folgas:aprovadas.filter(s=>s.dia===dia&&s.motivo==='Folga').length, Concessões:aprovadas.filter(s=>s.dia===dia&&s.motivo==='Concessão').length }));
+  const porSecao = SECOES.map(secao => ({ secao, total:aprovadas.filter(s=>s.secao===secao).length })).filter(s=>s.total>0).sort((a,b)=>b.total-a.total);
+  const totalPorDia = porDia.map(d => d.Folgas + d.Concessões);
+  const maxDia = Math.max(...totalPorDia);
+  const mediaDia = totalPorDia.reduce((a,b)=>a+b,0) / 7;
+  const diaCritico = porDia.find(d => (d.Folgas+d.Concessões) === maxDia && maxDia > 0);
+  const desbalanceado = maxDia > 0 && (maxDia - Math.min(...totalPorDia.filter(v=>v>0))) >= 3;
+  const semSecao = policiais.filter(p => !p.secao || p.secao === '');
+  const retornosProximos = policiais.filter(p => p.situacao === 'Férias' && p.ferias_fim && diasParaRetorno(p.ferias_fim) !== null && diasParaRetorno(p.ferias_fim) <= 3 && diasParaRetorno(p.ferias_fim) >= 0);
+  const ltsProximos = policiais.filter(p => (p.sit_sanitaria||'Apto A') === 'LTS' && p.ss_fim && diasParaRetorno(p.ss_fim) !== null && diasParaRetorno(p.ss_fim) <= 3 && diasParaRetorno(p.ss_fim) >= 0);
+  const aptoBProximos = policiais.filter(p => (p.sit_sanitaria||'Apto A') === 'Apto B' && p.ss_fim && diasParaRetorno(p.ss_fim) !== null && diasParaRetorno(p.ss_fim) <= 3 && diasParaRetorno(p.ss_fim) >= 0);
+  const aptoCProximos = policiais.filter(p => (p.sit_sanitaria||'Apto A') === 'Apto C' && p.ss_fim && diasParaRetorno(p.ss_fim) !== null && diasParaRetorno(p.ss_fim) <= 3 && diasParaRetorno(p.ss_fim) >= 0);
+  const aptoAComRestricao = policiais.filter(p => (p.sit_sanitaria||'Apto A') === 'Apto A' && temRestricao(p));
+  const aptoASemRestricao = policiais.filter(p => (p.sit_sanitaria||'Apto A') === 'Apto A' && !temRestricao(p));
+  const ssCards = [
+    { label:'Apto A', total:aptoASemRestricao.length, cor:'#1565C0', emoji:'🔵' },
+    ...(aptoAComRestricao.length > 0 ? [{ label:'Apto A c/ Restrição', total:aptoAComRestricao.length, cor:'#E65100', emoji:'🟠' }] : []),
+    { label:'Apto B', total:policiais.filter(p=>(p.sit_sanitaria||'Apto A')==='Apto B').length, cor:'#F9A825', emoji:'🟡' },
+    { label:'Apto C', total:policiais.filter(p=>(p.sit_sanitaria||'Apto A')==='Apto C').length, cor:'#B71C1C', emoji:'🔴' },
+    { label:'LTS', total:policiais.filter(p=>(p.sit_sanitaria||'Apto A')==='LTS').length, cor:'#6A1B9A', emoji:'🟣' },
+  ];
+  const sitData = SITUACOES.map(s => ({ name:s, value:policiais.filter(p=>(p.situacao||'Pronto')===s).length })).filter(s=>s.value>0);
+  const fimSemana = new Date(semanaAtual);
+  fimSemana.setDate(fimSemana.getDate() + 6);
+  const isoInicio = semanaAtual.toISOString().split('T')[0];
+  const isoFim = fimSemana.toISOString().split('T')[0];
+  const prontos = policiais.filter(p => (p.situacao||'Pronto') === 'Pronto');
+  const semFolga = prontos.filter(p => !solicitacoes.find(s => s.policial_id === p.id && s.semana >= isoInicio && s.semana <= isoFim && s.status !== 'recusado'));
 
-  const carregar = useCallback(async () => {
-    const [e, a, af, g, h, c, p4d, p3s, p3o, p2d, ajdd, agd] = await Promise.all([
-      supabase.from('p1_efetivo').select('*').order('updated_at',{ascending:false}).limit(1),
-      supabase.from('p1_aptidao').select('*').order('updated_at',{ascending:false}).limit(1),
-      supabase.from('p1_afastamentos').select('*').order('updated_at',{ascending:false}).limit(1),
-      supabase.from('p1_graduacoes').select('*').order('ordem'),
-      supabase.from('p1_historico').select('*'),
-      supabase.from('p1_afastamentos_cia').select('*'),
-      supabase.from('p4_viaturas').select('*').order('updated_at',{ascending:false}).limit(1),
-      supabase.from('p3_estatisticas').select('*').order('updated_at',{ascending:false}).limit(1),
-      supabase.from('p3_ordens_policiamento').select('*').eq('ativa',true).order('data_fim'),
-      supabase.from('p2_relins').select('*').order('updated_at',{ascending:false}).limit(1),
-      supabase.from('ajd_processos').select('*').order('created_at',{ascending:false}),
-      supabase.from('secretaria_agenda').select('*').gte('data', new Date().toISOString().split('T')[0]).order('data').limit(5),
-    ]);
-    setP1(e.data?.[0]); setP1apt(a.data?.[0]); setP1afast(af.data?.[0]);
-    setP1grad(g.data||[]); setP1hist(h.data||[]); setP1cia(c.data||[]);
-    setP4(p4d.data?.[0]); setP3stats(p3s.data?.[0]); setP3ops(p3o.data||[]);
-    setP2(p2d.data?.[0]); setAjd(ajdd.data||[]); setAgenda(agd.data||[]);
-    setLoading(false);
-  }, []);
+  return (
+    <div>
+      <h3 style={{ fontSize:15, fontWeight:800, color:'#1a3a5c', marginBottom:16 }}>📈 Dashboard de Estatísticas</h3>
 
-  useEffect(() => { carregar(); }, [carregar]);
+      {retornosProximos.length > 0 && (
+        <div style={{ background:'#FFF3E0', border:'2px solid #FFB74D', borderRadius:10, padding:'12px 16px', marginBottom:14 }}>
+          <div style={{ fontWeight:800, color:'#E65100', fontSize:13, marginBottom:8 }}>⏰ Férias encerrando em até 3 dias:</div>
+          {retornosProximos.map(p => { const dias = diasParaRetorno(p.ferias_fim); return (<div key={p.id} style={{ display:'flex', gap:8, alignItems:'center', marginBottom:4 }}><span style={{ fontWeight:700, color:'#1a3a5c', fontSize:12 }}>{p.patente} {p.nome}</span><span style={{ background:dias===0?'#B71C1C':dias<=1?'#E65100':'#F9A825', color:'#fff', borderRadius:6, padding:'1px 8px', fontSize:11, fontWeight:800 }}>{dias===0?'Retorna hoje!':dias===1?'Retorna amanhã!':`${dias} dias`}</span></div>); })}
+        </div>
+      )}
 
-  if (loading) return <Spinner />;
+      {ltsProximos.length > 0 && (
+        <div style={{ background:'#F3E5F5', border:'2px solid #CE93D8', borderRadius:10, padding:'12px 16px', marginBottom:14 }}>
+          <div style={{ fontWeight:800, color:'#6A1B9A', fontSize:13, marginBottom:8 }}>🟣 LTS Sanitário encerrando em até 3 dias:</div>
+          {ltsProximos.map(p => { const dias = diasParaRetorno(p.ss_fim); return (<div key={p.id} style={{ display:'flex', gap:8, alignItems:'center', marginBottom:4 }}><span style={{ fontWeight:700, color:'#1a3a5c', fontSize:12 }}>{p.patente} {p.nome}</span><span style={{ background:dias===0?'#6A1B9A':'#AB47BC', color:'#fff', borderRadius:6, padding:'1px 8px', fontSize:11, fontWeight:800 }}>{dias===0?'Encerra hoje!':dias===1?'Encerra amanhã!':`${dias} dias`}</span></div>); })}
+        </div>
+      )}
 
-  const mesAtual = new Date().toLocaleString('pt-BR',{month:'long',year:'numeric'});
-  const aptData = p1apt ? [
-    { name:'Apto A', value:p1apt.apto_a },
-    { name:'Apto B', value:p1apt.apto_b },
-    { name:'Apto C', value:p1apt.apto_c },
-    { name:'LTS', value:p1apt.lts },
-  ] : [];
-  const ajdTram = ajd.filter(p => p.status === 'tramitacao');
-  const ajdSol = ajd.filter(p => p.status === 'solucionado' && p.ano === new Date().getFullYear());
+      {aptoBProximos.length > 0 && (
+        <div style={{ background:'#FFF8E1', border:'2px solid #FFD54F', borderRadius:10, padding:'12px 16px', marginBottom:14 }}>
+          <div style={{ fontWeight:800, color:'#F9A825', fontSize:13, marginBottom:8 }}>🟡 Apto B encerrando em até 3 dias:</div>
+          {aptoBProximos.map(p => { const dias = diasParaRetorno(p.ss_fim); return (<div key={p.id} style={{ display:'flex', gap:8, alignItems:'center', marginBottom:4 }}><span style={{ fontWeight:700, color:'#1a3a5c', fontSize:12 }}>{p.patente} {p.nome}</span><span style={{ background:dias===0?'#F9A825':dias<=1?'#F57F17':'#FFA000', color:'#fff', borderRadius:6, padding:'1px 8px', fontSize:11, fontWeight:800 }}>{dias===0?'Encerra hoje!':dias===1?'Encerra amanhã!':`${dias} dias`}</span></div>); })}
+        </div>
+      )}
 
-  const SECOES = [
-    { id:'geral', label:'🏛️ Visão Geral' },
-    { id:'p1', label:'👥 P1 — Pessoal' },
-    { id:'p3', label:'🚔 P3 — Operações' },
-    { id:'p4', label:'🚗 P4 — Viaturas' },
-    { id:'p2', label:'🔍 P2' },
-    { id:'ajd', label:'⚖️ AJD' },
-    { id:'agenda', label:'📅 Agenda' },
-  ];
+      {aptoCProximos.length > 0 && (
+        <div style={{ background:'#FFEBEE', border:'2px solid #EF9A9A', borderRadius:10, padding:'12px 16px', marginBottom:14 }}>
+          <div style={{ fontWeight:800, color:'#B71C1C', fontSize:13, marginBottom:8 }}>🔴 Apto C encerrando em até 3 dias:</div>
+          {aptoCProximos.map(p => { const dias = diasParaRetorno(p.ss_fim); return (<div key={p.id} style={{ display:'flex', gap:8, alignItems:'center', marginBottom:4 }}><span style={{ fontWeight:700, color:'#1a3a5c', fontSize:12 }}>{p.patente} {p.nome}</span><span style={{ background:dias===0?'#B71C1C':'#E53935', color:'#fff', borderRadius:6, padding:'1px 8px', fontSize:11, fontWeight:800 }}>{dias===0?'Encerra hoje!':dias===1?'Encerra amanhã!':`${dias} dias`}</span></div>); })}
+        </div>
+      )}
 
-  return (
-    <div>
-      {/* ABAS */}
-      <div style={{ display:'flex', gap:6, marginBottom:18, flexWrap:'wrap' }}>
-        {SECOES.map(s => (
-          <button key={s.id} onClick={() => setSecaoAtiva(s.id)} style={{
-            padding:'8px 14px', borderRadius:8, fontWeight:600, cursor:'pointer', fontSize:12,
-            background: secaoAtiva===s.id ? AZUL : '#fff', color: secaoAtiva===s.id ? '#fff' : AZUL2,
-            border:`1px solid ${secaoAtiva===s.id ? AZUL : '#d0dce8'}`,
-          }}>{s.label}</button>
-        ))}
-      </div>
+      {semSecao.length > 0 && (
+        <div style={{ background:'#FFEBEE', border:'2px solid #EF9A9A', borderRadius:10, padding:'12px 16px', marginBottom:14 }}>
+          <div style={{ fontWeight:800, color:'#B71C1C', fontSize:13, marginBottom:8 }}>⚠️ {semSecao.length} policial(is) sem seção definida:</div>
+          {semSecao.map(p => (
+            <div key={p.id} style={{ display:'flex', gap:8, alignItems:'center', flexWrap:'wrap', marginBottom:6, background:'#fff', borderRadius:8, padding:'6px 10px', border:'1px solid #EF9A9A' }}>
+              <span style={{ fontWeight:700, color:'#B71C1C', fontSize:12, flex:1 }}>{p.patente} {p.nome}</span>
+              <select defaultValue="" onChange={e => { if(e.target.value) onAtualizarPolicial(p.id,'secao',e.target.value); }} style={{ fontSize:12, padding:'4px 6px', borderRadius:6, border:'1px solid #d0dce8', color:'#1a3a5c', background:'#f8fafc' }}>
+                <option value="" disabled>— Atribuir seção —</option>
+                {SECOES.map(s => <option key={s}>{s}</option>)}
+              </select>
+              <button onClick={() => onRemoverPolicial(p.id)} style={{ background:'#FFEBEE', color:'#B71C1C', border:'none', borderRadius:6, padding:'4px 8px', fontSize:12, fontWeight:700, cursor:'pointer' }}>🗑️</button>
+            </div>
+          ))}
+        </div>
+      )}
 
-      {/* VISÃO GERAL */}
-      {secaoAtiva === 'geral' && (
-        <div>
-          <h2 style={{ fontSize:16, fontWeight:800, color:AZUL, marginBottom:16 }}>📊 Panorama Geral — 32º BPM</h2>
+      {semFolga.length > 0 && (
+        <div style={{ background:'#E3F2FD', border:'2px solid #90CAF9', borderRadius:10, padding:'12px 16px', marginBottom:14 }}>
+          <div style={{ fontWeight:800, color:'#0D47A1', fontSize:13, marginBottom:8 }}>📋 {semFolga.length} policial(is) Pronto(s) sem solicitação esta semana:</div>
+          <div style={{ display:'flex', flexWrap:'wrap', gap:6 }}>
+            {semFolga.map(p => <span key={p.id} style={{ background:'#fff', color:'#0D47A1', borderRadius:6, padding:'2px 8px', fontSize:11, fontWeight:700, border:'1px solid #90CAF9' }}>{p.patente} {p.nome.split(' ').slice(0,2).join(' ')}</span>)}
+          </div>
+        </div>
+      )}
 
-          {/* Cards principais */}
-          <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:10, marginBottom:16 }}>
-            <StatCard label="Efetivo Total" value={p1?.efetivo_total||'—'} color={AZUL} icon="👮" />
-            <StatCard label="Disponíveis" value={p1?.efetivo_disponivel||'—'} color={VERDE} icon="✅" sub={p1?`${Math.round((p1.efetivo_disponivel/p1.efetivo_total)*100)}% do efetivo`:''} />
-            <StatCard label="Afastados" value={p1afast?(p1afast.lts+p1afast.ferias+p1afast.licenca_especial+p1afast.suspensao_total+p1afast.preso+p1afast.aguardando_reserva):'—'} color={VERMELHO} icon="🚫" />
-            <StatCard label="Viaturas OK" value={p4?.funcionando||'—'} color="#0D47A1" icon="🚗" sub={p4?`de ${p4.total} total`:''} />
-          </div>
+      {aprovadas.length > 0 && (
+        <Card>
+          <h4 style={{ fontSize:13, fontWeight:800, color:'#1a3a5c', marginBottom:12 }}>🔍 Insights Automáticos</h4>
+          <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+            {diaCritico && <div style={{ background:'#FFEBEE', borderRadius:8, padding:'8px 12px', display:'flex', gap:8, alignItems:'center' }}><span style={{ fontSize:16 }}>🔴</span><span style={{ fontSize:13, color:'#B71C1C', fontWeight:700 }}>Dia crítico: <strong>{diaCritico.dia}</strong> com {diaCritico.Folgas+diaCritico.Concessões} folgas ({Math.round(((diaCritico.Folgas+diaCritico.Concessões)/totalAprovadas)*100)}% do total)</span></div>}
+            {desbalanceado && <div style={{ background:'#FFF8E1', borderRadius:8, padding:'8px 12px', display:'flex', gap:8, alignItems:'center' }}><span style={{ fontSize:16 }}>⚠️</span><span style={{ fontSize:13, color:'#7B5800', fontWeight:700 }}>Desbalanceamento detectado: distribuição irregular entre os dias da semana</span></div>}
+            {porSecao.length > 0 && <div style={{ background:'#E8F5E9', borderRadius:8, padding:'8px 12px', display:'flex', gap:8, alignItems:'center' }}><span style={{ fontSize:16 }}>📊</span><span style={{ fontSize:13, color:'#1B5E20', fontWeight:700 }}>Seção mais ativa: <strong>{porSecao[0].secao}</strong> ({Math.round((porSecao[0].total/totalAprovadas)*100)}% das folgas)</span></div>}
+            <div style={{ background:'#E3F2FD', borderRadius:8, padding:'8px 12px', display:'flex', gap:8, alignItems:'center' }}><span style={{ fontSize:16 }}>📈</span><span style={{ fontSize:13, color:'#0D47A1', fontWeight:700 }}>Média de {mediaDia.toFixed(1)} folgas por dia da semana</span></div>
+          </div>
+        </Card>
+      )}
 
-          {/* Segunda linha */}
-          <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:10, marginBottom:20 }}>
-            <StatCard label="Apto B" value={p1apt?.apto_b||'—'} color="#F9A825" icon="🟡" />
-            <StatCard label="Apto C" value={p1apt?.apto_c||'—'} color={VERMELHO} icon="🔴" />
-            <StatCard label="Em LTS" value={p1apt?.lts||'—'} color={ROXO} icon="🏥" />
-            <StatCard label="Relins/mês" value={p2?.quantidade||'—'} color={VERDE} icon="📋" sub={mesAtual} />
-          </div>
+      <Card>
+        <h4 style={{ fontSize:13, fontWeight:800, color:'#1a3a5c', marginBottom:12 }}>⚙️ Capacidade Operacional</h4>
+        <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:10 }}>
+          {[
+            { l:'Total do Efetivo', v:policiais.length, c:'#1a3a5c' },
+            { l:'Prontos p/ Serviço', v:prontos.length, c:'#1B5E20' },
+            { l:'Afastados', v:policiais.filter(p=>(p.situacao||'Pronto')!=='Pronto').length, c:'#B71C1C' },
+            { l:'Com Restrição', v:policiais.filter(p=>temRestricao(p)).length, c:'#E65100' },
+            { l:'Sem folga esta semana', v:semFolga.length, c:'#0D47A1' },
+            { l:'LTS Sanitário', v:policiais.filter(p=>(p.sit_sanitaria||'Apto A')==='LTS').length, c:'#6A1B9A' },
+          ].map(s => <div key={s.l} style={{ background:'#f8fafc', borderRadius:10, padding:'12px 8px', textAlign:'center', border:'1px solid #e0e8f0' }}><div style={{ fontSize:22, fontWeight:900, color:s.c }}>{s.v}</div><div style={{ fontSize:10, color:'#6b8099', fontWeight:700 }}>{s.l}</div></div>)}
+        </div>
+      </Card>
 
-          {/* P3 + AJD + Agenda lado a lado */}
-          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12, marginBottom:12 }}>
-            <Card>
-              <h3 style={{ fontSize:13, fontWeight:800, color:AZUL, marginBottom:12 }}>🚔 P3 — Resultados do Mês</h3>
-              {p3stats ? (
-                <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8 }}>
-                  {[
-                    { l:'Prisões', v:p3stats.prisoes, c:VERMELHO },
-                    { l:'Veículos Recuperados', v:p3stats.veiculos_recuperados, c:AZUL2 },
-                    { l:'Maconha (kg)', v:p3stats.maconha_kg, c:VERDE },
-                    { l:'Cocaína (kg)', v:p3stats.cocaina_kg, c:'#F9A825' },
-                    { l:'Crack (kg)', v:p3stats.crack_kg, c:LARANJA },
-                    { l:'OPs Ativas', v:p3ops.length, c:'#0D47A1' },
-                  ].map(s => (
-                    <div key={s.l} style={{ background:'#f8fafc', borderRadius:8, padding:'10px 8px', textAlign:'center' }}>
-                      <div style={{ fontSize:20, fontWeight:900, color:s.c }}>{s.v}</div>
-                      <div style={{ fontSize:10, color:'#6b8099', fontWeight:600 }}>{s.l}</div>
-                    </div>
-                  ))}
-                </div>
-              ) : <p style={{ color:'#aab', fontSize:13 }}>Sem dados registrados.</p>}
-            </Card>
+      {policiais.filter(p => (p.situacao||'Pronto') !== 'Pronto').length > 0 && (
+        <Card>
+          <h4 style={{ fontSize:13, fontWeight:800, color:'#1a3a5c', marginBottom:12 }}>🚨 Policiais Afastados</h4>
+          {SITUACOES.filter(sit => sit !== 'Pronto').map(sit => {
+            const afastados = policiais.filter(p => (p.situacao||'Pronto') === sit);
+            if (afastados.length === 0) return null;
+            return (
+              <div key={sit} style={{ marginBottom:12 }}>
+                <div style={{ fontWeight:800, color:'#B71C1C', fontSize:12, marginBottom:6, background:'#FFEBEE', borderRadius:6, padding:'4px 10px', display:'inline-block' }}>{sit} ({afastados.length})</div>
+                {afastados.map(p => { const dias = diasParaRetorno(p.ferias_fim); return (
+                  <div key={p.id} style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'5px 0', borderBottom:'1px solid #f0f4f8', flexWrap:'wrap', gap:6 }}>
+                    <span style={{ fontWeight:700, color:'#1a3a5c', fontSize:12 }}>{p.patente} {p.nome}</span>
+                    <div style={{ display:'flex', gap:6, alignItems:'center' }}>
+                      {p.ferias_fim && <span style={{ color:'#6b8099', fontSize:11 }}>{p.ferias_inicio?new Date(p.ferias_inicio+'T00:00:00').toLocaleDateString('pt-BR'):'—'} → {new Date(p.ferias_fim+'T00:00:00').toLocaleDateString('pt-BR')}</span>}
+                      {dias!==null&&dias>=0&&<span style={{ background:dias<=3?'#B71C1C':'#1B5E20', color:'#fff', borderRadius:6, padding:'1px 8px', fontSize:11, fontWeight:800 }}>{dias===0?'Retorna hoje!':dias===1?'1 dia':`${dias} dias`}</span>}
+                      {dias!==null&&dias<0&&<span style={{ background:'#7B5800', color:'#fff', borderRadius:6, padding:'1px 8px', fontSize:11, fontWeight:800 }}>Vencido</span>}
+                    </div>
+                  </div>
+                ); })}
+              </div>
+            );
+          })}
+        </Card>
+      )}
 
-            <Card>
-              <h3 style={{ fontSize:13, fontWeight:800, color:AZUL, marginBottom:12 }}>⚖️ AJD — Processos</h3>
-              <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8, marginBottom:10 }}>
-                {['DRD','IPM','AVERIGUACAO','RPM'].map(tipo => {
-                  const tram = ajdTram.filter(p => p.tipo===tipo).length;
-                  const sol = ajdSol.filter(p => p.tipo===tipo).length;
-                  return (
-                    <div key={tipo} style={{ background:'#f8fafc', borderRadius:8, padding:'8px', border:'1px solid #e0e8f0' }}>
-                      <div style={{ fontWeight:800, color:AZUL, fontSize:11, marginBottom:4 }}>{tipo}</div>
-                      <div style={{ display:'flex', gap:6 }}>
-                        <span style={{ background:'#FFF8E1', color:'#7B5800', borderRadius:6, padding:'1px 6px', fontSize:10, fontWeight:700 }}>{tram} tram.</span>
-                        <span style={{ background:'#E8F5E9', color:VERDE, borderRadius:6, padding:'1px 6px', fontSize:10, fontWeight:700 }}>{sol} sol.</span>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </Card>
-          </div>
+      <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:10, marginBottom:20 }}>
+        {[{l:'Total',v:total,c:'#1a3a5c'},{l:'Folgas aprovadas',v:totalFolgas,c:'#0D47A1'},{l:'Concessões aprovadas',v:totalConcessoes,c:'#6A1B9A'},{l:'Pendentes',v:totalPendentes,c:'#7B5800'},{l:'Recusadas',v:totalRecusadas,c:'#B71C1C'},{l:'Total aprovadas',v:totalAprovadas,c:'#1B5E20'}]
+          .map(s => <div key={s.l} style={{ background:'#fff', borderRadius:10, padding:'14px 10px', boxShadow:'0 2px 8px #00000012', textAlign:'center' }}><div style={{ fontSize:26, fontWeight:900, color:s.c }}>{s.v}</div><div style={{ fontSize:11, color:'#6b8099', fontWeight:700 }}>{s.l}</div></div>)}
+      </div>
 
-          {/* Agenda próximos compromissos */}
-          <Card>
-            <h3 style={{ fontSize:13, fontWeight:800, color:AZUL, marginBottom:12 }}>📅 Próximos Compromissos</h3>
-            {agenda.length === 0 ? <p style={{ color:'#aab', fontSize:13 }}>Nenhum compromisso agendado.</p> : (
-              <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
-                {agenda.map(a => (
-                  <div key={a.id} style={{ display:'flex', gap:12, alignItems:'center', background:'#f8fafc', borderRadius:8, padding:'10px 12px', border:'1px solid #e0e8f0' }}>
-                    <div style={{ textAlign:'center', minWidth:44 }}>
-                      <div style={{ fontSize:16, fontWeight:900, color:AZUL }}>{new Date(a.data+'T12:00:00').toLocaleDateString('pt-BR',{day:'2-digit'})}</div>
-                      <div style={{ fontSize:10, color:'#6b8099', fontWeight:600 }}>{new Date(a.data+'T12:00:00').toLocaleDateString('pt-BR',{month:'short'}).toUpperCase()}</div>
-                    </div>
-                    <div style={{ flex:1 }}>
-                      <div style={{ fontWeight:700, color:AZUL, fontSize:13 }}>{a.titulo}</div>
-                      {a.local && <div style={{ fontSize:11, color:'#6b8099' }}>📍 {a.local}</div>}
-                      {a.hora_inicio && <div style={{ fontSize:11, color:'#6b8099' }}>🕐 {a.hora_inicio}{a.hora_fim?` — ${a.hora_fim}`:''}</div>}
-                    </div>
-                    <span style={{ background:'#E3F2FD', color:'#0D47A1', borderRadius:6, padding:'2px 8px', fontSize:10, fontWeight:700 }}>{a.tipo}</span>
-                  </div>
-                ))}
-              </div>
-            )}
-          </Card>
-        </div>
-      )}
+      <Card>
+        <h4 style={{ fontSize:13, fontWeight:800, color:'#1a3a5c', marginBottom:14 }}>Situação Sanitária do Efetivo</h4>
+        <div style={{ display:'flex', gap:10, flexWrap:'wrap' }}>
+          {ssCards.map(s => <div key={s.label} style={{ flex:1, minWidth:90, background:s.cor+'18', borderRadius:10, padding:'12px 8px', textAlign:'center', border:`2px solid ${s.cor}` }}><div style={{ fontSize:22 }}>{s.emoji}</div><div style={{ fontSize:20, fontWeight:900, color:s.cor }}>{s.total}</div><div style={{ fontSize:10, color:'#6b8099', fontWeight:700 }}>{s.label}</div></div>)}
+        </div>
+      </Card>
 
-      {/* P1 PESSOAL */}
-      {secaoAtiva === 'p1' && (
-        <div>
-          <h2 style={{ fontSize:16, fontWeight:800, color:AZUL, marginBottom:16 }}>👥 P1 — Pessoal</h2>
-          <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:10, marginBottom:16 }}>
-            <StatCard label="Efetivo Total" value={p1?.efetivo_total||'—'} color={AZUL} />
-            <StatCard label="Oficiais" value={p1?.oficiais||'—'} color={AZUL2} />
-            <StatCard label="Praças" value={p1?.pracas||'—'} color={AZUL3} />
-            <StatCard label="Disponíveis" value={p1?.efetivo_disponivel||'—'} color={VERDE} />
-            <StatCard label="Afastados/Indisp." value={p1?(p1.efetivo_total-p1.efetivo_disponivel):'—'} color={VERMELHO} />
-            <StatCard label="Período anterior" value={p1?.efetivo_anterior||'—'} color="#6b8099" sub={p1?`Variação: ${p1.efetivo_total-p1.efetivo_anterior}`:''} />
-          </div>
+      <Card>
+        <h4 style={{ fontSize:13, fontWeight:800, color:'#1a3a5c', marginBottom:14 }}>Situação do Efetivo</h4>
+        <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
+          {sitData.map(s => <div key={s.name} style={{ background:s.name==='Pronto'?'#E8F5E9':'#FFEBEE', borderRadius:8, padding:'8px 14px', textAlign:'center' }}><div style={{ fontSize:18, fontWeight:900, color:s.name==='Pronto'?'#1B5E20':'#B71C1C' }}>{s.value}</div><div style={{ fontSize:11, color:'#6b8099', fontWeight:700 }}>{s.name}</div></div>)}
+        </div>
+      </Card>
 
-          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12, marginBottom:12 }}>
-            <Card>
-              <h3 style={{ fontSize:13, fontWeight:800, color:AZUL, marginBottom:14 }}>Situação de Aptidão</h3>
-              <div style={{ display:'flex', gap:8, flexWrap:'wrap', marginBottom:14 }}>
-                {aptData.map(a => (
-                  <div key={a.name} style={{ background:(CORES_APT[a.name]||AZUL)+'18', borderRadius:10, padding:'10px 12px', textAlign:'center', border:`2px solid ${CORES_APT[a.name]||AZUL}`, flex:1, minWidth:70 }}>
-                    <div style={{ fontSize:22, fontWeight:900, color:CORES_APT[a.name]||AZUL }}>{a.value}</div>
-                    <div style={{ fontSize:10, color:'#6b8099', fontWeight:600 }}>{a.name}</div>
-                  </div>
-                ))}
-              </div>
-              {p1apt && (
-                <div style={{ background:'#FFF3E0', borderRadius:8, padding:'8px 12px' }}>
-                  <span style={{ fontWeight:700, color:LARANJA, fontSize:12 }}>⚠️ CD/CRD: {p1apt.cd_crd} policiais</span>
-                </div>
-              )}
-              <ResponsiveContainer width="100%" height={160}>
-                <PieChart>
-                  <Pie data={aptData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={60} label={({name,value})=>`${name}: ${value}`} labelLine={false} fontSize={9}>
-                    {aptData.map((e,i) => <Cell key={i} fill={CORES_APT[e.name]||AZUL} />)}
-                  </Pie>
-                  <Tooltip />
-                </PieChart>
-              </ResponsiveContainer>
-            </Card>
+      <Card>
+        <h4 style={{ fontSize:13, fontWeight:800, color:'#1a3a5c', marginBottom:14 }}>Folgas aprovadas por dia da semana</h4>
+        {aprovadas.length === 0 ? <p style={{ color:'#aab', fontSize:13 }}>Nenhuma folga aprovada ainda.</p>
+          : <ResponsiveContainer width="100%" height={200}><BarChart data={porDia} margin={{ top:5, right:10, left:-20, bottom:5 }}><CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" /><XAxis dataKey="dia" tick={{ fontSize:11 }} /><YAxis tick={{ fontSize:11 }} allowDecimals={false} /><Tooltip /><Bar dataKey="Folgas" fill="#0D47A1" radius={[4,4,0,0]} /><Bar dataKey="Concessões" fill="#6A1B9A" radius={[4,4,0,0]} /></BarChart></ResponsiveContainer>}
+      </Card>
 
-            <Card>
-              <h3 style={{ fontSize:13, fontWeight:800, color:AZUL, marginBottom:14 }}>Afastamentos</h3>
-              {p1afast && (
-                <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
-                  {[
-                    { l:'Férias', v:p1afast.ferias, c:'#0D47A1' },
-                    { l:'LTS', v:p1afast.lts, c:ROXO },
-                    { l:'Licença Especial', v:p1afast.licenca_especial, c:LARANJA },
-                    { l:'Suspensão Total', v:p1afast.suspensao_total, c:VERMELHO },
-                    { l:'Aguard. Reserva', v:p1afast.aguardando_reserva, c:'#37474F' },
-                    { l:'Red. Carga Horária', v:p1afast.reducao_carga, c:'#00695C' },
-                    { l:'Preso', v:p1afast.preso, c:VERMELHO },
-                  ].map(s => (
-                    <div key={s.l} style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'6px 10px', background:'#f8fafc', borderRadius:8 }}>
-                      <span style={{ fontSize:12, color:AZUL2, fontWeight:500 }}>{s.l}</span>
-                      <span style={{ fontWeight:800, color:s.c, fontSize:15 }}>{s.v}</span>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </Card>
-          </div>
-
-          <Card>
-            <h3 style={{ fontSize:13, fontWeight:800, color:AZUL, marginBottom:14 }}>Afastamentos por CIA/Seção</h3>
-            <div style={{ overflowX:'auto' }}>
-              <table style={{ width:'100%', borderCollapse:'collapse', fontSize:12 }}>
-                <thead>
-                  <tr style={{ background:AZUL }}>
-                    {['Fração','Férias','LE','LTS','Suspensão','Preso','Total'].map(h => (
-                      <th key={h} style={{ color:'#fff', padding:'8px 6px', fontWeight:700, textAlign:'center' }}>{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {p1cia.map((c,i) => (
-                    <tr key={c.id} style={{ background:i%2===0?'#fff':'#f8fafc' }}>
-                      <td style={{ padding:'7px 8px', fontWeight:700, color:AZUL }}>{c.fracao}</td>
-                      <td style={{ padding:'7px 8px', textAlign:'center' }}>{c.ferias}</td>
-                      <td style={{ padding:'7px 8px', textAlign:'center' }}>{c.licenca_especial}</td>
-                      <td style={{ padding:'7px 8px', textAlign:'center' }}>{c.lts}</td>
-                      <td style={{ padding:'7px 8px', textAlign:'center' }}>{c.suspensao}</td>
-                      <td style={{ padding:'7px 8px', textAlign:'center' }}>{c.preso}</td>
-                      <td style={{ padding:'7px 8px', textAlign:'center', fontWeight:800, color:VERMELHO }}>{c.total}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </Card>
-
-          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12 }}>
-            <Card>
-              <h3 style={{ fontSize:13, fontWeight:800, color:AZUL, marginBottom:14 }}>Distribuição por Graduação</h3>
-              <ResponsiveContainer width="100%" height={220}>
-                <BarChart data={p1grad} layout="vertical" margin={{ left:60, right:20 }}>
-                  <XAxis type="number" tick={{ fontSize:10 }} />
-                  <YAxis type="category" dataKey="graduacao" tick={{ fontSize:10 }} width={70} />
-                  <Tooltip />
-                  <Bar dataKey="quantidade" radius={[0,4,4,0]}>
-                    {p1grad.map((e,i) => <Cell key={i} fill={CORES_GRAD[i%CORES_GRAD.length]} />)}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
-            </Card>
-
-            <Card>
-              <h3 style={{ fontSize:13, fontWeight:800, color:AZUL, marginBottom:14 }}>Evolução Histórica</h3>
-              <ResponsiveContainer width="100%" height={220}>
-                <LineChart data={p1hist} margin={{ left:0, right:10 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                  <XAxis dataKey="periodo" tick={{ fontSize:9 }} />
-                  <YAxis domain={[600,760]} tick={{ fontSize:10 }} />
-                  <Tooltip />
-                  <Line type="monotone" dataKey="quantidade" stroke={AZUL3} strokeWidth={2} dot={{ r:4, fill:AZUL }} />
-                </LineChart>
-              </ResponsiveContainer>
-            </Card>
-          </div>
-        </div>
-      )}
-
-      {/* P3 OPERAÇÕES */}
-      {secaoAtiva === 'p3' && (
-        <div>
-          <h2 style={{ fontSize:16, fontWeight:800, color:AZUL, marginBottom:16 }}>🚔 P3 — Operações</h2>
-          {p3stats ? (
-            <>
-              <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:10, marginBottom:16 }}>
-                <StatCard label="Prisões" value={p3stats.prisoes} color={VERMELHO} icon="🔒" />
-                <StatCard label="Apreensões (pessoas)" value={p3stats.apreensoes_pessoas} color={LARANJA} icon="👤" />
-                <StatCard label="Veículos Recuperados" value={p3stats.veiculos_recuperados} color={AZUL2} icon="🚗" />
-                <StatCard label="Maconha (kg)" value={p3stats.maconha_kg} color={VERDE} icon="🌿" />
-                <StatCard label="Cocaína (kg)" value={p3stats.cocaina_kg} color="#F9A825" icon="⚗️" />
-                <StatCard label="Crack (kg)" value={p3stats.crack_kg} color={LARANJA} icon="🧪" />
-              </div>
-            </>
-          ) : <Card><p style={{ color:'#aab', fontSize:13 }}>Nenhum dado registrado ainda.</p></Card>}
-
-          <Card>
-            <h3 style={{ fontSize:13, fontWeight:800, color:AZUL, marginBottom:14 }}>📋 Ordens de Policiamento Ativas</h3>
-            {p3ops.length === 0 ? <p style={{ color:'#aab', fontSize:13 }}>Nenhuma OP ativa.</p> : (
-              <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
-                {p3ops.map(op => {
-                  const venc = op.data_fim ? new Date(op.data_fim+'T12:00:00') : null;
-                  const dias = venc ? Math.ceil((venc-new Date())/(1000*60*60*24)) : null;
-                  return (
-                    <div key={op.id} style={{ display:'flex', justifyContent:'space-between', alignItems:'center', background:'#f8fafc', borderRadius:8, padding:'10px 14px', border:'1px solid #e0e8f0', flexWrap:'wrap', gap:8 }}>
-                      <div>
-                        <div style={{ fontWeight:700, color:AZUL, fontSize:13 }}>OP {op.numero}</div>
-                        {op.descricao && <div style={{ fontSize:12, color:'#6b8099' }}>{op.descricao}</div>}
-                        {op.data_inicio && <div style={{ fontSize:11, color:'#aab' }}>Início: {new Date(op.data_inicio+'T12:00:00').toLocaleDateString('pt-BR')}</div>}
-                      </div>
-                      <div style={{ display:'flex', gap:8, alignItems:'center' }}>
-                        {op.pdf_url && <a href={op.pdf_url} target="_blank" rel="noreferrer" style={{ background:'#E3F2FD', color:'#0D47A1', borderRadius:6, padding:'4px 10px', fontSize:11, fontWeight:700, textDecoration:'none' }}>📄 Ver PDF</a>}
-                        {dias !== null && (
-                          <span style={{ background:dias<=7?'#FFEBEE':dias<=30?'#FFF8E1':'#E8F5E9', color:dias<=7?VERMELHO:dias<=30?'#7B5800':VERDE, borderRadius:6, padding:'4px 10px', fontSize:11, fontWeight:700 }}>
-                            {dias<0?'VENCIDA':dias===0?'Vence hoje':`${dias} dias`}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </Card>
-        </div>
-      )}
-
-      {/* P4 VIATURAS */}
-      {secaoAtiva === 'p4' && (
-        <div>
-          <h2 style={{ fontSize:16, fontWeight:800, color:AZUL, marginBottom:16 }}>🚗 P4 — Viaturas</h2>
-          {p4 ? (
-            <>
-              <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:10, marginBottom:16 }}>
-                <StatCard label="Total de Viaturas" value={p4.total} color={AZUL} icon="🚗" />
-                <StatCard label="Em Funcionamento" value={p4.funcionando} color={VERDE} icon="✅" sub={p4.total?`${Math.round((p4.funcionando/p4.total)*100)}% da frota`:''} />
-                <StatCard label="Baixadas" value={p4.baixadas} color={VERMELHO} icon="🔧" sub={p4.total?`${Math.round((p4.baixadas/p4.total)*100)}% da frota`:''} />
-              </div>
-              <Card>
-                <h3 style={{ fontSize:13, fontWeight:800, color:AZUL, marginBottom:14 }}>Situação da Frota</h3>
-                <ResponsiveContainer width="100%" height={200}>
-                  <PieChart>
-                    <Pie data={[{name:'Funcionando',value:p4.funcionando},{name:'Baixadas',value:p4.baixadas}]} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={70} label={({name,value})=>`${name}: ${value}`}>
-                      <Cell fill={VERDE} />
-                      <Cell fill={VERMELHO} />
-                    </Pie>
-                    <Tooltip />
-                  </PieChart>
-                </ResponsiveContainer>
-                {p4.observacoes && <div style={{ background:'#f0f6ff', borderRadius:8, padding:'10px 14px', marginTop:12, fontSize:13, color:AZUL2 }}>📝 {p4.observacoes}</div>}
-                <div style={{ marginTop:8, fontSize:11, color:'#aab', textAlign:'right' }}>Atualizado por: {p4.atualizado_por}</div>
-              </Card>
-            </>
-          ) : <Card><p style={{ color:'#aab', fontSize:13 }}>Nenhum dado registrado ainda.</p></Card>}
-        </div>
-      )}
-
-      {/* P2 */}
-      {secaoAtiva === 'p2' && (
-        <div>
-          <h2 style={{ fontSize:16, fontWeight:800, color:AZUL, marginBottom:16 }}>🔍 P2 — Relins</h2>
-          {p2 ? (
-            <div style={{ display:'grid', gridTemplateColumns:'repeat(2,1fr)', gap:10 }}>
-              <StatCard label="Relins produzidos" value={p2.quantidade} color={VERDE} icon="📋" sub={mesAtual} />
-              {p2.observacoes && <Card><p style={{ fontSize:13, color:AZUL2 }}>📝 {p2.observacoes}</p></Card>}
-            </div>
-          ) : <Card><p style={{ color:'#aab', fontSize:13 }}>Nenhum dado registrado ainda.</p></Card>}
-        </div>
-      )}
-
-      {/* AJD */}
-      {secaoAtiva === 'ajd' && (
-        <div>
-          <h2 style={{ fontSize:16, fontWeight:800, color:AZUL, marginBottom:16 }}>⚖️ AJD — Assessoria Jurídica</h2>
-          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12, marginBottom:12 }}>
-            <Card>
-              <h3 style={{ fontSize:13, fontWeight:800, color:'#7B5800', marginBottom:12 }}>⏳ Em Tramitação</h3>
-              {['DRD','IPM','AVERIGUACAO','RPM'].map(tipo => {
-                const itens = ajdTram.filter(p => p.tipo===tipo);
-                return (
-                  <div key={tipo} style={{ marginBottom:10 }}>
-                    <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:4 }}>
-                      <span style={{ fontWeight:700, color:AZUL, fontSize:12 }}>{tipo}</span>
-                      <span style={{ background:'#FFF8E1', color:'#7B5800', borderRadius:6, padding:'2px 10px', fontSize:12, fontWeight:800 }}>{itens.length}</span>
-                    </div>
-                    {itens.map(p => <div key={p.id} style={{ fontSize:11, color:'#6b8099', padding:'3px 8px', background:'#f8fafc', borderRadius:6, marginBottom:2 }}>{p.numero||'Sem número'}{p.descricao?` — ${p.descricao}`:''}</div>)}
-                  </div>
-                );
-              })}
-            </Card>
-            <Card>
-              <h3 style={{ fontSize:13, fontWeight:800, color:VERDE, marginBottom:12 }}>✅ Solucionados em {new Date().getFullYear()}</h3>
-              {['DRD','IPM','AVERIGUACAO','RPM'].map(tipo => {
-                const itens = ajdSol.filter(p => p.tipo===tipo);
-                return (
-                  <div key={tipo} style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'8px 10px', background:'#f8fafc', borderRadius:8, marginBottom:6 }}>
-                    <span style={{ fontWeight:700, color:AZUL, fontSize:12 }}>{tipo}</span>
-                    <span style={{ background:'#E8F5E9', color:VERDE, borderRadius:6, padding:'2px 10px', fontSize:12, fontWeight:800 }}>{itens.length}</span>
-                  </div>
-                );
-              })}
-            </Card>
-          </div>
-        </div>
-      )}
-
-      {/* AGENDA */}
-      {secaoAtiva === 'agenda' && (
-        <div>
-          <h2 style={{ fontSize:16, fontWeight:800, color:AZUL, marginBottom:16 }}>📅 Agenda do Comandante</h2>
-          <Card>
-            {agenda.length === 0 ? <p style={{ color:'#aab', fontSize:13 }}>Nenhum compromisso agendado.</p> : (
-              <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
-                {agenda.map(a => (
-                  <div key={a.id} style={{ display:'flex', gap:14, alignItems:'flex-start', background:'#f8fafc', borderRadius:10, padding:'12px 16px', border:'1px solid #e0e8f0' }}>
-                    <div style={{ textAlign:'center', minWidth:48, background:AZUL, borderRadius:8, padding:'8px 4px' }}>
-                      <div style={{ fontSize:18, fontWeight:900, color:'#fff' }}>{new Date(a.data+'T12:00:00').toLocaleDateString('pt-BR',{day:'2-digit'})}</div>
-                      <div style={{ fontSize:9, color:'#8db4d8', fontWeight:600 }}>{new Date(a.data+'T12:00:00').toLocaleDateString('pt-BR',{month:'short'}).toUpperCase()}</div>
-                    </div>
-                    <div style={{ flex:1 }}>
-                      <div style={{ fontWeight:700, color:AZUL, fontSize:14 }}>{a.titulo}</div>
-                      {a.descricao && <div style={{ fontSize:12, color:'#6b8099', marginTop:2 }}>{a.descricao}</div>}
-                      <div style={{ display:'flex', gap:8, marginTop:6, flexWrap:'wrap' }}>
-                        {a.hora_inicio && <span style={{ fontSize:11, color:AZUL2 }}>🕐 {a.hora_inicio}{a.hora_fim?` — ${a.hora_fim}`:''}</span>}
-                        {a.local && <span style={{ fontSize:11, color:AZUL2 }}>📍 {a.local}</span>}
-                      </div>
-                    </div>
-                    <span style={{ background:'#E3F2FD', color:'#0D47A1', borderRadius:6, padding:'3px 10px', fontSize:11, fontWeight:700 }}>{a.tipo}</span>
-                  </div>
-                ))}
-              </div>
-            )}
-          </Card>
-        </div>
-      )}
-    </div>
-  );
+      <Card>
+        <h4 style={{ fontSize:13, fontWeight:800, color:'#1a3a5c', marginBottom:14 }}>Distribuição por seção (%)</h4>
+        {porSecao.length === 0 ? <p style={{ color:'#aab', fontSize:13 }}>Nenhuma folga aprovada ainda.</p>
+          : <><ResponsiveContainer width="100%" height={220}><PieChart><Pie data={porSecao} dataKey="total" nameKey="secao" cx="50%" cy="50%" outerRadius={80} label={({ secao, total }) => `${secao} ${Math.round((total/totalAprovadas)*100)}%`} labelLine={false} fontSize={9}>{porSecao.map((_,i) => <Cell key={i} fill={CORES_GRAFICO[i%CORES_GRAFICO.length]} />)}</Pie><Tooltip formatter={(v,n) => [`${v} folgas (${Math.round((v/totalAprovadas)*100)}%)`, n]} /></PieChart></ResponsiveContainer><div style={{ display:'flex', flexWrap:'wrap', gap:6, marginTop:8 }}>{porSecao.map((s,i) => <span key={s.secao} style={{ background:CORES_GRAFICO[i%CORES_GRAFICO.length], color:'#fff', borderRadius:6, padding:'2px 8px', fontSize:11, fontWeight:700 }}>{s.secao}: {s.total} ({Math.round((s.total/totalAprovadas)*100)}%)</span>)}</div></>}
+      </Card>
+    </div>
+  );
 }
 
-// ============================================================
-// TELAS DE SEÇÃO
-// ============================================================
-function TelaSecao({ usuario, onSair }) {
-  const secao = usuario.secao_sigla;
-  const [aba, setAba] = useState('dados');
-  const [salvando, setSalvando] = useState(false);
-  const [msg, setMsg] = useState(null);
+// ========== CALENDÁRIO (ORIGINAL COMPLETO) ==========
+function CalendarioFolgas({ solicitacoes }) {
+  const aprovadas = solicitacoes.filter(s => s.status === 'aprovado');
+  const [filtroSecao, setFiltroSecao] = useState('todas');
+  const [semanaCalendario, setSemanaCalendario] = useState(() => getInicioSemana(new Date()));
 
-  function showMsg(texto, tipo='ok') {
-    setMsg({ texto, tipo });
-    setTimeout(() => setMsg(null), 3000);
-  }
+  function semanaAnteriorCal() { const d = new Date(semanaCalendario); d.setDate(d.getDate()-7); setSemanaCalendario(d); }
+  function proximaSemanaCalendario() { const d = new Date(semanaCalendario); d.setDate(d.getDate()+7); setSemanaCalendario(d); }
 
-  // P4
-  const [p4form, setP4form] = useState({ total:'', funcionando:'', baixadas:'', observacoes:'' });
-  async function salvarP4() {
-    setSalvando(true);
-    const { error } = await supabase.from('p4_viaturas').insert({ ...p4form, atualizado_por: usuario.nome });
-    setSalvando(false);
-    if (error) showMsg('Erro ao salvar.','erro');
-    else { showMsg('Dados salvos!'); setP4form({ total:'', funcionando:'', baixadas:'', observacoes:'' }); }
-  }
+  const fimSemana = new Date(semanaCalendario);
+  fimSemana.setDate(fimSemana.getDate() + 6);
+  const isoInicio = semanaCalendario.toISOString().split('T')[0];
+  const isoFim = fimSemana.toISOString().split('T')[0];
+  const aprovadasSemana = aprovadas.filter(s => s.semana >= isoInicio && s.semana <= isoFim);
+  const filtradas = filtroSecao === 'todas' ? aprovadasSemana : aprovadasSemana.filter(s => s.secao === filtroSecao);
 
-  // P3 stats
-  const [p3form, setP3form] = useState({ mes: new Date().getMonth()+1, ano: new Date().getFullYear(), prisoes:0, apreensoes_pessoas:0, maconha_kg:0, cocaina_kg:0, crack_kg:0, veiculos_recuperados:0 });
-  async function salvarP3() {
-    setSalvando(true);
-    const { error } = await supabase.from('p3_estatisticas').insert({ ...p3form, atualizado_por: usuario.nome });
-    setSalvando(false);
-    if (error) showMsg('Erro ao salvar.','erro'); else showMsg('Estatísticas salvas!');
-  }
-
-  // P3 OP
-  const [opForm, setOpForm] = useState({ numero:'', descricao:'', data_inicio:'', data_fim:'', pdf_url:'' });
-  const [ops, setOps] = useState([]);
-  useEffect(() => {
-    if (secao==='P3') supabase.from('p3_ordens_policiamento').select('*').order('created_at',{ascending:false}).then(({data}) => setOps(data||[]));
-  }, [secao]);
-  async function salvarOP() {
-    setSalvando(true);
-    const { error } = await supabase.from('p3_ordens_policiamento').insert({ ...opForm, atualizado_por: usuario.nome });
-    setSalvando(false);
-    if (error) showMsg('Erro ao salvar.','erro');
-    else { showMsg('OP cadastrada!'); setOpForm({ numero:'', descricao:'', data_inicio:'', data_fim:'', pdf_url:'' }); }
-  }
-  async function encerrarOP(id) {
-    await supabase.from('p3_ordens_policiamento').update({ ativa:false }).eq('id',id);
-    setOps(prev => prev.map(o => o.id===id ? {...o, ativa:false} : o));
-  }
-
-  // P2
-  const [p2form, setP2form] = useState({ quantidade:'', observacoes:'' });
-  async function salvarP2() {
-    setSalvando(true);
-    const { error } = await supabase.from('p2_relins').insert({ ...p2form, mes: new Date().getMonth()+1, ano: new Date().getFullYear(), atualizado_por: usuario.nome });
-    setSalvando(false);
-    if (error) showMsg('Erro ao salvar.','erro'); else showMsg('Relins salvos!');
-  }
-
-  // AJD
-  const [ajdForm, setAjdForm] = useState({ tipo:'DRD', numero:'', descricao:'', status:'tramitacao', ano: new Date().getFullYear(), observacoes:'' });
-  const [ajdLista, setAjdLista] = useState([]);
-  useEffect(() => {
-    if (secao==='AJD') supabase.from('ajd_processos').select('*').order('created_at',{ascending:false}).then(({data}) => setAjdLista(data||[]));
-  }, [secao]);
-  async function salvarAJD() {
-    setSalvando(true);
-    const { error } = await supabase.from('ajd_processos').insert({ ...ajdForm, atualizado_por: usuario.nome });
-    setSalvando(false);
-    if (error) showMsg('Erro ao salvar.','erro');
-    else { showMsg('Processo cadastrado!'); const {data} = await supabase.from('ajd_processos').select('*').order('created_at',{ascending:false}); setAjdLista(data||[]); }
-  }
-  async function toggleStatusAJD(id, status) {
-    const novo = status === 'tramitacao' ? 'solucionado' : 'tramitacao';
-    await supabase.from('ajd_processos').update({ status:novo, data_solucao: novo==='solucionado'?new Date().toISOString().split('T')[0]:null }).eq('id',id);
-    setAjdLista(prev => prev.map(p => p.id===id ? {...p, status:novo} : p));
-  }
-
-  // AGENDA (Secretaria)
-  const [agdForm, setAgdForm] = useState({ titulo:'', descricao:'', data:'', hora_inicio:'', hora_fim:'', local:'', tipo:'reuniao' });
-  const [agdLista, setAgdLista] = useState([]);
-  useEffect(() => {
-    if (secao==='SEC') supabase.from('secretaria_agenda').select('*').order('data').then(({data}) => setAgdLista(data||[]));
-  }, [secao]);
-  async function salvarAgenda() {
-    if (!agdForm.titulo || !agdForm.data) { showMsg('Título e data são obrigatórios.','erro'); return; }
-    setSalvando(true);
-    const { error } = await supabase.from('secretaria_agenda').insert({ ...agdForm, atualizado_por: usuario.nome });
-    setSalvando(false);
-    if (error) showMsg('Erro ao salvar.','erro');
-    else { showMsg('Compromisso adicionado!'); const {data} = await supabase.from('secretaria_agenda').select('*').order('data'); setAgdLista(data||[]); setAgdForm({ titulo:'', descricao:'', data:'', hora_inicio:'', hora_fim:'', local:'', tipo:'reuniao' }); }
-  }
-  async function removerAgenda(id) {
-    if (!window.confirm('Remover este compromisso?')) return;
-    await supabase.from('secretaria_agenda').delete().eq('id',id);
-    setAgdLista(prev => prev.filter(a => a.id !== id));
-  }
-
-  // P1 Afastamentos
-  const [p1form, setP1form] = useState({ efetivo_total:645, efetivo_anterior:670, oficiais:21, pracas:624, efetivo_disponivel:533 });
-  const [p1aptForm, setP1aptForm] = useState({ apto_a:545, apto_b:55, apto_c:20, lts:25, cd_crd:23 });
-  const [p1afastForm, setP1afastForm] = useState({ lts:25, ferias:41, licenca_especial:15, suspensao_total:14, preso:1, aguardando_reserva:16, reducao_carga:15 });
-  async function salvarP1() {
-    setSalvando(true);
-    await Promise.all([
-      supabase.from('p1_efetivo').insert({ ...p1form, atualizado_por: usuario.nome }),
-      supabase.from('p1_aptidao').insert({ ...p1aptForm }),
-      supabase.from('p1_afastamentos').insert({ ...p1afastForm }),
-    ]);
-    setSalvando(false);
-    showMsg('Dados P1 atualizados!');
-  }
-
-  const ABAS = secao==='P4' ? [['dados','📊 Atualizar Dados']] :
-               secao==='P3' ? [['dados','📊 Estatísticas'],['ops','📋 Ordens de Policiamento']] :
-               secao==='P2' ? [['dados','📊 Relins']] :
-               secao==='AJD' ? [['dados','⚖️ Processos']] :
-               secao==='SEC' ? [['dados','📅 Agenda']] :
-               secao==='P1' ? [['dados','👥 Efetivo'],['aptidao','🏥 Aptidão'],['afastamentos','📋 Afastamentos']] : [];
-
-  const TITULOS = { P1:'P1 — Pessoal', P2:'P2', P3:'P3 — Operações', P4:'P4 — Viaturas', AJD:'AJD — Assessoria Jurídica', SEC:'Secretaria' };
-
-  return (
-    <div>
-      <div style={{ display:'flex', gap:6, marginBottom:18, flexWrap:'wrap' }}>
-        {ABAS.map(([id,label]) => (
-          <button key={id} onClick={() => setAba(id)} style={{
-            padding:'8px 14px', borderRadius:8, fontWeight:600, cursor:'pointer', fontSize:12,
-            background: aba===id ? AZUL : '#fff', color: aba===id ? '#fff' : AZUL2,
-            border:`1px solid ${aba===id ? AZUL : '#d0dce8'}`,
-          }}>{label}</button>
-        ))}
-      </div>
-
-      {msg && (
-        <div style={{ position:'fixed', top:20, right:20, zIndex:9999, background:msg.tipo==='ok'?VERDE:VERMELHO, color:'#fff', borderRadius:10, padding:'12px 20px', fontWeight:700, fontSize:14, boxShadow:'0 4px 20px #00000030' }}>
-          {msg.texto}
-        </div>
-      )}
-
-      {/* P4 */}
-      {secao==='P4' && aba==='dados' && (
-        <Card>
-          <h3 style={{ fontSize:14, fontWeight:800, color:AZUL, marginBottom:16 }}>Atualizar Dados de Viaturas</h3>
-          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:10, marginBottom:10 }}>
-            {[['total','Total de Viaturas'],['funcionando','Em Funcionamento'],['baixadas','Baixadas']].map(([k,l]) => (
-              <div key={k}>
-                <label style={lbl}>{l}</label>
-                <input type="number" min="0" value={p4form[k]} onChange={e => setP4form(f=>({...f,[k]:parseInt(e.target.value)||0}))} style={inp} />
-              </div>
-            ))}
-          </div>
-          <label style={lbl}>Observações</label>
-          <textarea value={p4form.observacoes} onChange={e => setP4form(f=>({...f,observacoes:e.target.value}))} placeholder="Observações sobre a frota..." style={{ ...inp, minHeight:80, resize:'vertical', marginBottom:6 }} />
-          <button onClick={salvarP4} disabled={salvando} style={{ ...btnPrimary, marginTop:8 }}>{salvando?'Salvando...':'💾 Salvar Dados'}</button>
-        </Card>
-      )}
-
-      {/* P3 STATS */}
-      {secao==='P3' && aba==='dados' && (
-        <Card>
-          <h3 style={{ fontSize:14, fontWeight:800, color:AZUL, marginBottom:16 }}>Registrar Estatísticas Operacionais</h3>
-          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, marginBottom:10 }}>
-            {[
-              ['prisoes','Prisões'],['apreensoes_pessoas','Apreensões (pessoas)'],
-              ['maconha_kg','Maconha (kg)'],['cocaina_kg','Cocaína (kg)'],
-              ['crack_kg','Crack (kg)'],['veiculos_recuperados','Veículos Recuperados'],
-            ].map(([k,l]) => (
-              <div key={k}>
-                <label style={lbl}>{l}</label>
-                <input type="number" min="0" step={k.includes('kg')?'0.01':'1'} value={p3form[k]} onChange={e => setP3form(f=>({...f,[k]:parseFloat(e.target.value)||0}))} style={inp} />
-              </div>
-            ))}
-          </div>
-          <button onClick={salvarP3} disabled={salvando} style={{ ...btnPrimary, marginTop:8 }}>{salvando?'Salvando...':'💾 Salvar Estatísticas'}</button>
-        </Card>
-      )}
-
-      {/* P3 OPS */}
-      {secao==='P3' && aba==='ops' && (
-        <>
-          <Card>
-            <h3 style={{ fontSize:14, fontWeight:800, color:AZUL, marginBottom:16 }}>Cadastrar Ordem de Policiamento</h3>
-            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, marginBottom:10 }}>
-              <div><label style={lbl}>Número da OP *</label><input value={opForm.numero} onChange={e=>setOpForm(f=>({...f,numero:e.target.value}))} placeholder="Ex.: 001/2026" style={inp} /></div>
-              <div><label style={lbl}>Descrição</label><input value={opForm.descricao} onChange={e=>setOpForm(f=>({...f,descricao:e.target.value}))} placeholder="Operação..." style={inp} /></div>
-              <div><label style={lbl}>Data Início</label><input type="date" value={opForm.data_inicio} onChange={e=>setOpForm(f=>({...f,data_inicio:e.target.value}))} style={inp} /></div>
-              <div><label style={lbl}>Data Fim / Vigência</label><input type="date" value={opForm.data_fim} onChange={e=>setOpForm(f=>({...f,data_fim:e.target.value}))} style={inp} /></div>
-              <div style={{ gridColumn:'1/-1' }}><label style={lbl}>Link do PDF (opcional)</label><input value={opForm.pdf_url} onChange={e=>setOpForm(f=>({...f,pdf_url:e.target.value}))} placeholder="https://..." style={inp} /></div>
-            </div>
-            <button onClick={salvarOP} disabled={salvando} style={{ ...btnPrimary, marginTop:4 }}>{salvando?'Salvando...':'➕ Cadastrar OP'}</button>
-          </Card>
-          <Card>
-            <h3 style={{ fontSize:13, fontWeight:800, color:AZUL, marginBottom:12 }}>OPs Cadastradas</h3>
-            {ops.length === 0 ? <p style={{ color:'#aab', fontSize:13 }}>Nenhuma OP cadastrada.</p> : ops.map(op => (
-              <div key={op.id} style={{ display:'flex', justifyContent:'space-between', alignItems:'center', background:'#f8fafc', borderRadius:8, padding:'10px 14px', marginBottom:8, border:`1px solid ${op.ativa?'#e0e8f0':'#EF9A9A'}` }}>
-                <div>
-                  <span style={{ fontWeight:700, color:AZUL, fontSize:13 }}>OP {op.numero}</span>
-                  {op.descricao && <span style={{ fontSize:12, color:'#6b8099', marginLeft:8 }}>{op.descricao}</span>}
-                  {op.data_fim && <div style={{ fontSize:11, color:'#aab' }}>Vigência até: {new Date(op.data_fim+'T12:00:00').toLocaleDateString('pt-BR')}</div>}
-                </div>
-                <div style={{ display:'flex', gap:8 }}>
-                  {op.pdf_url && <a href={op.pdf_url} target="_blank" rel="noreferrer" style={{ ...btnSm, background:'#E3F2FD', color:'#0D47A1' }}>📄 PDF</a>}
-                  {op.ativa && <button onClick={() => encerrarOP(op.id)} style={{ ...btnSm, background:'#FFEBEE', color:VERMELHO }}>Encerrar</button>}
-                  {!op.ativa && <span style={{ fontSize:11, color:VERMELHO, fontWeight:700 }}>ENCERRADA</span>}
-                </div>
-              </div>
-            ))}
-          </Card>
-        </>
-      )}
-
-      {/* P2 */}
-      {secao==='P2' && aba==='dados' && (
-        <Card>
-          <h3 style={{ fontSize:14, fontWeight:800, color:AZUL, marginBottom:16 }}>Registrar Relins do Mês</h3>
-          <label style={lbl}>Quantidade de Relins produzidos</label>
-          <input type="number" min="0" value={p2form.quantidade} onChange={e=>setP2form(f=>({...f,quantidade:parseInt(e.target.value)||0}))} style={{ ...inp, marginBottom:12 }} />
-          <label style={lbl}>Observações</label>
-          <textarea value={p2form.observacoes} onChange={e=>setP2form(f=>({...f,observacoes:e.target.value}))} placeholder="Observações..." style={{ ...inp, minHeight:80, resize:'vertical', marginBottom:6 }} />
-          <button onClick={salvarP2} disabled={salvando} style={{ ...btnPrimary, marginTop:8 }}>{salvando?'Salvando...':'💾 Salvar'}</button>
-        </Card>
-      )}
-
-      {/* AJD */}
-      {secao==='AJD' && aba==='dados' && (
-        <>
-          <Card>
-            <h3 style={{ fontSize:14, fontWeight:800, color:AZUL, marginBottom:16 }}>Cadastrar Processo</h3>
-            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, marginBottom:10 }}>
-              <div>
-                <label style={lbl}>Tipo *</label>
-                <select value={ajdForm.tipo} onChange={e=>setAjdForm(f=>({...f,tipo:e.target.value}))} style={inp}>
-                  {['DRD','IPM','AVERIGUACAO','RPM'].map(t => <option key={t}>{t}</option>)}
-                </select>
-              </div>
-              <div><label style={lbl}>Número</label><input value={ajdForm.numero} onChange={e=>setAjdForm(f=>({...f,numero:e.target.value}))} placeholder="Ex.: 001/2026" style={inp} /></div>
-              <div style={{ gridColumn:'1/-1' }}><label style={lbl}>Descrição</label><input value={ajdForm.descricao} onChange={e=>setAjdForm(f=>({...f,descricao:e.target.value}))} placeholder="Descrição resumida..." style={inp} /></div>
-              <div>
-                <label style={lbl}>Status</label>
-                <select value={ajdForm.status} onChange={e=>setAjdForm(f=>({...f,status:e.target.value}))} style={inp}>
-                  <option value="tramitacao">Em Tramitação</option>
-                  <option value="solucionado">Solucionado</option>
-                </select>
-              </div>
-              <div><label style={lbl}>Ano</label><input type="number" value={ajdForm.ano} onChange={e=>setAjdForm(f=>({...f,ano:parseInt(e.target.value)}))} style={inp} /></div>
-              <div style={{ gridColumn:'1/-1' }}><label style={lbl}>Observações</label><textarea value={ajdForm.observacoes} onChange={e=>setAjdForm(f=>({...f,observacoes:e.target.value}))} style={{ ...inp, minHeight:70, resize:'vertical' }} /></div>
-            </div>
-            <button onClick={salvarAJD} disabled={salvando} style={{ ...btnPrimary, marginTop:4 }}>{salvando?'Salvando...':'➕ Cadastrar Processo'}</button>
-          </Card>
-          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12 }}>
-            {['tramitacao','solucionado'].map(status => (
-              <Card key={status}>
-                <h3 style={{ fontSize:13, fontWeight:800, color:status==='tramitacao'?'#7B5800':VERDE, marginBottom:12 }}>
-                  {status==='tramitacao'?'⏳ Em Tramitação':'✅ Solucionados'}
-                </h3>
-                {ajdLista.filter(p=>p.status===status).length===0 ? <p style={{ color:'#aab', fontSize:13 }}>Nenhum.</p> :
-                  ajdLista.filter(p=>p.status===status).map(p => (
-                    <div key={p.id} style={{ background:'#f8fafc', borderRadius:8, padding:'8px 10px', marginBottom:6, border:'1px solid #e0e8f0' }}>
-                      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
-                        <div>
-                          <span style={{ fontWeight:700, color:AZUL, fontSize:12 }}>{p.tipo}</span>
-                          {p.numero && <span style={{ fontSize:11, color:'#6b8099', marginLeft:6 }}>{p.numero}</span>}
-                          {p.descricao && <div style={{ fontSize:11, color:'#6b8099' }}>{p.descricao}</div>}
-                        </div>
-                        <button onClick={() => toggleStatusAJD(p.id, p.status)} style={{ ...btnSm, background:status==='tramitacao'?'#E8F5E9':'#FFF8E1', color:status==='tramitacao'?VERDE:'#7B5800', fontSize:10 }}>
-                          {status==='tramitacao'?'✅ Resolver':'↩️ Reabrir'}
-                        </button>
-                      </div>
-                    </div>
-                  ))
-                }
-              </Card>
-            ))}
-          </div>
-        </>
-      )}
-
-      {/* SECRETARIA AGENDA */}
-      {secao==='SEC' && aba==='dados' && (
-        <>
-          <Card>
-            <h3 style={{ fontSize:14, fontWeight:800, color:AZUL, marginBottom:16 }}>Adicionar Compromisso</h3>
-            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, marginBottom:10 }}>
-              <div style={{ gridColumn:'1/-1' }}><label style={lbl}>Título *</label><input value={agdForm.titulo} onChange={e=>setAgdForm(f=>({...f,titulo:e.target.value}))} placeholder="Reunião, evento..." style={inp} /></div>
-              <div><label style={lbl}>Data *</label><input type="date" value={agdForm.data} onChange={e=>setAgdForm(f=>({...f,data:e.target.value}))} style={inp} /></div>
-              <div>
-                <label style={lbl}>Tipo</label>
-                <select value={agdForm.tipo} onChange={e=>setAgdForm(f=>({...f,tipo:e.target.value}))} style={inp}>
-                  {['reuniao','evento','compromisso','visita','formatura','outro'].map(t => <option key={t} value={t}>{t.charAt(0).toUpperCase()+t.slice(1)}</option>)}
-                </select>
-              </div>
-              <div><label style={lbl}>Hora Início</label><input type="time" value={agdForm.hora_inicio} onChange={e=>setAgdForm(f=>({...f,hora_inicio:e.target.value}))} style={inp} /></div>
-              <div><label style={lbl}>Hora Fim</label><input type="time" value={agdForm.hora_fim} onChange={e=>setAgdForm(f=>({...f,hora_fim:e.target.value}))} style={inp} /></div>
-              <div><label style={lbl}>Local</label><input value={agdForm.local} onChange={e=>setAgdForm(f=>({...f,local:e.target.value}))} placeholder="Local do compromisso" style={inp} /></div>
-              <div style={{ gridColumn:'1/-1' }}><label style={lbl}>Descrição</label><textarea value={agdForm.descricao} onChange={e=>setAgdForm(f=>({...f,descricao:e.target.value}))} style={{ ...inp, minHeight:70, resize:'vertical' }} /></div>
-            </div>
-            <button onClick={salvarAgenda} disabled={salvando} style={{ ...btnPrimary, marginTop:4 }}>{salvando?'Salvando...':'➕ Adicionar'}</button>
-          </Card>
-          <Card>
-            <h3 style={{ fontSize:13, fontWeight:800, color:AZUL, marginBottom:12 }}>Agenda Cadastrada</h3>
-            {agdLista.length===0 ? <p style={{ color:'#aab', fontSize:13 }}>Nenhum compromisso.</p> :
-              agdLista.map(a => (
-                <div key={a.id} style={{ display:'flex', justifyContent:'space-between', alignItems:'center', background:'#f8fafc', borderRadius:8, padding:'10px 14px', marginBottom:8, border:'1px solid #e0e8f0' }}>
-                  <div>
-                    <div style={{ fontWeight:700, color:AZUL, fontSize:13 }}>{a.titulo}</div>
-                    <div style={{ fontSize:11, color:'#6b8099' }}>📅 {new Date(a.data+'T12:00:00').toLocaleDateString('pt-BR')} {a.hora_inicio?`· 🕐 ${a.hora_inicio}`:''} {a.local?`· 📍 ${a.local}`:''}</div>
-                  </div>
-                  <button onClick={() => removerAgenda(a.id)} style={{ ...btnSm, background:'#FFEBEE', color:VERMELHO }}>Remover</button>
-                </div>
-              ))
-            }
-          </Card>
-        </>
-      )}
-
-      {/* P1 */}
-      {secao==='P1' && aba==='dados' && (
-        <Card>
-          <h3 style={{ fontSize:14, fontWeight:800, color:AZUL, marginBottom:16 }}>Atualizar Efetivo Geral</h3>
-          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:10, marginBottom:10 }}>
-            {[['efetivo_total','Efetivo Total'],['efetivo_anterior','Período Anterior'],['oficiais','Oficiais'],['pracas','Praças'],['efetivo_disponivel','Disponíveis']].map(([k,l]) => (
-              <div key={k}><label style={lbl}>{l}</label><input type="number" min="0" value={p1form[k]} onChange={e=>setP1form(f=>({...f,[k]:parseInt(e.target.value)||0}))} style={inp} /></div>
-            ))}
-          </div>
-          <button onClick={salvarP1} disabled={salvando} style={{ ...btnPrimary, marginTop:8 }}>{salvando?'Salvando...':'💾 Salvar'}</button>
-        </Card>
-      )}
-
-      {secao==='P1' && aba==='aptidao' && (
-        <Card>
-          <h3 style={{ fontSize:14, fontWeight:800, color:AZUL, marginBottom:16 }}>Atualizar Situação de Aptidão</h3>
-          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:10, marginBottom:10 }}>
-            {[['apto_a','Apto A'],['apto_b','Apto B'],['apto_c','Apto C'],['lts','LTS'],['cd_crd','CD/CRD']].map(([k,l]) => (
-              <div key={k}><label style={lbl}>{l}</label><input type="number" min="0" value={p1aptForm[k]} onChange={e=>setP1aptForm(f=>({...f,[k]:parseInt(e.target.value)||0}))} style={inp} /></div>
-            ))}
-          </div>
-          <button onClick={salvarP1} disabled={salvando} style={{ ...btnPrimary, marginTop:8 }}>{salvando?'Salvando...':'💾 Salvar'}</button>
-        </Card>
-      )}
-
-      {secao==='P1' && aba==='afastamentos' && (
-        <Card>
-          <h3 style={{ fontSize:14, fontWeight:800, color:AZUL, marginBottom:16 }}>Atualizar Afastamentos</h3>
-          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:10, marginBottom:10 }}>
-            {[['lts','LTS'],['ferias','Férias'],['licenca_especial','Lic. Especial'],['suspensao_total','Suspensão Total'],['preso','Preso'],['aguardando_reserva','Aguard. Reserva'],['reducao_carga','Red. Carga Horária']].map(([k,l]) => (
-              <div key={k}><label style={lbl}>{l}</label><input type="number" min="0" value={p1afastForm[k]} onChange={e=>setP1afastForm(f=>({...f,[k]:parseInt(e.target.value)||0}))} style={inp} /></div>
-            ))}
-          </div>
-          <button onClick={salvarP1} disabled={salvando} style={{ ...btnPrimary, marginTop:8 }}>{salvando?'Salvando...':'💾 Salvar'}</button>
-        </Card>
-      )}
-    </div>
-  );
+  return (
+    <div>
+      <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', background:'#f0f4f8', borderRadius:10, padding:'8px 14px', marginBottom:12 }}>
+        <button onClick={semanaAnteriorCal} style={{ ...btnSm, background:'#fff', color:'#1a3a5c' }}>← Anterior</button>
+        <span style={{ fontWeight:800, color:'#1a3a5c', fontSize:13 }}>{formatarSemana(semanaCalendario)}</span>
+        <button onClick={proximaSemanaCalendario} style={{ ...btnSm, background:'#fff', color:'#1a3a5c' }}>Próxima →</button>
+      </div>
+      <select value={filtroSecao} onChange={e => setFiltroSecao(e.target.value)} style={{ ...inp, marginBottom:12 }}>
+        <option value="todas">Todas as seções</option>
+        {SECOES.map(s => <option key={s}>{s}</option>)}
+      </select>
+      <div style={{ display:'flex', gap:6, marginBottom:8 }}>
+        <span style={{ background:'#E3F2FD', color:'#0D47A1', borderRadius:6, padding:'3px 10px', fontSize:12, fontWeight:700 }}>🌙 Folga</span>
+        <span style={{ background:'#F3E5F5', color:'#6A1B9A', borderRadius:6, padding:'3px 10px', fontSize:12, fontWeight:700 }}>🎖️ Concessão</span>
+      </div>
+      <div style={{ overflowX:'auto' }}>
+        <table style={{ width:'100%', borderCollapse:'collapse', minWidth:600 }}>
+          <thead><tr>{DIAS.map(d => <th key={d} style={{ background:'#1a3a5c', color:'#fff', padding:'10px 6px', fontSize:12, fontWeight:800, textAlign:'center', border:'1px solid #0d2340' }}>{d}</th>)}</tr></thead>
+          <tbody><tr>{DIAS.map(dia => { const dodia = filtradas.filter(s => s.dia === dia); return (<td key={dia} style={{ verticalAlign:'top', padding:6, border:'1px solid #d0dce8', background:'#f8fafc', minWidth:80 }}>{dodia.length === 0 ? <span style={{ color:'#ccc', fontSize:11 }}>—</span> : dodia.map(s => (<div key={s.id} style={{ background:s.motivo==='Concessão'?'#F3E5F5':'#E3F2FD', color:s.motivo==='Concessão'?'#6A1B9A':'#0D47A1', borderRadius:6, padding:'4px 6px', marginBottom:4, fontSize:11, fontWeight:700 }}><div>{s.policial_nome.split(' ').slice(0,2).join(' ')}</div><div style={{ fontSize:10, opacity:0.8 }}>{s.secao&&s.secao!=='—'?s.secao:'Não vinculada'}</div></div>))}{dodia.length > 0 && <div style={{ fontSize:10, color:'#6b8099', marginTop:2, textAlign:'right' }}>{dodia.length} folga{dodia.length>1?'s':''}</div>}</td>); })}</tr></tbody>
+        </table>
+      </div>
+      {filtradas.length === 0 && <p style={{ color:'#aab', fontSize:13, textAlign:'center', marginTop:20 }}>Nenhuma folga aprovada nesta semana.</p>}
+    </div>
+  );
 }
 
-// ============================================================
-// PAINEL ADMIN
-// ============================================================
-function PainelAdmin() {
-  const [usuarios, setUsuarios] = useState([]);
-  const [form, setForm] = useState({ nome:'', matricula:'', senha:'', secao_sigla:'', nivel:'chefe' });
-  const [msg, setMsg] = useState(null);
-  const SECOES_OPTS = ['P1','P2','P3','P4','P5','AJD','SEC'];
+// ========== TELA DE SERVIÇO ==========
+function TelaServico({ solicitacoes, policiais }) {
+  const hoje = new Date().toISOString().split('T')[0];
+  const [dataSelecionada, setDataSelecionada] = useState(hoje);
+  const [secaoFiltro, setSecaoFiltro] = useState('todas');
 
-  useEffect(() => {
-    supabase.from('usuarios_secao').select('*').order('created_at').then(({data}) => setUsuarios(data||[]));
-  }, []);
+  const diaSemana = DIAS[new Date(dataSelecionada + 'T12:00:00').getDay() === 0 ? 6 : new Date(dataSelecionada + 'T12:00:00').getDay() - 1];
 
-  function showMsg(texto, tipo='ok') { setMsg({texto,tipo}); setTimeout(()=>setMsg(null),3000); }
+  // Folgas aprovadas naquele dia (semana contém a data selecionada e dia da semana bate)
+  const folgasNoDia = solicitacoes.filter(s =>
+    s.status === 'aprovado' &&
+    s.dia === diaSemana &&
+    s.semana <= dataSelecionada &&
+    (() => {
+      const inicioSemana = new Date(s.semana + 'T00:00:00');
+      const fimSemana = new Date(inicioSemana);
+      fimSemana.setDate(fimSemana.getDate() + 6);
+      const data = new Date(dataSelecionada + 'T00:00:00');
+      return data >= inicioSemana && data <= fimSemana;
+    })()
+  );
 
-  async function cadastrar() {
-    if (!form.nome || !form.matricula || !form.senha) { showMsg('Preencha todos os campos.','erro'); return; }
-    const { data, error } = await supabase.from('usuarios_secao').insert({ ...form, secao_sigla: form.secao_sigla||null }).select().single();
-    if (error) { showMsg('Erro: '+error.message,'erro'); return; }
-    setUsuarios(prev => [...prev, data]);
-    setForm({ nome:'', matricula:'', senha:'', secao_sigla:'', nivel:'chefe' });
-    showMsg('Usuário cadastrado!');
-  }
+  const policiaisfiltrados = secaoFiltro === 'todas' ? policiais : policiais.filter(p => p.secao === secaoFiltro);
 
-  async function remover(id) {
-    if (!window.confirm('Remover este usuário?')) return;
-    await supabase.from('usuarios_secao').delete().eq('id',id);
-    setUsuarios(prev => prev.filter(u => u.id !== id));
-  }
+  const deServico = policiaisfiltrados.filter(p => {
+    const temFolga = folgasNoDia.find(s => s.policial_id === p.id);
+    const afastado = (p.situacao || 'Pronto') !== 'Pronto';
+    return !temFolga && !afastado;
+  });
 
-  async function resetarSenha(id) {
-    const nova = prompt('Nova senha:');
-    if (!nova) return;
-    await supabase.from('usuarios_secao').update({ senha:nova }).eq('id',id);
-    showMsg('Senha redefinida!');
-  }
+  const deFolga = policiaisfiltrados.filter(p => folgasNoDia.find(s => s.policial_id === p.id));
 
-  const NIVEL_BADGE = { admin:{bg:'#0d2340',cor:'#fff',label:'ADMIN'}, comandante:{bg:VERDE,cor:'#fff',label:'CMT'}, chefe:{bg:'#f0f4f8',cor:AZUL2,label:'CHEFE'} };
+  const afastados = policiaisfiltrados.filter(p => {
+    const temFolga = folgasNoDia.find(s => s.policial_id === p.id);
+    return !temFolga && (p.situacao || 'Pronto') !== 'Pronto';
+  });
 
-  return (
-    <div>
-      <h2 style={{ fontSize:16, fontWeight:800, color:AZUL, marginBottom:16 }}>⚙️ Painel Administrativo</h2>
-      {msg && <div style={{ position:'fixed', top:20, right:20, zIndex:9999, background:msg.tipo==='ok'?VERDE:VERMELHO, color:'#fff', borderRadius:10, padding:'12px 20px', fontWeight:700 }}>{msg.texto}</div>}
+  const totalEfetivo = policiaisfiltrados.length;
+  const pctServico = totalEfetivo > 0 ? Math.round((deServico.length / totalEfetivo) * 100) : 0;
 
-      <Card>
-        <h3 style={{ fontSize:14, fontWeight:800, color:AZUL, marginBottom:16 }}>➕ Cadastrar Usuário</h3>
-        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, marginBottom:10 }}>
-          <div style={{ gridColumn:'1/-1' }}><label style={lbl}>Nome completo *</label><input value={form.nome} onChange={e=>setForm(f=>({...f,nome:e.target.value}))} placeholder="Ex.: CAP PM SILVA" style={inp} /></div>
-          <div><label style={lbl}>Matrícula *</label><input value={form.matricula} onChange={e=>setForm(f=>({...f,matricula:e.target.value}))} placeholder="Ex.: p3chefe" style={inp} /></div>
-          <div><label style={lbl}>Senha *</label><input value={form.senha} onChange={e=>setForm(f=>({...f,senha:e.target.value}))} placeholder="Senha de acesso" style={inp} /></div>
-          <div>
-            <label style={lbl}>Seção</label>
-            <select value={form.secao_sigla} onChange={e=>setForm(f=>({...f,secao_sigla:e.target.value}))} style={inp}>
-              <option value="">— Selecionar —</option>
-              {SECOES_OPTS.map(s => <option key={s}>{s}</option>)}
-            </select>
-          </div>
-          <div>
-            <label style={lbl}>Nível de acesso</label>
-            <select value={form.nivel} onChange={e=>setForm(f=>({...f,nivel:e.target.value}))} style={inp}>
-              <option value="chefe">Chefe de Seção</option>
-              <option value="comandante">Comandante</option>
-              <option value="admin">Admin</option>
-            </select>
-          </div>
-        </div>
-        <button onClick={cadastrar} style={{ ...btnPrimary, marginTop:4 }}>Cadastrar</button>
-      </Card>
+  return (
+    <div>
+      <h3 style={{ fontSize:15, fontWeight:800, color:'#1a3a5c', marginBottom:14 }}>🪖 Efetivo de Serviço</h3>
 
-      <Card>
-        <h3 style={{ fontSize:13, fontWeight:800, color:AZUL, marginBottom:12 }}>Usuários Cadastrados ({usuarios.length})</h3>
-        {usuarios.map(u => {
-          const nb = NIVEL_BADGE[u.nivel] || NIVEL_BADGE.chefe;
-          return (
-            <div key={u.id} style={{ display:'flex', justifyContent:'space-between', alignItems:'center', background:'#f8fafc', borderRadius:8, padding:'10px 14px', marginBottom:8, border:'1px solid #e0e8f0', flexWrap:'wrap', gap:8 }}>
-              <div>
-                <span style={{ fontWeight:700, color:AZUL, fontSize:13 }}>{u.nome}</span>
-                <span style={{ color:'#6b8099', fontSize:12, marginLeft:8 }}>@{u.matricula}</span>
-                <div style={{ display:'flex', gap:6, marginTop:4 }}>
-                  <span style={{ background:nb.bg, color:nb.cor, borderRadius:6, padding:'1px 8px', fontSize:10, fontWeight:700 }}>{nb.label}</span>
-                  {u.secao_sigla && <span style={{ background:'#E3F2FD', color:'#0D47A1', borderRadius:6, padding:'1px 8px', fontSize:10, fontWeight:700 }}>{u.secao_sigla}</span>}
-                </div>
-              </div>
-              <div style={{ display:'flex', gap:6 }}>
-                <button onClick={() => resetarSenha(u.id)} style={{ ...btnSm, background:'#FFF8E1', color:'#7B5800' }}>🔑 Senha</button>
-                {u.nivel !== 'admin' && <button onClick={() => remover(u.id)} style={{ ...btnSm, background:'#FFEBEE', color:VERMELHO }}>Remover</button>}
-              </div>
-            </div>
-          );
-        })}
-      </Card>
-    </div>
-  );
+      {/* FILTROS */}
+      <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8, marginBottom:14 }}>
+        <div>
+          <label style={lbl}>Data</label>
+          <input type="date" value={dataSelecionada} onChange={e => setDataSelecionada(e.target.value)} style={inp} />
+        </div>
+        <div>
+          <label style={lbl}>Seção</label>
+          <select value={secaoFiltro} onChange={e => setSecaoFiltro(e.target.value)} style={inp}>
+            <option value="todas">Todas as seções</option>
+            {SECOES.map(s => <option key={s}>{s}</option>)}
+          </select>
+        </div>
+      </div>
+
+      {/* DIA DA SEMANA */}
+      <div style={{ background:'linear-gradient(135deg,#0d2340,#1e4d7b)', borderRadius:10, padding:'12px 16px', marginBottom:14, display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+        <div>
+          <div style={{ color:'#8db4d8', fontSize:11, fontWeight:600 }}>DIA SELECIONADO</div>
+          <div style={{ color:'#fff', fontSize:16, fontWeight:800 }}>{diaSemana}-feira · {new Date(dataSelecionada + 'T12:00:00').toLocaleDateString('pt-BR')}</div>
+        </div>
+        <div style={{ textAlign:'right' }}>
+          <div style={{ color:'#8db4d8', fontSize:11, fontWeight:600 }}>DISPONÍVEIS</div>
+          <div style={{ color:'#fff', fontSize:22, fontWeight:900 }}>{deServico.length} <span style={{ fontSize:13, fontWeight:400 }}>/ {totalEfetivo}</span></div>
+        </div>
+      </div>
+
+      {/* CARDS DE RESUMO */}
+      <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:10, marginBottom:14 }}>
+        <div style={{ background:'#E8F5E9', borderRadius:10, padding:'12px 8px', textAlign:'center', border:'2px solid #A5D6A7' }}>
+          <div style={{ fontSize:26, fontWeight:900, color:'#1B5E20' }}>{deServico.length}</div>
+          <div style={{ fontSize:11, color:'#1B5E20', fontWeight:700 }}>🟢 De Serviço</div>
+          <div style={{ fontSize:10, color:'#6b8099', marginTop:2 }}>{pctServico}% do efetivo</div>
+        </div>
+        <div style={{ background:'#E3F2FD', borderRadius:10, padding:'12px 8px', textAlign:'center', border:'2px solid #90CAF9' }}>
+          <div style={{ fontSize:26, fontWeight:900, color:'#0D47A1' }}>{deFolga.length}</div>
+          <div style={{ fontSize:11, color:'#0D47A1', fontWeight:700 }}>🌙 De Folga</div>
+        </div>
+        <div style={{ background:'#FFEBEE', borderRadius:10, padding:'12px 8px', textAlign:'center', border:'2px solid #EF9A9A' }}>
+          <div style={{ fontSize:26, fontWeight:900, color:'#B71C1C' }}>{afastados.length}</div>
+          <div style={{ fontSize:11, color:'#B71C1C', fontWeight:700 }}>🚨 Afastados</div>
+        </div>
+      </div>
+
+      {/* DE SERVIÇO */}
+      {deServico.length > 0 && (
+        <Card>
+          <h4 style={{ fontSize:13, fontWeight:800, color:'#1B5E20', marginBottom:10 }}>🟢 De Serviço ({deServico.length})</h4>
+          <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
+            {deServico.map(p => (
+              <div key={p.id} style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'8px 10px', background:'#f8fafc', borderRadius:8, border:'1px solid #e0e8f0' }}>
+                <div>
+                  <span style={{ fontWeight:700, color:'#1a3a5c', fontSize:13 }}>{p.patente} {p.nome}</span>
+                  <span style={{ color:'#6b8099', fontSize:11, marginLeft:8 }}>Mat. {p.matricula}</span>
+                </div>
+                <div style={{ display:'flex', gap:6, alignItems:'center' }}>
+                  {p.secao && <span style={{ background:'#e8f0fe', color:'#3d5a9e', borderRadius:6, padding:'2px 8px', fontSize:11, fontWeight:700 }}>{p.secao}</span>}
+                  <SSBadge p={p} />
+                </div>
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
+
+      {/* DE FOLGA */}
+      {deFolga.length > 0 && (
+        <Card>
+          <h4 style={{ fontSize:13, fontWeight:800, color:'#0D47A1', marginBottom:10 }}>🌙 De Folga/Concessão ({deFolga.length})</h4>
+          <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
+            {deFolga.map(p => {
+              const folga = folgasNoDia.find(s => s.policial_id === p.id);
+              return (
+                <div key={p.id} style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'8px 10px', background:'#f0f6ff', borderRadius:8, border:'1px solid #d0dce8' }}>
+                  <div>
+                    <span style={{ fontWeight:700, color:'#1a3a5c', fontSize:13 }}>{p.patente} {p.nome}</span>
+                    <span style={{ color:'#6b8099', fontSize:11, marginLeft:8 }}>Mat. {p.matricula}</span>
+                  </div>
+                  <MotivoBadge motivo={folga?.motivo || 'Folga'} />
+                </div>
+              );
+            })}
+          </div>
+        </Card>
+      )}
+
+      {/* AFASTADOS */}
+      {afastados.length > 0 && (
+        <Card>
+          <h4 style={{ fontSize:13, fontWeight:800, color:'#B71C1C', marginBottom:10 }}>🚨 Afastados ({afastados.length})</h4>
+          <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
+            {afastados.map(p => (
+              <div key={p.id} style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'8px 10px', background:'#fff5f5', borderRadius:8, border:'1px solid #EF9A9A' }}>
+                <div>
+                  <span style={{ fontWeight:700, color:'#1a3a5c', fontSize:13 }}>{p.patente} {p.nome}</span>
+                  <span style={{ color:'#6b8099', fontSize:11, marginLeft:8 }}>Mat. {p.matricula}</span>
+                </div>
+                <SituacaoBadge situacao={p.situacao || 'Pronto'} />
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
+
+      {deServico.length === 0 && deFolga.length === 0 && afastados.length === 0 && (
+        <p style={{ color:'#aab', fontSize:13, textAlign:'center', padding:20 }}>Nenhum policial encontrado para os filtros selecionados.</p>
+      )}
+    </div>
+  );
 }
 
-// ============================================================
-// TROCAR SENHA
-// ============================================================
-function TrocarSenha({ usuario, onVoltar, onSucesso }) {
-  const [senhaAtual, setSenhaAtual] = useState('');
-  const [novaSenha, setNovaSenha] = useState('');
-  const [confirma, setConfirma] = useState('');
-  const [erro, setErro] = useState('');
-  const [salvando, setSalvando] = useState(false);
+// ========== LOGIN DO POLICIAL (v2.0 com busca por nome) ==========
+function LoginPolicial({ onLogin }) {
+  const [policiais, setPoliciais] = useState([]);
+  const [buscaLogin, setBuscaLogin] = useState('');
+  const [policialSel, setPolicialSel] = useState(null);
+  const [senha, setSenha] = useState('');
+  const [erro, setErro] = useState('');
+  const [modo, setModo] = useState('login');
+  const [novaSenha, setNovaSenha] = useState('');
+  const [confirmarSenha, setConfirmarSenha] = useState('');
+  const [carregando, setCarregando] = useState(true);
+  const [mostrarSugestoes, setMostrarSugestoes] = useState(false);
 
-  async function salvar() {
-    setErro('');
-    if (!senhaAtual || !novaSenha || !confirma) { setErro('Preencha todos os campos.'); return; }
-    if (senhaAtual !== usuario.senha) { setErro('Senha atual incorreta.'); return; }
-    if (novaSenha.length < 4) { setErro('Nova senha deve ter no mínimo 4 caracteres.'); return; }
-    if (novaSenha !== confirma) { setErro('As senhas não coincidem.'); return; }
-    setSalvando(true);
-    const { error } = await supabase.from('usuarios_secao').update({ senha: novaSenha }).eq('id', usuario.id);
-    setSalvando(false);
-    if (error) { setErro('Erro ao salvar. Tente novamente.'); return; }
-    onSucesso();
-  }
+  useEffect(() => {
+    supabase.from('policiais').select('*').order('nome')
+      .then(({ data }) => { setPoliciais(data || []); setCarregando(false); });
+  }, []);
 
-  return (
-    <Card>
-      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:16 }}>
-        <h2 style={{ fontSize:16, fontWeight:800, color:AZUL, margin:0 }}>🔑 Alterar Senha</h2>
-        <button onClick={onVoltar} style={{ ...btnSm, background:'#f0f4f8', color:AZUL2 }}>← Voltar</button>
-      </div>
-      <p style={{ color:'#6b8099', fontSize:13, marginBottom:16 }}>Conectado como: <strong>{usuario.nome}</strong></p>
-      <label style={lbl}>Senha atual</label>
-      <input type="password" value={senhaAtual} onChange={e => setSenhaAtual(e.target.value)} placeholder="••••••" style={{ ...inp, marginBottom:12 }} />
-      <label style={lbl}>Nova senha</label>
-      <input type="password" value={novaSenha} onChange={e => setNovaSenha(e.target.value)} placeholder="Mínimo 4 caracteres" style={{ ...inp, marginBottom:12 }} />
-      <label style={lbl}>Confirmar nova senha</label>
-      <input type="password" value={confirma} onChange={e => setConfirma(e.target.value)} placeholder="Repita a nova senha" onKeyDown={e => e.key==='Enter'&&salvar()} style={{ ...inp, marginBottom:6 }} />
-      {erro && <p style={{ color:VERMELHO, fontSize:12, marginBottom:4 }}>{erro}</p>}
-      <button onClick={salvar} disabled={salvando} style={{ ...btnPrimary, opacity:salvando?0.7:1 }}>{salvando?'Salvando...':'Salvar Nova Senha'}</button>
-    </Card>
-  );
+  const policiaisFiltrados = buscaLogin.length >= 2
+    ? policiais.filter(p => p.nome.toLowerCase().includes(buscaLogin.toLowerCase()) || p.matricula.includes(buscaLogin)).slice(0, 8)
+    : [];
+
+  function selecionarPolicial(p) { setPolicialSel(p); setBuscaLogin(p.nome); setMostrarSugestoes(false); setErro(''); }
+
+  async function entrar() {
+    if (!policialSel) { setErro('Selecione seu nome na lista.'); return; }
+    if (!senha) { setErro('Digite sua senha.'); return; }
+    if (!policialSel.senha) { setModo('cadastrar'); return; }
+    if (policialSel.senha !== senha) { setErro('Senha incorreta.'); return; }
+    salvarSessao('policial', policialSel);
+    onLogin(policialSel);
+  }
+
+  async function cadastrarSenha() {
+    if (!validarSenha(novaSenha)) { setErro('Senha deve ter no mínimo 4 caracteres.'); return; }
+    if (novaSenha !== confirmarSenha) { setErro('As senhas não coincidem.'); return; }
+    const { data, error } = await supabase.from('policiais').update({ senha:novaSenha }).eq('id', policialSel.id).select().single();
+    if (error || !data) { setErro('Erro ao criar senha.'); return; }
+    salvarSessao('policial', data);
+    onLogin(data);
+  }
+
+  if (modo === 'cadastrar') return (
+    <div>
+      <h2 style={{ color:'#1a3a5c', fontWeight:700, fontSize:16, marginBottom:4, marginTop:0 }}>Primeiro acesso</h2>
+      <p style={{ color:'#6b8099', fontSize:13, fontWeight:400, marginBottom:16 }}>Olá, <strong>{policialSel.nome}</strong>! Cadastre sua senha.</p>
+      <label style={lbl}>Nova senha *</label>
+      <input type="password" value={novaSenha} onChange={e=>setNovaSenha(e.target.value)} placeholder="Mínimo 4 caracteres" style={{ ...inp, marginBottom:10 }} />
+      <label style={lbl}>Confirmar senha *</label>
+      <input type="password" value={confirmarSenha} onChange={e=>setConfirmarSenha(e.target.value)} placeholder="Repita a senha" style={{ ...inp, marginBottom:6 }} />
+      {erro && <p style={{ color:'#B71C1C', fontSize:12, marginBottom:6 }}>{erro}</p>}
+      <button onClick={cadastrarSenha} style={{ ...btnPrimary, letterSpacing:0.5, textTransform:'uppercase', fontSize:13 }}>Cadastrar e Entrar</button>
+      <button onClick={() => setModo('login')} style={{ ...btnPrimary, background:'#f0f4f8', color:'#6b8099', marginTop:6 }}>Voltar</button>
+    </div>
+  );
+
+  return (
+    <div>
+      <p style={{ color:'#6b8099', fontSize:13, fontWeight:400, marginBottom:20, marginTop:0 }}>
+        Digite seu nome e selecione na lista.
+      </p>
+      <label style={lbl}>Nome ou matrícula</label>
+      <div style={{ position:'relative', marginBottom:10 }}>
+        <input value={buscaLogin} onChange={e => { setBuscaLogin(e.target.value); setPolicialSel(null); setMostrarSugestoes(true); }} onFocus={() => setMostrarSugestoes(true)} onBlur={() => setTimeout(() => setMostrarSugestoes(false), 200)} placeholder="Digite seu nome..." style={{ ...inp }} autoComplete="off" />
+        {mostrarSugestoes && policiaisFiltrados.length > 0 && (
+          <div style={{ position:'absolute', top:'100%', left:0, right:0, background:'#fff', border:'1.5px solid #d0dce8', borderRadius:8, boxShadow:'0 4px 16px #00000020', zIndex:100, maxHeight:240, overflowY:'auto' }}>
+            {carregando ? <div style={{ padding:'10px 14px', color:'#aab', fontSize:13 }}>Carregando...</div>
+              : policiaisFiltrados.map(p => (
+                <div key={p.id} onMouseDown={() => selecionarPolicial(p)} style={{ padding:'10px 14px', cursor:'pointer', borderBottom:'1px solid #f0f4f8', fontSize:13, color:'#1a3a5c' }} onMouseEnter={e => e.currentTarget.style.background='#f0f6ff'} onMouseLeave={e => e.currentTarget.style.background='#fff'}>
+                  <div style={{ fontWeight:600 }}>{p.patente} {p.nome}</div>
+                  <div style={{ fontSize:11, color:'#6b8099' }}>Mat. {p.matricula} — {p.secao||'Sem seção'}</div>
+                </div>
+              ))
+            }
+          </div>
+        )}
+      </div>
+      {policialSel && <div style={{ background:'#f0f6ff', borderRadius:8, padding:'8px 12px', marginBottom:12, fontSize:12, color:'#1a3a5c', fontWeight:600 }}>✅ {policialSel.patente} {policialSel.nome} — Mat. {policialSel.matricula}</div>}
+      <label style={lbl}>Senha</label>
+      <input type="password" value={senha} onChange={e => setSenha(e.target.value)} onKeyDown={e => e.key==='Enter'&&entrar()} placeholder="••••••" style={{ ...inp, marginBottom:6 }} />
+      {erro && <p style={{ color:'#B71C1C', fontSize:12, marginBottom:4 }}>{erro}</p>}
+      <button onClick={entrar} style={{ ...btnPrimary, letterSpacing:0.5, textTransform:'uppercase', fontSize:13 }}>Entrar</button>
+      <p style={{ color:'#aab', fontSize:11, marginTop:10, textAlign:'center', fontWeight:400 }}>Esqueceu a senha? Fale com o gestor para resetar.</p>
+    </div>
+  );
 }
 
-// ============================================================
-// TELA DE MENSAGENS
-// ============================================================
-function TelaMensagens({ usuario, ehComandante, msgs, setMsgs, onVoltar, onSucesso }) {
-  const [form, setForm] = useState({ titulo:'', texto:'', destinatario:'todos' });
-  const [salvando, setSalvando] = useState(false);
-  const SECOES_OPTS = ['todos','P1','P2','P3','P4','P5','AJD','SEC'];
+// ========== TELA DE SOLICITAÇÃO (Policial) ==========
+function TelaSolicitacao({ usuario }) {
+  const [dia, setDia] = useState(null);
+  const [semana, setSemana] = useState('');
+  const [motivo, setMotivo] = useState('');
+  const [email, setEmail] = useState('');
+  const [minhas, setMinhas] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [enviando, setEnviando] = useState(false);
+  const [msg, setMsg] = useState(null);
+  const [solicitandoTroca, setSolicitandoTroca] = useState(null);
+  const [novoDiaTroca, setNovoDiaTroca] = useState('');
+  const [paginaMinhas, setPaginaMinhas] = useState(1);
 
-  async function enviar() {
-    if (!form.titulo || !form.texto) { onSucesso('Preencha título e mensagem.', 'erro'); return; }
-    setSalvando(true);
-    const { data, error } = await supabase.from('mensagens_comando').insert({
-      ...form, atualizado_por: usuario.nome, lida_por: []
-    }).select().single();
-    setSalvando(false);
-    if (error) { onSucesso('Erro ao enviar.', 'erro'); return; }
-    setMsgs(prev => [data, ...prev]);
-    setForm({ titulo:'', texto:'', destinatario:'todos' });
-    onSucesso('✅ Mensagem enviada!');
-  }
+  const carregarMinhas = useCallback(async () => {
+    setLoading(true);
+    const { data } = await supabase.from('solicitacoes').select('*').eq('policial_id', usuario.id).order('created_at', { ascending:false });
+    setMinhas(data || []);
+    setLoading(false);
+  }, [usuario.id]);
 
-  async function marcarLida(msg) {
-    if ((msg.lida_por||[]).includes(usuario.id)) return;
-    const novaLista = [...(msg.lida_por||[]), usuario.id];
-    await supabase.from('mensagens_comando').update({ lida_por: novaLista }).eq('id', msg.id);
-    setMsgs(prev => prev.map(m => m.id===msg.id ? {...m, lida_por:novaLista} : m));
-  }
+  useEffect(() => { carregarMinhas(); }, [carregarMinhas]);
+  useEffect(() => {
+    const interval = setInterval(() => { carregarMinhas(); }, AUTO_REFRESH_INTERVAL);
+    return () => clearInterval(interval);
+  }, [carregarMinhas]);
 
-  async function remover(id) {
-    if (!window.confirm('Remover esta mensagem?')) return;
-    await supabase.from('mensagens_comando').delete().eq('id', id);
-    setMsgs(prev => prev.filter(m => m.id !== id));
-  }
+  const naoProto = usuario.situacao && usuario.situacao !== 'Pronto';
 
-  const msgsFiltradas = msgs.filter(m => m.destinatario === 'todos' || m.destinatario === usuario.secao_sigla || ehComandante);
+  async function enviar() {
+    if (naoProto) return;
+    if (!dia || !semana || !motivo) { setMsg({ tipo:'erro', texto:'Selecione o tipo, o dia e a data.' }); return; }
+    if (!email || !validarEmail(email)) { setMsg({ tipo:'erro', texto:'Informe um email válido (ex: seu@email.com).' }); return; }
+    const check = rateLimiterSolicitacao.podeExecutar();
+    if (!check.permitido) { setMsg({ tipo:'erro', texto:`Aguarde ${check.proxemaEmMs}s antes de enviar nova solicitação.` }); return; }
+    const isCHR = usuario.restricao === 'CHR';
+    const jaExiste = minhas.find(s => s.semana === semana && s.motivo === motivo && s.status !== 'recusado');
+    if (jaExiste) {
+      // CHR pode ter 2 concessões
+      if (motivo === 'Concessão' && isCHR) {
+        const concessoesSemana = minhas.filter(s => s.semana === semana && s.motivo === 'Concessão' && s.status !== 'recusado');
+        if (concessoesSemana.length >= 2) {
+          setMsg({ tipo:'erro', texto:'Você já possui 2 concessões solicitadas para esta semana (limite CHR).' });
+          return;
+        }
+      } else {
+        setMsg({ tipo:'erro', texto:`Você já possui uma ${motivo} solicitada para esta semana.` });
+        return;
+      }
+    }
+    setEnviando(true);
+    const { error } = await supabase.from('solicitacoes').insert({ policial_id:usuario.id, policial_nome:usuario.nome, matricula:usuario.matricula, patente:usuario.patente, secao:usuario.secao||'—', dia, semana, motivo, status:'pendente', email_policial:email });
+    setEnviando(false);
+    if (error) { setMsg({ tipo:'erro', texto:'Erro ao enviar.' }); return; }
+    setDia(null); setSemana(''); setMotivo(''); setEmail('');
+    setMsg({ tipo:'ok', texto:'✅ Solicitação enviada com sucesso!' });
+    setTimeout(() => setMsg(null), 4000);
+    carregarMinhas();
+  }
 
-  return (
-    <div>
-      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:16 }}>
-        <h2 style={{ fontSize:16, fontWeight:800, color:AZUL, margin:0 }}>📨 Mensagens do Comando</h2>
-        <button onClick={onVoltar} style={{ ...btnSm, background:'#f0f4f8', color:AZUL2 }}>← Voltar</button>
-      </div>
+  async function cancelarSolicitacao(id) {
+    if (!window.confirm('Cancelar esta solicitação?')) return;
+    await supabase.from('solicitacoes').delete().eq('id', id);
+    setMinhas(prev => prev.filter(s => s.id !== id));
+  }
 
-      {/* ENVIAR — só Comandante e Admin */}
-      {ehComandante && (
-        <Card>
-          <h3 style={{ fontSize:14, fontWeight:800, color:AZUL, marginBottom:14 }}>📤 Enviar Mensagem</h3>
-          <label style={lbl}>Destinatário</label>
-          <select value={form.destinatario} onChange={e => setForm(f=>({...f,destinatario:e.target.value}))} style={{ ...inp, marginBottom:10 }}>
-            {SECOES_OPTS.map(s => <option key={s} value={s}>{s === 'todos' ? '📢 Todos os chefes de seção' : s}</option>)}
-          </select>
-          <label style={lbl}>Título *</label>
-          <input value={form.titulo} onChange={e => setForm(f=>({...f,titulo:e.target.value}))} placeholder="Assunto da mensagem..." style={{ ...inp, marginBottom:10 }} />
-          <label style={lbl}>Mensagem *</label>
-          <textarea value={form.texto} onChange={e => setForm(f=>({...f,texto:e.target.value}))} placeholder="Digite sua mensagem..." style={{ ...inp, minHeight:100, resize:'vertical', marginBottom:6 }} />
-          <button onClick={enviar} disabled={salvando} style={{ ...btnPrimary, marginTop:8 }}>{salvando?'Enviando...':'📤 Enviar Mensagem'}</button>
-        </Card>
-      )}
+  async function enviarTroca(sol) {
+    if (!novoDiaTroca) { setMsg({ tipo:'erro', texto:'Selecione o novo dia.' }); return; }
+    if (novoDiaTroca === sol.dia) { setMsg({ tipo:'erro', texto:'O novo dia deve ser diferente do atual.' }); return; }
+    await supabase.from('solicitacoes').update({ dia_troca:novoDiaTroca, status_troca:'pendente' }).eq('id', sol.id);
+    setMinhas(prev => prev.map(s => s.id === sol.id ? { ...s, dia_troca:novoDiaTroca, status_troca:'pendente' } : s));
+    setSolicitandoTroca(null); setNovoDiaTroca('');
+    setMsg({ tipo:'ok', texto:'⏳ Solicitação de troca enviada! Aguarde aprovação.' });
+    setTimeout(() => setMsg(null), 4000);
+  }
 
-      {/* LISTA DE MENSAGENS */}
-      <div>
-        <h3 style={{ fontSize:14, fontWeight:800, color:AZUL, marginBottom:12 }}>📬 Caixa de Mensagens</h3>
-        {msgsFiltradas.length === 0 ? (
-          <Card><p style={{ color:'#aab', fontSize:13 }}>Nenhuma mensagem.</p></Card>
-        ) : msgsFiltradas.map(m => {
-          const lida = (m.lida_por||[]).includes(usuario.id);
-          return (
-            <div key={m.id} onClick={() => marcarLida(m)} style={{
-              background: lida ? '#fff' : '#FFFDE7',
-              borderRadius:10, padding:'14px 16px', marginBottom:10,
-              boxShadow:'0 2px 8px #00000012',
-              border: lida ? '1px solid #e0e8f0' : '2px solid #FFD54F',
-              cursor:'pointer'
-            }}>
-              <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', gap:8 }}>
-                <div style={{ flex:1 }}>
-                  <div style={{ display:'flex', gap:8, alignItems:'center', marginBottom:4, flexWrap:'wrap' }}>
-                    {!lida && <span style={{ background:VERMELHO, color:'#fff', borderRadius:6, padding:'1px 8px', fontSize:10, fontWeight:800 }}>NOVA</span>}
-                    <span style={{ background:'#E3F2FD', color:'#0D47A1', borderRadius:6, padding:'1px 8px', fontSize:10, fontWeight:700 }}>
-                      Para: {m.destinatario === 'todos' ? 'Todos' : m.destinatario}
-                    </span>
-                    <span style={{ fontSize:11, color:'#aab' }}>{new Date(m.created_at).toLocaleDateString('pt-BR')} às {new Date(m.created_at).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})}</span>
-                  </div>
-                  <div style={{ fontWeight:700, color:AZUL, fontSize:14, marginBottom:6 }}>{m.titulo}</div>
-                  <div style={{ fontSize:13, color:'#2d4a63', lineHeight:1.5, whiteSpace:'pre-wrap' }}>{m.texto}</div>
-                  <div style={{ fontSize:11, color:'#aab', marginTop:6 }}>Enviado por: {m.atualizado_por}</div>
-                </div>
-                {ehComandante && (
-                  <button onClick={e => { e.stopPropagation(); remover(m.id); }} style={{ ...btnSm, background:'#FFEBEE', color:VERMELHO, flexShrink:0 }}>🗑️</button>
-                )}
-              </div>
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
+  async function cancelarTroca(id) {
+    await supabase.from('solicitacoes').update({ dia_troca:'', status_troca:'' }).eq('id', id);
+    setMinhas(prev => prev.map(s => s.id === id ? { ...s, dia_troca:'', status_troca:'' } : s));
+  }
+
+  const paginado = paginar(minhas, paginaMinhas, POR_PAGINA);
+
+  return (
+    <div>
+      <h2 style={{ fontSize:18, fontWeight:900, color:'#1a3a5c', marginBottom:4 }}>Nova Solicitação</h2>
+      <Card>
+        <DetalhesPolicialCard policial={usuario} />
+        <ContadorFolgas solicitacoes={minhas} policialId={usuario.id} />
+        {naoProto ? (
+          <div style={{ background:'#FFEBEE', borderRadius:8, padding:'14px', textAlign:'center', color:'#B71C1C', fontWeight:700 }}>
+            ⚠️ Você está classificado como <strong>{usuario.situacao}</strong> e não pode solicitar folga no momento.
+          </div>
+        ) : (
+          <>
+            <label style={lbl}>Tipo de solicitação *</label>
+            <div style={{ display:'flex', gap:10, marginBottom:16 }}>
+              {MOTIVOS.map(m => <button key={m} onClick={() => setMotivo(m)} style={{ flex:1, padding:'14px 10px', borderRadius:10, fontWeight:800, fontSize:15, cursor:'pointer', background:motivo===m?(m==='Folga'?'#0D47A1':'#6A1B9A'):'#f0f4f8', color:motivo===m?'#fff':'#2d4a63', border:motivo===m?`2px solid ${m==='Folga'?'#0D47A1':'#6A1B9A'}`:'2px solid transparent' }}>{m==='Folga'?'🌙 Folga':'🎖️ Concessão'}</button>)}
+            </div>
+            <label style={lbl}>Dia da semana *</label>
+            <div style={{ display:'flex', gap:6, flexWrap:'wrap', marginBottom:16 }}>
+              {DIAS.map(d => <button key={d} onClick={() => setDia(d)} style={{ padding:'7px 11px', borderRadius:8, fontWeight:700, fontSize:13, cursor:'pointer', background:dia===d?'#1a3a5c':'#f0f4f8', color:dia===d?'#fff':'#2d4a63', border:dia===d?'2px solid #1a3a5c':'2px solid transparent' }}>{d}</button>)}
+            </div>
+            <label style={lbl}>Semana de referência *</label>
+            <input type="date" value={semana} onChange={e => setSemana(e.target.value)} style={{ ...inp, marginBottom:14 }} />
+            <label style={lbl}>Seu email *</label>
+            <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="seu.email@gmail.com" style={{ ...inp, marginBottom:6 }} />
+            {msg && <div style={{ padding:'10px 14px', borderRadius:8, marginTop:10, fontWeight:600, background:msg.tipo==='ok'?'#E8F5E9':'#FFEBEE', color:msg.tipo==='ok'?'#1B5E20':'#B71C1C' }}>{msg.texto}</div>}
+            <button onClick={enviar} disabled={enviando} style={{ ...btnPrimary, opacity:enviando?0.7:1 }}>{enviando?'Enviando...':'Enviar Solicitação'}</button>
+          </>
+        )}
+      </Card>
+
+      <h3 style={{ fontSize:15, fontWeight:800, color:'#1a3a5c', margin:'22px 0 10px' }}>Minhas Solicitações</h3>
+      {loading ? <Spinner /> : paginado.dados.length === 0 ? <p style={{ color:'#aab', fontSize:13 }}>Nenhuma solicitação registrada.</p>
+        : (
+          <>
+            {paginado.dados.map(s => (
+              <Card key={s.id}>
+                <div style={{ display:'flex', justifyContent:'space-between', flexWrap:'wrap', gap:8, alignItems:'center' }}>
+                  <div style={{ display:'flex', gap:8, alignItems:'center', flexWrap:'wrap' }}>
+                    <MotivoBadge motivo={s.motivo} />
+                    <span style={{ fontWeight:800, color:'#1a3a5c' }}>{s.dia}</span>
+                    <span style={{ color:'#6b8099', fontSize:13 }}>{s.semana}</span>
+                  </div>
+                  <Badge status={s.status} />
+                </div>
+                {s.status === 'aprovado' && s.status_troca === 'aprovado' && <div style={{ background:'#E8F5E9', borderRadius:8, padding:'6px 10px', marginTop:8, fontSize:12, color:'#1B5E20', fontWeight:700 }}>✅ Troca aprovada! Novo dia: <strong>{s.dia_troca}</strong></div>}
+                {s.status === 'aprovado' && s.status_troca === 'pendente' && <div style={{ background:'#FFF8E1', borderRadius:8, padding:'6px 10px', marginTop:8, fontSize:12, color:'#7B5800', fontWeight:700, display:'flex', justifyContent:'space-between', alignItems:'center' }}><span>⏳ Troca para <strong>{s.dia_troca}</strong> aguardando aprovação</span><button onClick={() => cancelarTroca(s.id)} style={{ ...btnSm, background:'#FFEBEE', color:'#B71C1C', fontSize:11 }}>Cancelar troca</button></div>}
+                {s.status === 'aprovado' && s.status_troca === 'recusado' && <div style={{ background:'#FFEBEE', borderRadius:8, padding:'6px 10px', marginTop:8, fontSize:12, color:'#B71C1C', fontWeight:700 }}>❌ Troca para <strong>{s.dia_troca}</strong> foi recusada</div>}
+                <p style={{ color:'#bbb', fontSize:12, marginTop:6 }}>Enviado em {formatarDataHora(s.created_at)}</p>
+                <div style={{ display:'flex', gap:8, flexWrap:'wrap', marginTop:8 }}>
+                  {s.status === 'pendente' && <button onClick={() => cancelarSolicitacao(s.id)} style={{ ...btnSm, background:'#FFEBEE', color:'#B71C1C' }}>✕ Cancelar</button>}
+                  {s.status === 'aprovado' && !s.status_troca && <button onClick={() => { setSolicitandoTroca(s.id); setNovoDiaTroca(''); }} style={{ ...btnSm, background:'#E3F2FD', color:'#0D47A1' }}>🔄 Solicitar troca de dia</button>}
+                </div>
+                {solicitandoTroca === s.id && (
+                  <div style={{ background:'#f0f6ff', borderRadius:8, padding:'12px', marginTop:10 }}>
+                    <p style={{ fontWeight:700, color:'#1a3a5c', fontSize:13, marginBottom:8 }}>Escolha o novo dia:</p>
+                    <div style={{ display:'flex', gap:6, flexWrap:'wrap', marginBottom:10 }}>
+                      {DIAS.map(d => <button key={d} onClick={() => setNovoDiaTroca(d)} style={{ padding:'6px 10px', borderRadius:8, fontWeight:700, fontSize:12, cursor:'pointer', background:novoDiaTroca===d?'#0D47A1':'#f0f4f8', color:novoDiaTroca===d?'#fff':'#2d4a63', border:novoDiaTroca===d?'2px solid #0D47A1':'2px solid transparent' }}>{d}</button>)}
+                    </div>
+                    <div style={{ display:'flex', gap:8 }}>
+                      <button onClick={() => enviarTroca(s)} style={{ ...btnSm, background:'#0D47A1', color:'#fff' }}>Enviar pedido de troca</button>
+                      <button onClick={() => { setSolicitandoTroca(null); setNovoDiaTroca(''); }} style={{ ...btnSm, background:'#f0f4f8', color:'#6b8099' }}>Cancelar</button>
+                    </div>
+                  </div>
+                )}
+              </Card>
+            ))}
+            {paginado.totalPaginas > 1 && <ComponentePaginacao paginaAtual={paginaMinhas} totalPaginas={paginado.totalPaginas} onMudarPagina={setPaginaMinhas} />}
+          </>
+        )
+      }
+    </div>
+  );
 }
 
-// ============================================================
-// APP PRINCIPAL
-// ============================================================
+// ========== TELA DE GESTOR ==========
+function TelaGestor({ gestorLogado }) {
+  const [aba, setAba] = useState('solicitacoes');
+  const [solicitacoes, setSolicitacoes] = useState([]);
+  const [policiais, setPoliciais] = useState([]);
+  const [gestores, setGestores] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [filtroStatus, setFiltroStatus] = useState('todos');
+  const [filtroSecao, setFiltroSecao] = useState('todas');
+  const [filtroDia, setFiltroDia] = useState('todos');
+  const [filtroMotivo, setFiltroMotivo] = useState('todos');
+  const [semanaAtual, setSemanaAtual] = useState(() => getInicioSemana(new Date()));
+  const [busca, setBusca] = useState('');
+  const [filtroBuscaEfetivo, setFiltroBuscaEfetivo] = useState('todos');
+  const [filtroEfSecao, setFiltroEfSecao] = useState('todas');
+  const [filtroEfSit, setFiltroEfSit] = useState('todas');
+  const [filtroEfSS, setFiltroEfSS] = useState('todas');
+  const [filtroEfRest, setFiltroEfRest] = useState('todas');
+  const [novoNome, setNovoNome] = useState('');
+  const [novaMatricula, setNovaMatricula] = useState('');
+  const [novaPatente, setNovaPatente] = useState('3º SGT PM');
+  const [novaSecao, setNovaSecao] = useState('');
+  const [senhaAtual, setSenhaAtual] = useState('');
+  const [novaSenha, setNovaSenha] = useState('');
+  const [confirmaSenha, setConfirmaSenha] = useState('');
+  const [msgSenha, setMsgSenha] = useState(null);
+  const [novoGestorNome, setNovoGestorNome] = useState('');
+  const [novoGestorMatricula, setNovoGestorMatricula] = useState('');
+  const [novoGestorSenha, setNovoGestorSenha] = useState('');
+  const [novoGestorFuncao, setNovoGestorFuncao] = useState('');
+  const [novoGestorNivel, setNovoGestorNivel] = useState('gestor');
+  const [msgGestor, setMsgGestor] = useState(null);
+  const [ultimaAtualizacao, setUltimaAtualizacao] = useState(new Date());
+  const [paginaSolicitacoes, setPaginaSolicitacoes] = useState(1);
+  const [paginaEfetivo, setPaginaEfetivo] = useState(1);
+  const [toast, setToast] = useState(null);
+  const intervalRef = useRef(null);
+
+  const carregar = useCallback(async () => {
+    const [s, p, g] = await Promise.all([
+      supabase.from('solicitacoes').select('*').order('created_at', { ascending:false }),
+      supabase.from('policiais').select('*').order('nome'),
+      supabase.from('gestores').select('*').order('created_at'),
+    ]);
+    setSolicitacoes(s.data || []);
+    setPoliciais(p.data || []);
+    setGestores(g.data || []);
+    setUltimaAtualizacao(new Date());
+    setLoading(false);
+  }, []);
+
+  useEffect(() => {
+    setLoading(true);
+    carregar();
+    intervalRef.current = setInterval(() => { carregar(); }, AUTO_REFRESH_INTERVAL);
+    return () => clearInterval(intervalRef.current);
+  }, [carregar]);
+
+  function semanaAnterior() { const d = new Date(semanaAtual); d.setDate(d.getDate()-7); setSemanaAtual(d); }
+  function proximaSemana() { const d = new Date(semanaAtual); d.setDate(d.getDate()+7); setSemanaAtual(d); }
+
+  const fimSemana = new Date(semanaAtual);
+  fimSemana.setDate(fimSemana.getDate() + 6);
+  const isoInicio = semanaAtual.toISOString().split('T')[0];
+  const isoFim = fimSemana.toISOString().split('T')[0];
+  const solicitacoesSemana = solicitacoes.filter(s => s.semana >= isoInicio && s.semana <= isoFim);
+  const trocasPendentes = solicitacoes.filter(s => s.status_troca === 'pendente');
+  const filtradas = solicitacoesSemana
+    .filter(s => filtroStatus === 'todos' || s.status === filtroStatus)
+    .filter(s => filtroSecao === 'todas' || s.secao === filtroSecao)
+    .filter(s => filtroDia === 'todos' || s.dia === filtroDia)
+    .filter(s => filtroMotivo === 'todos' || s.motivo === filtroMotivo);
+
+  const semSecao = policiais.filter(p => !p.secao || p.secao === '');
+  const retornosProximos = policiais.filter(p => p.situacao === 'Férias' && p.ferias_fim && diasParaRetorno(p.ferias_fim) !== null && diasParaRetorno(p.ferias_fim) <= 3 && diasParaRetorno(p.ferias_fim) >= 0);
+  const prontos = policiais.filter(p => (p.situacao||'Pronto') === 'Pronto');
+  const semFolgaSemana = prontos.filter(p => !solicitacoesSemana.find(s => s.policial_id === p.id && s.status !== 'recusado'));
+
+  const policiaisfiltrados = policiais.filter(p => {
+    const buscaOk = p.nome.toLowerCase().includes(busca.toLowerCase()) || p.matricula.includes(busca);
+    const filtroOk = filtroBuscaEfetivo === 'todos' || (filtroBuscaEfetivo === 'sem_secao' && (!p.secao || p.secao === '')) || (filtroBuscaEfetivo === 'sem_folga' && semFolgaSemana.find(sf => sf.id === p.id));
+    const secaoOk = filtroEfSecao === 'todas' || p.secao === filtroEfSecao;
+    const sitOk = filtroEfSit === 'todas' || (p.situacao||'Pronto') === filtroEfSit;
+    const ssOk = filtroEfSS === 'todas' || (p.sit_sanitaria||'Apto A') === filtroEfSS;
+    const restOk = filtroEfRest === 'todas' || (p.restricao||'Sem restrição') === filtroEfRest;
+    return buscaOk && filtroOk && secaoOk && sitOk && ssOk && restOk;
+  });
+
+  const paginadasSolic = paginar(filtradas, paginaSolicitacoes, POR_PAGINA);
+  const paginadasEfetivo = paginar(policiaisfiltrados, paginaEfetivo, POR_PAGINA);
+
+  const stats = {
+    total: solicitacoesSemana.length,
+    pendentes: solicitacoesSemana.filter(s => s.status === 'pendente').length,
+    aprovadas: solicitacoesSemana.filter(s => s.status === 'aprovado').length,
+    recusadas: solicitacoesSemana.filter(s => s.status === 'recusado').length,
+  };
+
+  const isPrincipal = gestorLogado.principal === true;
+  const isMaster = isPrincipal || gestorLogado.nivel === 'master';
+
+  function showToast(texto, tipo = 'ok') {
+    setToast({ texto, tipo });
+    setTimeout(() => setToast(null), 3000);
+  }
+
+  async function mudarStatus(id, status) {
+    if (!isMaster) return;
+    const check = rateLimiterAprovacao.podeExecutar();
+    if (!check.permitido) { showToast(`Aguarde ${check.proxemaEmMs}s antes de fazer nova aprovação`, 'erro'); return; }
+    await supabase.from('solicitacoes').update({ status }).eq('id', id);
+    setSolicitacoes(prev => prev.map(s => s.id === id ? { ...s, status } : s));
+    showToast(status === 'aprovado' ? '✅ Solicitação aprovada!' : '❌ Solicitação recusada!', status === 'aprovado' ? 'ok' : 'erro');
+    const sol = solicitacoes.find(s => s.id === id);
+    if (sol && sol.email_policial && status !== 'pendente') {
+      emailjs.init(EMAILJS_PUBLIC_KEY);
+      emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, { email:sol.email_policial, nome:sol.policial_nome, motivo:sol.motivo, dia:sol.dia, semana:sol.semana, status:status==='aprovado'?'✅ APROVADA':'❌ RECUSADA', secao:sol.secao, matricula:sol.matricula });
+    }
+    registrarHistorico(supabase, 'solicitacoes', 'mudança_status', { id, status }, gestorLogado.id, gestorLogado.nome);
+  }
+
+  async function aprovarTroca(sol) {
+    if (!isMaster) return;
+    await supabase.from('solicitacoes').update({ dia:sol.dia_troca, status_troca:'aprovado' }).eq('id', sol.id);
+    setSolicitacoes(prev => prev.map(s => s.id === sol.id ? { ...s, dia:sol.dia_troca, status_troca:'aprovado' } : s));
+    showToast('✅ Troca aprovada!');
+  }
+
+  async function recusarTroca(id) {
+    if (!isMaster) return;
+    await supabase.from('solicitacoes').update({ status_troca:'recusado' }).eq('id', id);
+    setSolicitacoes(prev => prev.map(s => s.id === id ? { ...s, status_troca:'recusado' } : s));
+    showToast('❌ Troca recusada.', 'erro');
+  }
+
+  async function excluirSolicitacao(id) {
+    if (!window.confirm('Excluir esta solicitação?')) return;
+    await supabase.from('solicitacoes').delete().eq('id', id);
+    setSolicitacoes(prev => prev.filter(s => s.id !== id));
+  }
+
+  async function resetarSenhaPolicial(id, nome) {
+    if (!window.confirm(`Resetar a senha de ${nome}?`)) return;
+    await supabase.from('policiais').update({ senha:'' }).eq('id', id);
+    showToast('🔑 Senha resetada!');
+  }
+
+  async function atualizarPolicial(id, campo, valor) {
+    await supabase.from('policiais').update({ [campo]:valor }).eq('id', id);
+    setPoliciais(prev => prev.map(p => p.id === id ? { ...p, [campo]:valor } : p));
+  }
+
+  async function removerPolicial(id) {
+    if (!window.confirm('Confirmar remoção?')) return;
+    await supabase.from('solicitacoes').delete().eq('policial_id', id);
+    await supabase.from('policiais').delete().eq('id', id);
+    setPoliciais(prev => prev.filter(p => p.id !== id));
+    setSolicitacoes(prev => prev.filter(s => s.policial_id !== id));
+  }
+
+  async function adicionarPolicial() {
+    if (!novoNome.trim() || !validarMatricula(novaMatricula) || !novaSecao) { alert('Preencha todos os campos corretamente'); return; }
+    const { data, error } = await supabase.from('policiais').insert({ nome:novoNome.toUpperCase(), matricula:novaMatricula, patente:novaPatente, secao:novaSecao, senha:'', sit_sanitaria:'Apto A', situacao:'Pronto', restricao:'Sem restrição' }).select().single();
+    if (!error && data) setPoliciais(prev => [...prev, data].sort((a,b) => a.nome.localeCompare(b.nome)));
+    setNovoNome(''); setNovaMatricula(''); setNovaPatente('3º SGT PM'); setNovaSecao('');
+  }
+
+  async function alterarMinhaSenha() {
+    const mim = gestores.find(g => g.id === gestorLogado.id);
+    if (!mim || mim.senha !== senhaAtual) { setMsgSenha({ tipo:'erro', texto:'Senha atual incorreta.' }); return; }
+    if (!validarSenha(novaSenha)) { setMsgSenha({ tipo:'erro', texto:'Mínimo 4 caracteres.' }); return; }
+    if (novaSenha !== confirmaSenha) { setMsgSenha({ tipo:'erro', texto:'Senhas não coincidem.' }); return; }
+    await supabase.from('gestores').update({ senha:novaSenha }).eq('id', gestorLogado.id);
+    setSenhaAtual(''); setNovaSenha(''); setConfirmaSenha('');
+    setMsgSenha({ tipo:'ok', texto:'Senha alterada!' });
+    setTimeout(() => setMsgSenha(null), 3000);
+  }
+
+  async function adicionarGestor() {
+    if (!novoGestorNome.trim() || !validarMatricula(novoGestorMatricula) || !validarSenha(novoGestorSenha)) { setMsgGestor({ tipo:'erro', texto:'Preencha todos os campos corretamente.' }); return; }
+    if (gestores.find(g => g.matricula === novoGestorMatricula)) { setMsgGestor({ tipo:'erro', texto:'Matrícula já cadastrada.' }); return; }
+    const { data, error } = await supabase.from('gestores').insert({ nome:novoGestorNome.toUpperCase(), matricula:novoGestorMatricula, senha:novoGestorSenha, principal:false, nivel:novoGestorNivel, funcao:novoGestorFuncao }).select().single();
+    if (error) { setMsgGestor({ tipo:'erro', texto:'Erro ao cadastrar.' }); return; }
+    setGestores(prev => [...prev, data]);
+    setNovoGestorNome(''); setNovoGestorMatricula(''); setNovoGestorSenha(''); setNovoGestorFuncao(''); setNovoGestorNivel('gestor');
+    setMsgGestor({ tipo:'ok', texto:'Gestor cadastrado!' });
+    setTimeout(() => setMsgGestor(null), 3000);
+  }
+
+  async function alterarNivelGestor(id, nivel) {
+    await supabase.from('gestores').update({ nivel }).eq('id', id);
+    setGestores(prev => prev.map(g => g.id === id ? { ...g, nivel } : g));
+  }
+
+  async function alterarFuncaoGestor(id, funcao) {
+    await supabase.from('gestores').update({ funcao }).eq('id', id);
+    setGestores(prev => prev.map(g => g.id === id ? { ...g, funcao } : g));
+  }
+
+  async function removerGestor(id) {
+    if (!window.confirm('Remover este gestor?')) return;
+    await supabase.from('gestores').delete().eq('id', id);
+    setGestores(prev => prev.filter(g => g.id !== id));
+  }
+
+  const ABAS = [
+    { id:'solicitacoes', label:'📋 Solicitações' },
+    { id:'trocas', label:`🔄 Trocas${trocasPendentes.length > 0 ? ` (${trocasPendentes.length})` : ''}` },
+    { id:'calendario', label:'📅 Calendário' },
+    { id:'servico', label:'🪖 Serviço' },
+    { id:'estatisticas', label:'📈 Estatísticas' },
+    { id:'efetivo', label:'👮 Efetivo' },
+    { id:'gestores', label:'🗝️ Gestores' },
+  ];
+
+  if (loading) return <Spinner />;
+
+  return (
+    <div>
+      {/* TOAST */}
+      {toast && (
+        <div style={{ position:'fixed', top:20, right:20, zIndex:9999, background:toast.tipo==='ok'?'#1B5E20':'#B71C1C', color:'#fff', borderRadius:10, padding:'12px 20px', fontWeight:800, fontSize:14, boxShadow:'0 4px 20px #00000030' }}>
+          {toast.texto}
+        </div>
+      )}
+
+      {retornosProximos.length > 0 && (
+        <div style={{ background:'#FFF3E0', border:'2px solid #FFB74D', borderRadius:10, padding:'12px 16px', marginBottom:14 }}>
+          <div style={{ fontWeight:800, color:'#E65100', fontSize:13, marginBottom:8 }}>⏰ Férias encerrando em até 3 dias:</div>
+          {retornosProximos.map(p => { const dias = diasParaRetorno(p.ferias_fim); return (<div key={p.id} style={{ display:'flex', gap:8, alignItems:'center', marginBottom:4, flexWrap:'wrap' }}><span style={{ fontWeight:700, color:'#1a3a5c', fontSize:12 }}>{p.patente} {p.nome}</span><span style={{ background:dias===0?'#B71C1C':dias<=1?'#E65100':'#F9A825', color:'#fff', borderRadius:6, padding:'1px 8px', fontSize:11, fontWeight:800 }}>{dias===0?'Retorna hoje!':dias===1?'Retorna amanhã!':`${dias} dias`}</span></div>); })}
+        </div>
+      )}
+
+      {!isMaster && (
+        <div style={{ background:'#E3F2FD', border:'2px solid #90CAF9', borderRadius:10, padding:'10px 16px', marginBottom:14, fontSize:13, color:'#0D47A1', fontWeight:700 }}>
+          👁️ Você está no modo visualização. Apenas gestores Master ou Principal podem aprovar ou recusar solicitações.
+        </div>
+      )}
+
+      <div style={{ display:'flex', justifyContent:'flex-end', marginBottom:8 }}>
+        <span style={{ fontSize:11, color:'#aab' }}>🔄 Atualizado às {ultimaAtualizacao.toLocaleTimeString('pt-BR', { hour:'2-digit', minute:'2-digit' })}</span>
+      </div>
+
+      <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:10, marginBottom:18 }}>
+        {[{l:'Total',v:stats.total,c:'#1a3a5c'},{l:'Pendentes',v:stats.pendentes,c:'#7B5800'},{l:'Aprovadas',v:stats.aprovadas,c:'#1B5E20'},{l:'Recusadas',v:stats.recusadas,c:'#B71C1C'}]
+          .map(s => <div key={s.l} style={{ background:'#fff', borderRadius:10, padding:'12px 8px', boxShadow:'0 2px 8px #00000012', textAlign:'center' }}><div style={{ fontSize:24, fontWeight:900, color:s.c }}>{s.v}</div><div style={{ fontSize:11, color:'#6b8099', fontWeight:700 }}>{s.l}</div></div>)}
+      </div>
+
+      <div style={{ display:'flex', gap:6, marginBottom:18, flexWrap:'wrap' }}>
+        {ABAS.map(a => <button key={a.id} onClick={() => setAba(a.id)} style={{ padding:'8px 14px', borderRadius:8, fontWeight:700, cursor:'pointer', background:aba===a.id?'#1a3a5c':'#f0f4f8', color:aba===a.id?'#fff':'#2d4a63', border:'none', fontSize:12 }}>{a.label}</button>)}
+      </div>
+
+      {aba === 'solicitacoes' && (
+        <>
+          <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', background:'#fff', borderRadius:10, padding:'10px 16px', marginBottom:14, boxShadow:'0 2px 8px #00000012' }}>
+            <button onClick={semanaAnterior} style={{ ...btnSm, background:'#f0f4f8', color:'#1a3a5c' }}>← Anterior</button>
+            <span style={{ fontWeight:800, color:'#1a3a5c', fontSize:13 }}>📅 {formatarSemana(semanaAtual)}</span>
+            <button onClick={proximaSemana} style={{ ...btnSm, background:'#f0f4f8', color:'#1a3a5c' }}>Próxima →</button>
+          </div>
+          <button onClick={() => gerarPDF(solicitacoesSemana, policiais, semanaAtual)} style={{ ...btnPrimary, marginTop:0, marginBottom:14, background:'#1B5E20' }}>📄 Gerar Relatório PDF</button>
+          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8, marginBottom:14 }}>
+            <select value={filtroStatus} onChange={e => setFiltroStatus(e.target.value)} style={inp}>
+              <option value="todos">Todos os status</option>
+              <option value="pendente">Pendente</option>
+              <option value="aprovado">Aprovado</option>
+              <option value="recusado">Recusado</option>
+            </select>
+            <select value={filtroMotivo} onChange={e => setFiltroMotivo(e.target.value)} style={inp}>
+              <option value="todos">Folga e Concessão</option>
+              <option value="Folga">Somente Folgas</option>
+              <option value="Concessão">Somente Concessões</option>
+            </select>
+            <select value={filtroSecao} onChange={e => setFiltroSecao(e.target.value)} style={inp}>
+              <option value="todas">Todas as seções</option>
+              {SECOES.map(s => <option key={s}>{s}</option>)}
+            </select>
+            <select value={filtroDia} onChange={e => setFiltroDia(e.target.value)} style={inp}>
+              <option value="todos">Todos os dias</option>
+              {DIAS.map(d => <option key={d}>{d}</option>)}
+            </select>
+          </div>
+          {paginadasSolic.dados.length === 0
+            ? <p style={{ color:'#aab', fontSize:13, textAlign:'center', padding:20 }}>Nenhuma solicitação nesta semana.</p>
+            : (
+              <>
+                {paginadasSolic.dados.map(s => {
+                  const policial = policiais.find(p => p.id === s.policial_id);
+                  return (
+                    <Card key={s.id}>
+                      <div style={{ display:'flex', justifyContent:'space-between', flexWrap:'wrap', gap:8 }}>
+                        <div><span style={{ fontWeight:800, color:'#1a3a5c', fontSize:14 }}>{s.patente} {s.policial_nome}</span><span style={{ color:'#6b8099', fontSize:12, marginLeft:8 }}>Mat. {s.matricula}</span></div>
+                        <Badge status={s.status} />
+                      </div>
+                      <div style={{ display:'flex', gap:8, flexWrap:'wrap', marginTop:8, alignItems:'center' }}>
+                        <MotivoBadge motivo={s.motivo} />
+                        <span style={{ background:'#e8f0fe', color:'#3d5a9e', borderRadius:6, padding:'2px 8px', fontSize:12, fontWeight:700 }}>{s.secao&&s.secao!=='—'?s.secao:'Não vinculada'}</span>
+                        <span style={{ color:'#2d4a63', fontSize:13 }}>📅 <strong>{s.dia}</strong> — {s.semana}</span>
+                      </div>
+                      {/* Contador compacto do policial */}
+                      {policial && <ContadorFolgas solicitacoes={solicitacoes} policialId={s.policial_id} compact={true} />}
+                      {/* Detalhes do policial */}
+                      {policial && (
+                        <div style={{ background:'#f8fafc', borderRadius:8, padding:'10px 12px', marginTop:8, fontSize:12, display:'grid', gridTemplateColumns:'repeat(2, 1fr)', gap:8 }}>
+                          <div><span style={{ color:'#6b8099', fontWeight:700 }}>🏥 Sit. Sanitária:</span><div style={{ color:COR_SS[policial.sit_sanitaria||'Apto A'], fontWeight:800, marginTop:2 }}>{EMOJI_SS[policial.sit_sanitaria||'Apto A']} {policial.sit_sanitaria||'Apto A'}</div></div>
+                          <div><span style={{ color:'#6b8099', fontWeight:700 }}>📋 Situação:</span><div style={{ color:(policial.situacao||'Pronto')==='Pronto'?'#1B5E20':'#B71C1C', fontWeight:800, marginTop:2 }}>{policial.situacao||'Pronto'}</div></div>
+                          <div><span style={{ color:'#6b8099', fontWeight:700 }}>⚠️ Restrição:</span><div style={{ color:(policial.restricao||'Sem restrição')==='Sem restrição'?'#1B5E20':'#E65100', fontWeight:800, marginTop:2 }}>{policial.restricao||'Sem restrição'}</div></div>
+                          <div><span style={{ color:'#6b8099', fontWeight:700 }}>📍 Seção:</span><div style={{ color:'#1a3a5c', fontWeight:800, marginTop:2 }}>{policial.secao||'—'}</div></div>
+                        </div>
+                      )}
+                      {s.status_troca === 'pendente' && <div style={{ background:'#FFF8E1', borderRadius:6, padding:'4px 10px', marginTop:6, fontSize:12, color:'#7B5800', fontWeight:700 }}>⏳ Troca pendente para: <strong>{s.dia_troca}</strong></div>}
+                      {s.status_troca === 'aprovado' && <div style={{ background:'#E8F5E9', borderRadius:6, padding:'4px 10px', marginTop:6, fontSize:12, color:'#1B5E20', fontWeight:700 }}>✅ Troca aprovada para: <strong>{s.dia_troca}</strong></div>}
+                      {s.email_policial && <p style={{ color:'#aab', fontSize:12, marginTop:4 }}>📧 {s.email_policial}</p>}
+                      <p style={{ color:'#bbb', fontSize:12, marginTop:4 }}>{formatarDataHora(s.created_at)}</p>
+                      {isMaster && s.status === 'pendente' && (
+                        <div style={{ display:'flex', gap:8, marginTop:10 }}>
+                          <button onClick={() => mudarStatus(s.id,'aprovado')} style={{ ...btnSm, background:'#1B5E20', color:'#fff' }}>✔ Aprovar</button>
+                          <button onClick={() => mudarStatus(s.id,'recusado')} style={{ ...btnSm, background:'#B71C1C', color:'#fff' }}>✘ Recusar</button>
+                        </div>
+                      )}
+                      {isMaster && s.status === 'recusado' && <button onClick={() => excluirSolicitacao(s.id)} style={{ ...btnSm, background:'#FFEBEE', color:'#B71C1C', marginTop:8 }}>🗑️ Excluir</button>}
+                      {isMaster && s.status === 'aprovado' && <button onClick={() => mudarStatus(s.id,'pendente')} style={{ ...btnSm, background:'#FFF8E1', color:'#7B5800', marginTop:8 }}>↩️ Revogar aprovação</button>}
+                    </Card>
+                  );
+                })}
+                {paginadasSolic.totalPaginas > 1 && <ComponentePaginacao paginaAtual={paginaSolicitacoes} totalPaginas={paginadasSolic.totalPaginas} onMudarPagina={setPaginaSolicitacoes} />}
+              </>
+            )
+          }
+          <div style={{ display:'flex', gap:8, marginTop:20 }}>
+            <button onClick={() => exportarParaCSV(solicitacoesSemana, 'solicitacoes')} style={{ ...btnSm, background:'#0D47A1', color:'#fff', flex:1 }}>📊 Exportar CSV</button>
+            <button onClick={() => exportarParaExcel(solicitacoesSemana, 'solicitacoes', 'Folgas')} style={{ ...btnSm, background:'#1B5E20', color:'#fff', flex:1 }}>📈 Exportar Excel</button>
+          </div>
+        </>
+      )}
+
+      {aba === 'trocas' && (
+        <>
+          <h3 style={{ fontSize:15, fontWeight:800, color:'#1a3a5c', marginBottom:16 }}>🔄 Solicitações de Troca de Dia</h3>
+          {trocasPendentes.length === 0
+            ? <p style={{ color:'#aab', fontSize:13, textAlign:'center', padding:20 }}>Nenhuma solicitação de troca pendente.</p>
+            : trocasPendentes.map(s => (
+              <Card key={s.id} style={{ border:'2px solid #FFD54F' }}>
+                <div style={{ display:'flex', justifyContent:'space-between', flexWrap:'wrap', gap:8 }}>
+                  <div><span style={{ fontWeight:800, color:'#1a3a5c', fontSize:14 }}>{s.patente} {s.policial_nome}</span><span style={{ color:'#6b8099', fontSize:12, marginLeft:8 }}>Mat. {s.matricula}</span></div>
+                  <span style={{ background:'#FFF8E1', color:'#7B5800', border:'1px solid #FFD54F', padding:'3px 10px', borderRadius:20, fontSize:11, fontWeight:800 }}>TROCA PENDENTE</span>
+                </div>
+                <div style={{ display:'flex', gap:8, flexWrap:'wrap', marginTop:8, alignItems:'center' }}>
+                  <MotivoBadge motivo={s.motivo} />
+                  <span style={{ background:'#e8f0fe', color:'#3d5a9e', borderRadius:6, padding:'2px 8px', fontSize:12, fontWeight:700 }}>{s.secao}</span>
+                </div>
+                <div style={{ display:'flex', gap:12, alignItems:'center', marginTop:10, background:'#f8fafc', borderRadius:8, padding:'10px 14px' }}>
+                  <div style={{ textAlign:'center' }}><div style={{ fontSize:10, color:'#6b8099', fontWeight:700, marginBottom:4 }}>DIA ATUAL</div><div style={{ fontWeight:900, color:'#B71C1C', fontSize:16 }}>{s.dia}</div></div>
+                  <div style={{ fontSize:20 }}>→</div>
+                  <div style={{ textAlign:'center' }}><div style={{ fontSize:10, color:'#6b8099', fontWeight:700, marginBottom:4 }}>NOVO DIA</div><div style={{ fontWeight:900, color:'#1B5E20', fontSize:16 }}>{s.dia_troca}</div></div>
+                  <div style={{ fontSize:10, color:'#6b8099', marginLeft:'auto' }}>Semana: {s.semana}</div>
+                </div>
+                {isMaster && (
+                  <div style={{ display:'flex', gap:8, marginTop:10 }}>
+                    <button onClick={() => aprovarTroca(s)} style={{ ...btnSm, background:'#1B5E20', color:'#fff' }}>✔ Aprovar troca</button>
+                    <button onClick={() => recusarTroca(s.id)} style={{ ...btnSm, background:'#B71C1C', color:'#fff' }}>✘ Recusar troca</button>
+                  </div>
+                )}
+              </Card>
+            ))
+          }
+          <h3 style={{ fontSize:14, fontWeight:800, color:'#1a3a5c', margin:'20px 0 10px' }}>Histórico de Trocas</h3>
+          {solicitacoes.filter(s => s.status_troca && s.status_troca !== 'pendente' && s.status_troca !== '').length === 0
+            ? <p style={{ color:'#aab', fontSize:13 }}>Nenhuma troca processada ainda.</p>
+            : solicitacoes.filter(s => s.status_troca && s.status_troca !== 'pendente' && s.status_troca !== '').map(s => (
+              <Card key={s.id} style={{ opacity:0.8 }}>
+                <div style={{ display:'flex', justifyContent:'space-between', flexWrap:'wrap', gap:8, alignItems:'center' }}>
+                  <div><span style={{ fontWeight:800, color:'#1a3a5c', fontSize:13 }}>{s.patente} {s.policial_nome}</span><div style={{ fontSize:12, color:'#6b8099', marginTop:2 }}>{s.dia_troca ? `${s.dia} → ${s.dia_troca}` : ''} · {s.semana}</div></div>
+                  <span style={{ background:s.status_troca==='aprovado'?'#E8F5E9':'#FFEBEE', color:s.status_troca==='aprovado'?'#1B5E20':'#B71C1C', border:`1px solid ${s.status_troca==='aprovado'?'#A5D6A7':'#EF9A9A'}`, padding:'3px 10px', borderRadius:20, fontSize:11, fontWeight:800 }}>{s.status_troca==='aprovado'?'APROVADA':'RECUSADA'}</span>
+                </div>
+              </Card>
+            ))
+          }
+        </>
+      )}
+
+      {aba === 'calendario' && (
+        <Card>
+          <h3 style={{ fontSize:15, fontWeight:800, color:'#1a3a5c', marginBottom:14 }}>📅 Calendário de Folgas Aprovadas</h3>
+          <CalendarioFolgas solicitacoes={solicitacoes} />
+        </Card>
+      )}
+
+      {aba === 'servico' && (
+        <TelaServico solicitacoes={solicitacoes} policiais={policiais} />
+      )}
+
+      {aba === 'estatisticas' && (
+        <Dashboard
+          solicitacoes={solicitacoes}
+          policiais={policiais}
+          onAtualizarPolicial={atualizarPolicial}
+          onRemoverPolicial={removerPolicial}
+          semanaAtual={semanaAtual}
+        />
+      )}
+
+      {aba === 'efetivo' && (
+        <>
+          {semSecao.length > 0 && (
+            <div style={{ background:'#FFEBEE', border:'2px solid #EF9A9A', borderRadius:10, padding:'12px 16px', marginBottom:14 }}>
+              <div style={{ fontWeight:800, color:'#B71C1C', fontSize:13, marginBottom:6 }}>⚠️ {semSecao.length} policial(is) sem seção definida</div>
+              <button onClick={() => setFiltroBuscaEfetivo(filtroBuscaEfetivo==='sem_secao'?'todos':'sem_secao')} style={{ ...btnSm, background:'#B71C1C', color:'#fff', marginRight:8 }}>{filtroBuscaEfetivo==='sem_secao'?'Ver todos':'Ver só sem seção'}</button>
+            </div>
+          )}
+          {semFolgaSemana.length > 0 && (
+            <div style={{ background:'#E3F2FD', border:'2px solid #90CAF9', borderRadius:10, padding:'12px 16px', marginBottom:14 }}>
+              <div style={{ fontWeight:800, color:'#0D47A1', fontSize:13, marginBottom:6 }}>📋 {semFolgaSemana.length} policial(is) Pronto(s) sem solicitação esta semana</div>
+              <button onClick={() => setFiltroBuscaEfetivo(filtroBuscaEfetivo==='sem_folga'?'todos':'sem_folga')} style={{ ...btnSm, background:'#0D47A1', color:'#fff' }}>{filtroBuscaEfetivo==='sem_folga'?'Ver todos':'Ver só sem folga'}</button>
+            </div>
+          )}
+          <Card>
+            <h3 style={{ fontSize:14, fontWeight:800, color:'#1a3a5c', marginBottom:14 }}>➕ Adicionar Policial</h3>
+            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
+              <div style={{ gridColumn:'1/-1' }}><label style={lbl}>Nome completo *</label><input value={novoNome} onChange={e => setNovoNome(e.target.value)} placeholder="NOME COMPLETO" style={inp} /></div>
+              <div><label style={lbl}>Matrícula *</label><input value={novaMatricula} onChange={e => setNovaMatricula(e.target.value)} placeholder="99999" style={inp} /></div>
+              <div><label style={lbl}>Patente</label>
+                <select value={novaPatente} onChange={e => setNovaPatente(e.target.value)} style={inp}>
+                  {['TEN CEL PM','MAJ PM','CAP PM','1º TEN PM','2º TEN PM','SUB TEN PM','1º SGT PM','2º SGT PM','3º SGT PM','CB PM','SD PM'].map(p => <option key={p}>{p}</option>)}
+                </select>
+              </div>
+              <div style={{ gridColumn:'1/-1' }}><label style={lbl}>Seção *</label>
+                <select value={novaSecao} onChange={e => setNovaSecao(e.target.value)} style={inp}>
+                  <option value="">— Selecionar seção —</option>
+                  {SECOES.map(s => <option key={s}>{s}</option>)}
+                </select>
+              </div>
+            </div>
+            <button onClick={adicionarPolicial} style={{ ...btnPrimary, marginTop:12 }}>Adicionar ao Efetivo</button>
+          </Card>
+          <input value={busca} onChange={e => setBusca(e.target.value)} placeholder="🔍 Buscar por nome ou matrícula..." style={{ ...inp, marginBottom:10 }} />
+          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8, marginBottom:10 }}>
+            <select value={filtroEfSecao} onChange={e => setFiltroEfSecao(e.target.value)} style={inp}>
+              <option value="todas">Todas as seções</option>
+              {SECOES.map(s => <option key={s}>{s}</option>)}
+            </select>
+            <select value={filtroEfSit} onChange={e => setFiltroEfSit(e.target.value)} style={inp}>
+              <option value="todas">Todas as situações</option>
+              {SITUACOES.map(s => <option key={s}>{s}</option>)}
+            </select>
+            <select value={filtroEfSS} onChange={e => setFiltroEfSS(e.target.value)} style={inp}>
+              <option value="todas">Toda sit. sanitária</option>
+              {SIT_SANITARIA_LTS.map(s => <option key={s}>{s}</option>)}
+            </select>
+            <select value={filtroEfRest} onChange={e => setFiltroEfRest(e.target.value)} style={inp}>
+              <option value="todas">Todas as restrições</option>
+              {RESTRICOES.map(s => <option key={s}>{s}</option>)}
+            </select>
+          </div>
+          <p style={{ color:'#6b8099', fontSize:12, marginBottom:10 }}>{paginadasEfetivo.total} policial(is)</p>
+          {paginadasEfetivo.dados.map(p => (
+            <Card key={p.id} style={{ padding:'12px 16px', border:(!p.secao||p.secao==='')?'2px solid #EF9A9A':'none' }}>
+              <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', gap:10, flexWrap:'wrap' }}>
+                <div style={{ flex:1 }}>
+                  <div style={{ fontWeight:800, color:'#1a3a5c', fontSize:13 }}>{p.patente} {p.nome}</div>
+                  <div style={{ color:'#6b8099', fontSize:12, marginTop:2 }}>Mat. {p.matricula}</div>
+                  <ContadorFolgas solicitacoes={solicitacoes} policialId={p.id} compact={true} />
+                  <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:6, marginTop:8 }}>
+                    <div><label style={{ ...lbl, fontSize:10 }}>Seção</label><select value={p.secao||''} onChange={e => atualizarPolicial(p.id,'secao',e.target.value)} style={{ ...inp, fontSize:12, padding:'6px 8px' }}><option value="">— Não definida —</option>{SECOES.map(s => <option key={s}>{s}</option>)}</select></div>
+                    <div><label style={{ ...lbl, fontSize:10 }}>Sit. Sanitária</label><select value={p.sit_sanitaria||'Apto A'} onChange={e => atualizarPolicial(p.id,'sit_sanitaria',e.target.value)} style={{ ...inp, fontSize:12, padding:'6px 8px' }}>{SIT_SANITARIA_LTS.map(s => <option key={s}>{s}</option>)}</select></div>
+                    <div><label style={{ ...lbl, fontSize:10 }}>Situação</label><select value={p.situacao||'Pronto'} onChange={e => atualizarPolicial(p.id,'situacao',e.target.value)} style={{ ...inp, fontSize:12, padding:'6px 8px' }}>{SITUACOES.map(s => <option key={s}>{s}</option>)}</select></div>
+                    <div><label style={{ ...lbl, fontSize:10 }}>Restrições</label><select value={p.restricao||'Sem restrição'} onChange={e => atualizarPolicial(p.id,'restricao',e.target.value)} style={{ ...inp, fontSize:12, padding:'6px 8px' }}>{RESTRICOES.map(s => <option key={s}>{s}</option>)}</select></div>
+                  </div>
+                  {p.situacao === 'Férias' && (
+                    <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:6, marginTop:8, background:'#FFF8E1', borderRadius:8, padding:'10px' }}>
+                      <div><label style={{ ...lbl, fontSize:10 }}>Início das Férias</label><input type="date" value={p.ferias_inicio||''} onChange={e => atualizarPolicial(p.id,'ferias_inicio',e.target.value)} style={{ ...inp, fontSize:12, padding:'6px 8px' }} /></div>
+                      <div><label style={{ ...lbl, fontSize:10 }}>Fim das Férias</label><input type="date" value={p.ferias_fim||''} onChange={e => atualizarPolicial(p.id,'ferias_fim',e.target.value)} style={{ ...inp, fontSize:12, padding:'6px 8px' }} /></div>
+                      {p.ferias_fim && diasParaRetorno(p.ferias_fim) !== null && (<div style={{ gridColumn:'1/-1' }}><span style={{ background:diasParaRetorno(p.ferias_fim)<=3?'#B71C1C':'#1B5E20', color:'#fff', borderRadius:6, padding:'2px 10px', fontSize:12, fontWeight:800 }}>{diasParaRetorno(p.ferias_fim)===0?'Retorna hoje!':diasParaRetorno(p.ferias_fim)<0?'Férias vencidas!':diasParaRetorno(p.ferias_fim)<=3?`⚠️ Retorna em ${diasParaRetorno(p.ferias_fim)} dias`:`Retorna em ${diasParaRetorno(p.ferias_fim)} dias`}</span></div>)}
+                    </div>
+                  )}
+                  {(p.sit_sanitaria === 'Apto B' || p.sit_sanitaria === 'Apto C' || p.sit_sanitaria === 'LTS') && (
+                    <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:6, marginTop:8, background: p.sit_sanitaria==='Apto B'?'#FFF8E1':p.sit_sanitaria==='Apto C'?'#FFEBEE':'#F3E5F5', borderRadius:8, padding:'10px' }}>
+                      <div style={{ gridColumn:'1/-1', fontSize:11, fontWeight:800, color: p.sit_sanitaria==='Apto B'?'#F9A825':p.sit_sanitaria==='Apto C'?'#B71C1C':'#6A1B9A', marginBottom:4 }}>
+                        {p.sit_sanitaria==='Apto B' ? '🟡' : p.sit_sanitaria==='Apto C' ? '🔴' : '🟣'} Período do {p.sit_sanitaria}
+                      </div>
+                      <div><label style={{ ...lbl, fontSize:10 }}>Data de Início</label><input type="date" value={p.ss_inicio||''} onChange={e => atualizarPolicial(p.id,'ss_inicio',e.target.value)} style={{ ...inp, fontSize:12, padding:'6px 8px' }} /></div>
+                      <div><label style={{ ...lbl, fontSize:10 }}>Data de Fim</label><input type="date" value={p.ss_fim||''} onChange={e => atualizarPolicial(p.id,'ss_fim',e.target.value)} style={{ ...inp, fontSize:12, padding:'6px 8px' }} /></div>
+                      {p.ss_fim && diasParaRetorno(p.ss_fim) !== null && (
+                        <div style={{ gridColumn:'1/-1' }}>
+                          <span style={{ background:diasParaRetorno(p.ss_fim)<=3?(p.sit_sanitaria==='Apto B'?'#F9A825':p.sit_sanitaria==='Apto C'?'#B71C1C':'#6A1B9A'):'#1B5E20', color:'#fff', borderRadius:6, padding:'2px 10px', fontSize:12, fontWeight:800 }}>
+                            {diasParaRetorno(p.ss_fim)===0?'Encerra hoje!':diasParaRetorno(p.ss_fim)<0?`${p.sit_sanitaria} vencido!`:diasParaRetorno(p.ss_fim)<=3?`⚠️ Encerra em ${diasParaRetorno(p.ss_fim)} dias`:`Encerra em ${diasParaRetorno(p.ss_fim)} dias`}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  <div style={{ marginTop:8, display:'flex', gap:6, flexWrap:'wrap', alignItems:'center' }}>
+                    <SSBadge p={p} /><SituacaoBadge situacao={p.situacao||'Pronto'} />
+                    {p.restricao && p.restricao !== 'Sem restrição' && <span style={{ background:'#FFF3E0', color:'#E65100', borderRadius:6, padding:'2px 8px', fontSize:11, fontWeight:800 }}>{p.restricao}</span>}
+                    <button onClick={() => resetarSenhaPolicial(p.id, p.nome)} style={{ ...btnSm, background:'#FFF8E1', color:'#7B5800' }}>🔑 Resetar senha</button>
+                  </div>
+                </div>
+                <button onClick={() => removerPolicial(p.id)} style={{ ...btnSm, background:'#FFEBEE', color:'#B71C1C', marginTop:4 }}>Remover</button>
+              </div>
+            </Card>
+          ))}
+          {paginadasEfetivo.totalPaginas > 1 && <ComponentePaginacao paginaAtual={paginaEfetivo} totalPaginas={paginadasEfetivo.totalPaginas} onMudarPagina={setPaginaEfetivo} />}
+          <div style={{ display:'flex', gap:8, marginTop:20 }}>
+            <button onClick={() => exportarParaCSV(policiais, 'efetivo')} style={{ ...btnSm, background:'#0D47A1', color:'#fff', flex:1 }}>📊 Exportar CSV</button>
+            <button onClick={() => exportarParaExcel(policiais, 'efetivo', 'Efetivo')} style={{ ...btnSm, background:'#1B5E20', color:'#fff', flex:1 }}>📈 Exportar Excel</button>
+          </div>
+        </>
+      )}
+
+      {aba === 'gestores' && (
+        <>
+          <Card>
+            <h3 style={{ fontSize:14, fontWeight:800, color:'#1a3a5c', marginBottom:4 }}>🔒 Alterar Minha Senha</h3>
+            <p style={{ color:'#6b8099', fontSize:13, marginBottom:14 }}>
+              Conectado como: <strong>{gestorLogado.nome}</strong>
+              {' '}<span style={{ background:nivelLabel(gestorLogado).bg, color:nivelLabel(gestorLogado).color, borderRadius:6, padding:'2px 8px', fontSize:11, fontWeight:700 }}>{nivelLabel(gestorLogado).label}</span>
+              {gestorLogado.funcao && <span style={{ background:'#e8f0fe', color:'#3d5a9e', borderRadius:6, padding:'2px 8px', fontSize:11, fontWeight:700, marginLeft:4 }}>{gestorLogado.funcao}</span>}
+            </p>
+            <label style={lbl}>Senha atual</label>
+            <input type="password" value={senhaAtual} onChange={e => setSenhaAtual(e.target.value)} placeholder="••••" style={{ ...inp, marginBottom:10 }} />
+            <label style={lbl}>Nova senha</label>
+            <input type="password" value={novaSenha} onChange={e => setNovaSenha(e.target.value)} placeholder="Mínimo 4 caracteres" style={{ ...inp, marginBottom:10 }} />
+            <label style={lbl}>Confirmar nova senha</label>
+            <input type="password" value={confirmaSenha} onChange={e => setConfirmaSenha(e.target.value)} placeholder="Repita a nova senha" style={{ ...inp, marginBottom:6 }} />
+            {msgSenha && <div style={{ padding:'10px 14px', borderRadius:8, fontWeight:600, marginBottom:6, background:msgSenha.tipo==='ok'?'#E8F5E9':'#FFEBEE', color:msgSenha.tipo==='ok'?'#1B5E20':'#B71C1C' }}>{msgSenha.texto}</div>}
+            <button onClick={alterarMinhaSenha} style={btnPrimary}>Salvar Nova Senha</button>
+          </Card>
+          {isPrincipal && (
+            <Card>
+              <h3 style={{ fontSize:14, fontWeight:800, color:'#1a3a5c', marginBottom:4 }}>➕ Cadastrar Novo Gestor</h3>
+              <label style={lbl}>Nome / Patente *</label>
+              <input value={novoGestorNome} onChange={e => setNovoGestorNome(e.target.value)} placeholder="Ex.: TEN CEL SILVA" style={{ ...inp, marginBottom:10 }} />
+              <label style={lbl}>Matrícula *</label>
+              <input value={novoGestorMatricula} onChange={e => setNovoGestorMatricula(e.target.value)} placeholder="Ex.: 80231" style={{ ...inp, marginBottom:10 }} />
+              <label style={lbl}>Senha de acesso *</label>
+              <input type="password" value={novoGestorSenha} onChange={e => setNovoGestorSenha(e.target.value)} placeholder="Mínimo 4 caracteres" style={{ ...inp, marginBottom:10 }} />
+              <label style={lbl}>Função</label>
+              <select value={novoGestorFuncao} onChange={e => setNovoGestorFuncao(e.target.value)} style={{ ...inp, marginBottom:10 }}>
+                {FUNCOES_GESTOR.map(f => <option key={f} value={f}>{f || '— Sem função específica —'}</option>)}
+              </select>
+              <label style={lbl}>Nível de acesso</label>
+              <select value={novoGestorNivel} onChange={e => setNovoGestorNivel(e.target.value)} style={{ ...inp, marginBottom:6 }}>
+                <option value="gestor">Gestor (apenas visualização)</option>
+                <option value="master">Master (pode aprovar/recusar)</option>
+              </select>
+              {msgGestor && <div style={{ padding:'10px 14px', borderRadius:8, fontWeight:600, marginBottom:6, background:msgGestor.tipo==='ok'?'#E8F5E9':'#FFEBEE', color:msgGestor.tipo==='ok'?'#1B5E20':'#B71C1C' }}>{msgGestor.texto}</div>}
+              <button onClick={adicionarGestor} style={btnPrimary}>Cadastrar Gestor</button>
+            </Card>
+          )}
+          <h3 style={{ fontSize:14, fontWeight:800, color:'#1a3a5c', margin:'20px 0 10px' }}>Gestores Cadastrados</h3>
+          {gestores.map(g => {
+            const nl = nivelLabel(g);
+            return (
+              <Card key={g.id} style={{ padding:'12px 16px' }}>
+                <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', flexWrap:'wrap', gap:8 }}>
+                  <div style={{ flex:1 }}>
+                    <div style={{ display:'flex', gap:8, alignItems:'center', flexWrap:'wrap', marginBottom:4 }}>
+                      <span style={{ fontWeight:800, color:'#1a3a5c' }}>{g.nome}</span>
+                      <span style={{ color:'#6b8099', fontSize:12 }}>Mat. {g.matricula}</span>
+                      <span style={{ background:nl.bg, color:nl.color, borderRadius:6, padding:'2px 8px', fontSize:11, fontWeight:700 }}>{nl.label}</span>
+                      {g.funcao && <span style={{ background:'#e8f0fe', color:'#3d5a9e', borderRadius:6, padding:'2px 8px', fontSize:11, fontWeight:700 }}>{g.funcao}</span>}
+                    </div>
+                    {isPrincipal && !g.principal && (
+                      <div style={{ display:'flex', gap:8, flexWrap:'wrap', marginTop:6 }}>
+                        <select value={g.nivel||'gestor'} onChange={e => alterarNivelGestor(g.id, e.target.value)} style={{ ...inp, fontSize:12, padding:'5px 8px', width:'auto' }}>
+                          <option value="gestor">Gestor</option>
+                          <option value="master">Master</option>
+                        </select>
+                        <select value={g.funcao||''} onChange={e => alterarFuncaoGestor(g.id, e.target.value)} style={{ ...inp, fontSize:12, padding:'5px 8px', width:'auto' }}>
+                          {FUNCOES_GESTOR.map(f => <option key={f} value={f}>{f || '— Sem função —'}</option>)}
+                        </select>
+                      </div>
+                    )}
+                  </div>
+                  {!g.principal && g.id !== gestorLogado.id && isPrincipal && <button onClick={() => removerGestor(g.id)} style={{ ...btnSm, background:'#FFEBEE', color:'#B71C1C' }}>Remover</button>}
+                </div>
+              </Card>
+            );
+          })}
+        </>
+      )}
+    </div>
+  );
+}
+
 export default function App() {
-  const [usuario, setUsuario] = useState(null);
-  const [abaPrincipal, setAbaPrincipal] = useState('principal');
-  const [msgsSistema, setMsgsSistema] = useState([]);
-  const [toastGlobal, setToastGlobal] = useState(null);
+  const [modo, setModo] = useState('login');
+  const [usuarioSel, setUsuarioSel] = useState(null);
+  const [gestorLogado, setGestorLogado] = useState(null);
+  const [senhaGestor, setSenhaGestor] = useState('');
+  const [erroSenha, setErroSenha] = useState(false);
 
-  useEffect(() => {
-    try { const u = sessionStorage.getItem('cmd_usuario'); if (u) setUsuario(JSON.parse(u)); } catch(e){}
-  }, []);
+  useEffect(() => {
+    const sessao = carregarSessao();
+    if (sessao) {
+      if (sessao.tipo === 'policial') { setUsuarioSel(sessao.dados); setModo('policial'); }
+      else if (sessao.tipo === 'gestor') { setGestorLogado(sessao.dados); setModo('gestor'); }
+    }
+  }, []);
 
-  useEffect(() => {
-    if (usuario) {
-      supabase.from('mensagens_comando').select('*').order('created_at', { ascending:false }).limit(10)
-        .then(({ data }) => setMsgsSistema(data||[]));
-    }
-  }, [usuario]);
+  async function loginGestor() {
+    const { data } = await supabase.from('gestores').select('*').eq('senha', senhaGestor).single();
+    if (data) { salvarSessao('gestor', data); setGestorLogado(data); setModo('gestor'); setErroSenha(false); }
+    else setErroSenha(true);
+  }
 
-  function showToastGlobal(texto, tipo='ok') {
-    setToastGlobal({ texto, tipo });
-    setTimeout(() => setToastGlobal(null), 3000);
-  }
+  function sair() { limparSessao(); setModo('login'); setUsuarioSel(null); setGestorLogado(null); setSenhaGestor(''); setErroSenha(false); }
 
-  function onLogin(u) { try { sessionStorage.setItem('cmd_usuario', JSON.stringify(u)); } catch(e){} setUsuario(u); }
-  function sair() { try { sessionStorage.removeItem('cmd_usuario'); } catch(e){} setUsuario(null); }
+  const [abaLogin, setAbaLogin] = useState('policial');
 
-  const ehComandante = usuario?.nivel === 'comandante';
-  const ehAdmin = usuario?.nivel === 'admin';
-  const ehChefe = usuario?.nivel === 'chefe';
+  return (
+    <div style={{ minHeight:'100vh', background:'#f0f2f5', fontFamily:"'Inter','Segoe UI',sans-serif" }}>
 
-  // Mensagens não lidas
-  const msgsNaoLidas = msgsSistema.filter(m =>
-    (m.destinatario === 'todos' || m.destinatario === usuario?.secao_sigla) &&
-    !(m.lida_por||[]).includes(usuario?.id)
-  );
+      {/* CABEÇALHO */}
+      <div style={{ background:'linear-gradient(135deg,#0d2340 0%,#1a3a5c 60%,#1e4d7b 100%)', padding:'16px 24px', display:'flex', alignItems:'center', justifyContent:'space-between', boxShadow:'0 4px 20px #00000040' }}>
+        <div style={{ display:'flex', alignItems:'center', gap:12 }}>
+          <img src="/logo.jpeg" alt="32 BPM" style={{ height:42, width:42, objectFit:'contain' }} />
+          <div>
+            <div style={{ color:'#fff', fontWeight:700, fontSize:17, letterSpacing:0.3 }}>32º BPM — Controle de Folgas</div>
+            <div style={{ color:'#8db4d8', fontSize:11, fontWeight:400 }}>PCSV · Expediente Semanal · v2.1</div>
+          </div>
+        </div>
+        {modo !== 'login' && <button onClick={sair} style={{ background:'rgba(255,255,255,0.12)', color:'#fff', border:'1px solid rgba(255,255,255,0.25)', borderRadius:8, padding:'7px 14px', cursor:'pointer', fontSize:13, fontWeight:600 }}>← Sair</button>}
+      </div>
 
-  if (!usuario) return (
-    <div style={{ minHeight:'100vh', background:CINZA, fontFamily:"'Inter','Segoe UI',sans-serif" }}>
-      <TelaLogin onLogin={onLogin} />
-    </div>
-  );
+      {/* TELA DE LOGIN */}
+      {modo === 'login' && (
+        <div style={{
+          minHeight:'calc(100vh - 74px)',
+          position:'relative',
+          display:'flex',
+          alignItems:'center',
+          justifyContent:'center',
+          padding:'24px 16px',
+        }}>
+          {/* FOTO DE FUNDO */}
+          <div style={{
+            position:'absolute', inset:0,
+            backgroundImage:'url(/batalhao.jpg)',
+            backgroundSize:'cover',
+            backgroundPosition:'center 30%',
+            filter:'brightness(0.35) saturate(0.8)',
+          }} />
+          {/* OVERLAY AZUL */}
+          <div style={{
+            position:'absolute', inset:0,
+            background:'linear-gradient(160deg, rgba(13,35,64,0.72) 0%, rgba(30,77,123,0.55) 100%)',
+          }} />
 
-  return (
-    <div style={{ minHeight:'100vh', background:CINZA, fontFamily:"'Inter','Segoe UI',sans-serif" }}>
+          {/* CARD DE LOGIN */}
+          <div style={{
+            position:'relative', zIndex:1,
+            width:'100%', maxWidth:420,
+            background:'#fff',
+            borderRadius:16,
+            boxShadow:'0 20px 60px rgba(0,0,0,0.35)',
+            overflow:'hidden',
+          }}>
+            {/* TOPO DO CARD */}
+            <div style={{ background:'linear-gradient(135deg,#0d2340,#1e4d7b)', padding:'28px 32px 24px', textAlign:'center' }}>
+              <img src="/logo.jpeg" alt="32 BPM" style={{ height:56, width:56, objectFit:'contain', marginBottom:12 }} />
+              <h1 style={{ color:'#fff', fontWeight:700, fontSize:18, margin:0, letterSpacing:0.2 }}>Acesso ao Sistema</h1>
+              <p style={{ color:'#8db4d8', fontSize:12, fontWeight:400, margin:'6px 0 0' }}>
+                Sistema restrito ao uso do efetivo do 32º BPM
+              </p>
+            </div>
 
-      {toastGlobal && (
-        <div style={{ position:'fixed', top:20, right:20, zIndex:9999, background:toastGlobal.tipo==='ok'?VERDE:VERMELHO, color:'#fff', borderRadius:10, padding:'12px 20px', fontWeight:700, fontSize:14, boxShadow:'0 4px 20px #00000030' }}>
-          {toastGlobal.texto}
-        </div>
-      )}
+            {/* ABAS */}
+            <div style={{ display:'flex', borderBottom:'2px solid #f0f2f5' }}>
+              {[
+                { id:'policial', label:'👮 Sou Policial' },
+                { id:'gestor', label:'🗂️ Sou Gestor' },
+              ].map(a => (
+                <button key={a.id} onClick={() => setAbaLogin(a.id)} style={{
+                  flex:1, padding:'14px 8px',
+                  fontWeight: abaLogin === a.id ? 700 : 500,
+                  fontSize:13,
+                  cursor:'pointer',
+                  border:'none',
+                  borderBottom: abaLogin === a.id ? '3px solid #1a3a5c' : '3px solid transparent',
+                  background:'#fff',
+                  color: abaLogin === a.id ? '#1a3a5c' : '#6b8099',
+                  transition:'all 0.15s',
+                  marginBottom:'-2px',
+                }}>
+                  {a.label}
+                </button>
+              ))}
+            </div>
 
-      {/* CABEÇALHO */}
-      <div style={{ background:`linear-gradient(135deg,${AZUL} 0%,${AZUL2} 60%,${AZUL3} 100%)`, padding:'14px 24px', display:'flex', alignItems:'center', justifyContent:'space-between', boxShadow:'0 4px 20px #00000040' }}>
-        <div style={{ display:'flex', alignItems:'center', gap:12 }}>
-          <img src="/logo.jpeg" alt="32 BPM" style={{ height:40, width:40, objectFit:'contain' }} />
-          <div>
-            <div style={{ color:'#fff', fontWeight:800, fontSize:16, letterSpacing:0.3 }}>
-              {ehAdmin ? '⚙️ Administração' : ehComandante ? '🏛️ Painel do Comando' : `${usuario.secao_sigla} — Painel da Seção`}
-            </div>
-            <div style={{ color:'#8db4d8', fontSize:11 }}>32º BPM · {usuario.nome}</div>
-          </div>
-        </div>
-        <div style={{ display:'flex', gap:8, alignItems:'center' }}>
-          <button onClick={() => setAbaPrincipal(abaPrincipal==='mensagens'?'principal':'mensagens')} style={{ background:'rgba(255,255,255,0.12)', color:'#fff', border:'1px solid rgba(255,255,255,0.25)', borderRadius:8, padding:'7px 14px', cursor:'pointer', fontSize:13, fontWeight:600, position:'relative' }}>
-            📨 Mensagens
-            {msgsNaoLidas.length > 0 && <span style={{ position:'absolute', top:-6, right:-6, background:VERMELHO, color:'#fff', borderRadius:'50%', width:18, height:18, fontSize:10, fontWeight:800, display:'flex', alignItems:'center', justifyContent:'center' }}>{msgsNaoLidas.length}</span>}
-          </button>
-          <button onClick={() => setAbaPrincipal(abaPrincipal==='senha'?'principal':'senha')} style={{ background:'rgba(255,255,255,0.12)', color:'#fff', border:'1px solid rgba(255,255,255,0.25)', borderRadius:8, padding:'7px 14px', cursor:'pointer', fontSize:13, fontWeight:600 }}>🔑 Senha</button>
-          <button onClick={sair} style={{ background:'rgba(255,255,255,0.12)', color:'#fff', border:'1px solid rgba(255,255,255,0.25)', borderRadius:8, padding:'7px 14px', cursor:'pointer', fontSize:13, fontWeight:600 }}>← Sair</button>
-        </div>
-      </div>
+            {/* CONTEÚDO DAS ABAS */}
+            <div style={{ padding:'24px 32px 28px' }}>
+              {abaLogin === 'policial' && (
+                <LoginPolicial onLogin={p => { setUsuarioSel(p); setModo('policial'); }} />
+              )}
+              {abaLogin === 'gestor' && (
+                <div>
+                  <p style={{ color:'#6b8099', fontSize:13, fontWeight:400, marginBottom:20, marginTop:0 }}>
+                    Acesso restrito a gestores autorizados.
+                  </p>
+                  <label style={lbl}>Senha de acesso</label>
+                  <input
+                    type="password"
+                    value={senhaGestor}
+                    onChange={e => setSenhaGestor(e.target.value)}
+                    onKeyDown={e => e.key === 'Enter' && loginGestor()}
+                    placeholder="••••••"
+                    style={{ ...inp, marginBottom:6 }}
+                  />
+                  {erroSenha && <p style={{ color:'#B71C1C', fontSize:12, marginBottom:4 }}>Senha incorreta. Tente novamente.</p>}
+                  <button onClick={loginGestor} style={{ ...btnPrimary, marginTop:12, letterSpacing:0.5, textTransform:'uppercase', fontSize:13 }}>
+                    Entrar
+                  </button>
+                </div>
+              )}
+            </div>
 
-      {/* CONTEÚDO */}
-      <div style={{ maxWidth:900, margin:'28px auto', padding:'0 14px' }}>
+            {/* RODAPÉ DO CARD */}
+            <div style={{ borderTop:'1px solid #f0f2f5', padding:'12px 32px', textAlign:'center' }}>
+              <span style={{ fontSize:11, color:'#aab', fontWeight:400 }}>
+                Polícia Militar do Estado do Rio de Janeiro · 32º BPM
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
 
-        {/* TROCAR SENHA */}
-        {abaPrincipal === 'senha' && (
-          <TrocarSenha usuario={usuario} onVoltar={() => setAbaPrincipal('principal')} onSucesso={() => { showToastGlobal('✅ Senha alterada!'); setAbaPrincipal('principal'); }} />
-        )}
-
-        {/* MENSAGENS */}
-        {abaPrincipal === 'mensagens' && (
-          <TelaMensagens usuario={usuario} ehComandante={ehComandante||ehAdmin} msgs={msgsSistema} setMsgs={setMsgsSistema} onVoltar={() => setAbaPrincipal('principal')} onSucesso={showToastGlobal} />
-        )}
-
-        {/* PRINCIPAL */}
-        {abaPrincipal === 'principal' && (
-          <>
-            {msgsNaoLidas.length > 0 && (
-              <div style={{ background:'#FFF8E1', border:'2px solid #FFD54F', borderRadius:10, padding:'12px 16px', marginBottom:16, display:'flex', justifyContent:'space-between', alignItems:'center' }}>
-                <span style={{ fontWeight:700, color:'#7B5800', fontSize:13 }}>📨 Você tem {msgsNaoLidas.length} mensagem{msgsNaoLidas.length>1?'s':''} não lida{msgsNaoLidas.length>1?'s':''} do Comando!</span>
-                <button onClick={() => setAbaPrincipal('mensagens')} style={{ ...btnSm, background:'#7B5800', color:'#fff' }}>Ver mensagens</button>
-              </div>
-            )}
-            {ehAdmin && <PainelAdmin />}
-            {ehComandante && <DashboardComandante />}
-            {ehChefe && <TelaSecao usuario={usuario} />}
-          </>
-        )}
-      </div>
-    </div>
-  );
+      {/* TELAS INTERNAS */}
+      {modo !== 'login' && (
+        <div style={{ maxWidth:740, margin:'28px auto', padding:'0 14px' }}>
+          {modo === 'policial' && usuarioSel && <TelaSolicitacao usuario={usuarioSel} />}
+          {modo === 'gestor' && gestorLogado && <TelaGestor gestorLogado={gestorLogado} />}
+        </div>
+      )}
+    </div>
+  );
 }
