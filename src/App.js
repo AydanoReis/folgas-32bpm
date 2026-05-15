@@ -20,6 +20,34 @@ import {
   DetalhesPolicialCard,
 } from './utils';
 
+// 👇 ADICIONE ESTA LINHA EXATAMENTE AQUI 👇
+import { GraficoGanttCanvas, QuadroTaticoCanvas } from './ComponentesCanvas';
+
+const EMAILJS_SERVICE_ID = 'service_97rq307';
+const EMAILJS_TEMPLATE_ID = 'template_y0wm9hp';
+// ... o resto do seu código continua normal abaixo
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { supabase } from './supabaseClient';
+import emailjs from '@emailjs/browser';
+import jsPDF from 'jspdf';
+import 'jspdf-autotable';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
+import {
+  paginar,
+  validarEmail,
+  validarMatricula,
+  validarSenha,
+  rateLimiterSolicitacao,
+  rateLimiterAprovacao,
+  registrarHistorico,
+  exportarParaCSV,
+  exportarParaExcel,
+  formatarDataHora,
+  CORES_STATUS,
+  ComponentePaginacao,
+  DetalhesPolicialCard,
+} from './utils';
+
 const EMAILJS_SERVICE_ID = 'service_97rq307';
 const EMAILJS_TEMPLATE_ID = 'template_y0wm9hp';
 const EMAILJS_PUBLIC_KEY = 'VmM8b5g2hP9fKqsm-';
