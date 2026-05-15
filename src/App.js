@@ -1999,20 +1999,18 @@ function TelaGestor({ gestorLogado }) {
               {paginadasEfetivo.totalPaginas > 1 && <ComponentePaginacao paginaAtual={paginaEfetivo} totalPaginas={paginadasEfetivo.totalPaginas} onMudarPagina={setPaginaEfetivo} />}
             </>
           )}
-        </>
-      )}
 
-      {aba === 'gestores' && (
-        <Card>
-           <h3 style={{ fontSize: 15, fontWeight: 800, color: '#1a3a5c', marginBottom: 16 }}>🗝️ Gestão de Acessos</h3>
-           <p style={{ fontSize: 12, color: '#6b8099' }}>Apenas o Administrador Principal pode gerenciar outros gestores. (Aba em construção)</p>
-        </Card>
-      )}
-      
-      <button onClick={() => { limparSessao(); window.location.reload(); }} style={{ ...btnPrimary, background: '#f0f4f8', color: '#B71C1C', marginTop: 30 }}>🚪 Sair do Sistema</button>
-    </div>
-  );
-}
+          {aba === 'gestores' && (
+            <Card>
+               <h3 style={{ fontSize: 15, fontWeight: 800, color: '#1a3a5c', marginBottom: 16 }}>🗝️ Gestão de Acessos</h3>
+               <p style={{ fontSize: 12, color: '#6b8099' }}>Apenas o Administrador Principal pode gerenciar outros gestores. (Aba em construção)</p>
+            </Card>
+          )}
+          
+          <button onClick={() => { limparSessao(); window.location.reload(); }} style={{ ...btnPrimary, background: '#f0f4f8', color: '#B71C1C', marginTop: 30 }}>🚪 Sair do Sistema</button>
+        </div>
+      );
+    }
 
 // ========== COMPONENTE PRINCIPAL (APP) ==========
 export default function App() {
