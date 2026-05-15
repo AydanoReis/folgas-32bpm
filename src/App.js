@@ -600,7 +600,168 @@ function gerarPDF(solicitacoes, policiais, semanaAtual) {
   rodape(3);
   doc.save(`relatorio-32bpm-${periodoStr.replace(/\//g,'-').replace(/ /g,'')}.pdf`);
 }
-// ========== DASHBOARD (ORIGINAL COMPLETO) ==========
+// ========== TELA DE SERVIÇO ==========
+function TelaServico({ solicitacoes, policiais }) {
+  const hoje = new Date().toISOString().split('T')[0];
+  const [dataSelecionada, setDataSelecionada] = useState(hoje);
+  const [secaoFiltro, setSecaoFiltro] = useState('todas');
+
+  const diaSemana = DIAS[new Date(dataSelecionada + 'T12:00:00').getDay() === 0 ? 6 : new Date(dataSelecionada + 'T12:00:00').getDay() - 1];
+
+  // Folgas aprovadas naquele dia (semana contém a data selecionada e dia da semana bate)
+  const folgasNoDia = solicitacoes.filter(s =>
+    s.status === 'aprovado' &&
+    s.dia === diaSemana &&
+    s.semana <= dataSelecionada &&
+    (() => {
+      const inicioSemana = new Date(s.semana + 'T00:00:00');
+      const fimSemana = new Date(inicioSemana);
+      fimSemana.setDate(fimSemana.getDate() + 6);
+      const data = new Date(dataSelecionada + 'T00:00:00');
+      return data >= inicioSemana && data <= fimSemana;
+    })()
+  );
+
+  const policiaisfiltrados = secaoFiltro === 'todas' ? policiais : policiais.filter(p => p.secao === secaoFiltro);
+
+  const deServico = policiaisfiltrados.filter(p => {
+    const temFolga = folgasNoDia.find(s => s.policial_id === p.id);
+    const afastado = (p.situacao || 'Pronto') !== 'Pronto';
+    return !temFolga && !afastado;
+  });
+
+  const deFolga = policiaisfiltrados.filter(p => folgasNoDia.find(s => s.policial_id === p.id));
+
+  const afastados = policiaisfiltrados.filter(p => {
+    const temFolga = folgasNoDia.find(s => s.policial_id === p.id);
+    return !temFolga && (p.situacao || 'Pronto') !== 'Pronto';
+  });
+
+  const totalEfetivo = policiaisfiltrados.length;
+  const pctServico = totalEfetivo > 0 ? Math.round((deServico.length / totalEfetivo) * 100) : 0;
+
+  return (
+    <div>
+      <h3 style={{ fontSize:15, fontWeight:800, color:'#1a3a5c', marginBottom:14 }}>🪖 Efetivo de Serviço</h3>
+
+      {/* FILTROS */}
+      <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8, marginBottom:14 }}>
+        <div>
+          <label style={{ display:'block', fontSize:11, fontWeight:800, color:'#4a6580', marginBottom:5, textTransform:'uppercase', letterSpacing:0.5 }}>Data</label>
+          <input type="date" value={dataSelecionada} onChange={e => setDataSelecionada(e.target.value)} style={{ width:'100%', padding:'10px 12px', borderRadius:8, border:'1.5px solid #d0dce8', fontSize:14, color:'#1a3a5c', background:'#f8fafc', boxSizing:'border-box', outline:'none' }} />
+        </div>
+        <div>
+          <label style={{ display:'block', fontSize:11, fontWeight:800, color:'#4a6580', marginBottom:5, textTransform:'uppercase', letterSpacing:0.5 }}>Seção</label>
+          <select value={secaoFiltro} onChange={e => setSecaoFiltro(e.target.value)} style={{ width:'100%', padding:'10px 12px', borderRadius:8, border:'1.5px solid #d0dce8', fontSize:14, color:'#1a3a5c', background:'#f8fafc', boxSizing:'border-box', outline:'none' }}>
+            <option value="todas">Todas as seções</option>
+            {SECOES.map(s => <option key={s}>{s}</option>)}
+          </select>
+        </div>
+      </div>
+
+      {/* DIA DA SEMANA */}
+      <div style={{ background:'linear-gradient(135deg,#0d2340,#1e4d7b)', borderRadius:10, padding:'12px 16px', marginBottom:14, display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+        <div>
+          <div style={{ color:'#8db4d8', fontSize:11, fontWeight:600 }}>DIA SELECIONADO</div>
+          <div style={{ color:'#fff', fontSize:16, fontWeight:800 }}>{diaSemana}-feira · {new Date(dataSelecionada + 'T12:00:00').toLocaleDateString('pt-BR')}</div>
+        </div>
+        <div style={{ textAlign:'right' }}>
+          <div style={{ color:'#8db4d8', fontSize:11, fontWeight:600 }}>DISPONÍVEIS</div>
+          <div style={{ color:'#fff', fontSize:22, fontWeight:900 }}>{deServico.length} <span style={{ fontSize:13, fontWeight:400 }}>/ {totalEfetivo}</span></div>
+        </div>
+      </div>
+
+      {/* CARDS DE RESUMO */}
+      <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:10, marginBottom:14 }}>
+        <div style={{ background:'#E8F5E9', borderRadius:10, padding:'12px 8px', textAlign:'center', border:'2px solid #A5D6A7' }}>
+          <div style={{ fontSize:26, fontWeight:900, color:'#1B5E20' }}>{deServico.length}</div>
+          <div style={{ fontSize:11, color:'#1B5E20', fontWeight:700 }}>🟢 De Serviço</div>
+          <div style={{ fontSize:10, color:'#6b8099', marginTop:2 }}>{pctServico}% do efetivo</div>
+        </div>
+        <div style={{ background:'#E3F2FD', borderRadius:10, padding:'12px 8px', textAlign:'center', border:'2px solid #90CAF9' }}>
+          <div style={{ fontSize:26, fontWeight:900, color:'#0D47A1' }}>{deFolga.length}</div>
+          <div style={{ fontSize:11, color:'#0D47A1', fontWeight:700 }}>🌙 De Folga</div>
+        </div>
+        <div style={{ background:'#FFEBEE', borderRadius:10, padding:'12px 8px', textAlign:'center', border:'2px solid #EF9A9A' }}>
+          <div style={{ fontSize:26, fontWeight:900, color:'#B71C1C' }}>{afastados.length}</div>
+          <div style={{ fontSize:11, color:'#B71C1C', fontWeight:700 }}>🚨 Afastados</div>
+        </div>
+      </div>
+
+      {/* DE SERVIÇO */}
+      {deServico.length > 0 && (
+        <div style={{ background:'#fff', borderRadius:12, padding:'16px 18px', boxShadow:'0 2px 12px #00000012', marginBottom:10 }}>
+          <h4 style={{ fontSize:13, fontWeight:800, color:'#1B5E20', marginBottom:10 }}>🟢 De Serviço ({deServico.length})</h4>
+          <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
+            {deServico.map(p => (
+              <div key={p.id} style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'8px 10px', background:'#f8fafc', borderRadius:8, border:'1px solid #e0e8f0' }}>
+                <div>
+                  <span style={{ fontWeight:700, color:'#1a3a5c', fontSize:13 }}>{p.patente} {p.nome}</span>
+                  <span style={{ color:'#6b8099', fontSize:11, marginLeft:8 }}>Mat. {p.matricula}</span>
+                </div>
+                <div style={{ display:'flex', gap:6, alignItems:'center' }}>
+                  {p.secao && <span style={{ background:'#e8f0fe', color:'#3d5a9e', borderRadius:6, padding:'2px 8px', fontSize:11, fontWeight:700 }}>{p.secao}</span>}
+                  <span style={{ background: '#1565C0', color:'#fff', borderRadius:6, padding:'2px 8px', fontSize:11, fontWeight:800 }}>{p.sit_sanitaria || 'Apto A'}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* DE FOLGA */}
+      {deFolga.length > 0 && (
+        <div style={{ background:'#fff', borderRadius:12, padding:'16px 18px', boxShadow:'0 2px 12px #00000012', marginBottom:10 }}>
+          <h4 style={{ fontSize:13, fontWeight:800, color:'#0D47A1', marginBottom:10 }}>🌙 De Folga/Concessão ({deFolga.length})</h4>
+          <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
+            {deFolga.map(p => {
+              const folga = folgasNoDia.find(s => s.policial_id === p.id);
+              return (
+                <div key={p.id} style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'8px 10px', background:'#f0f6ff', borderRadius:8, border:'1px solid #d0dce8' }}>
+                  <div>
+                    <span style={{ fontWeight:700, color:'#1a3a5c', fontSize:13 }}>{p.patente} {p.nome}</span>
+                    <span style={{ color:'#6b8099', fontSize:11, marginLeft:8 }}>Mat. {p.matricula}</span>
+                  </div>
+                  <span style={{ background:'#E3F2FD', color:'#0D47A1', border:'1px solid #90CAF9', padding:'3px 10px', borderRadius:20, fontSize:11, fontWeight:800 }}>{folga?.motivo || 'Folga'}</span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* AFASTADOS */}
+      {afastados.length > 0 && (
+        <div style={{ background:'#fff', borderRadius:12, padding:'16px 18px', boxShadow:'0 2px 12px #00000012', marginBottom:10 }}>
+          <h4 style={{ fontSize:13, fontWeight:800, color:'#B71C1C', marginBottom:10 }}>🚨 Afastados ({afastados.length})</h4>
+          <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
+            {afastados.map(p => (
+              <div key={p.id} style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'8px 10px', background:'#fff5f5', borderRadius:8, border:'1px solid #EF9A9A' }}>
+                <div>
+                  <span style={{ fontWeight:700, color:'#1a3a5c', fontSize:13 }}>{p.patente} {p.nome}</span>
+                  <span style={{ color:'#6b8099', fontSize:11, marginLeft:8 }}>Mat. {p.matricula}</span>
+                </div>
+                <span style={{ background:'#FFEBEE', color:'#B71C1C', borderRadius:6, padding:'2px 8px', fontSize:11, fontWeight:800 }}>{p.situacao || 'Afastado'}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {deServico.length === 0 && deFolga.length === 0 && afastados.length === 0 && (
+        <p style={{ color:'#aab', fontSize:13, textAlign:'center', padding:20 }}>Nenhum policial encontrado para os filtros selecionados.</p>
+      )}
+
+      {/* ADICIONADO O QUADRO TÁTICO (CANVAS) */}
+      <div style={{ marginTop: 20 }}>
+        <QuadroTaticoCanvas policiais={policiais} secoesDisponiveis={SECOES.slice(0, 6)} />
+      </div>
+
+    </div>
+  );
+}
+
+// ========== DASHBOARD (COM GANTT CANVAS) ==========
 function Dashboard({ solicitacoes, policiais, onAtualizarPolicial, onRemoverPolicial, semanaAtual }) {
   const aprovadas = solicitacoes.filter(s => s.status === 'aprovado');
   const total = solicitacoes.length;
@@ -696,7 +857,7 @@ function Dashboard({ solicitacoes, policiais, onAtualizarPolicial, onRemoverPoli
       )}
 
       {aprovadas.length > 0 && (
-        <Card>
+        <div style={{ background:'#fff', borderRadius:12, padding:'16px 18px', boxShadow:'0 2px 12px #00000012', marginBottom:10 }}>
           <h4 style={{ fontSize:13, fontWeight:800, color:'#1a3a5c', marginBottom:12 }}>🔍 Insights Automáticos</h4>
           <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
             {diaCritico && <div style={{ background:'#FFEBEE', borderRadius:8, padding:'8px 12px', display:'flex', gap:8, alignItems:'center' }}><span style={{ fontSize:16 }}>🔴</span><span style={{ fontSize:13, color:'#B71C1C', fontWeight:700 }}>Dia crítico: <strong>{diaCritico.dia}</strong> com {diaCritico.Folgas+diaCritico.Concessões} folgas ({Math.round(((diaCritico.Folgas+diaCritico.Concessões)/totalAprovadas)*100)}% do total)</span></div>}
@@ -704,10 +865,10 @@ function Dashboard({ solicitacoes, policiais, onAtualizarPolicial, onRemoverPoli
             {porSecao.length > 0 && <div style={{ background:'#E8F5E9', borderRadius:8, padding:'8px 12px', display:'flex', gap:8, alignItems:'center' }}><span style={{ fontSize:16 }}>📊</span><span style={{ fontSize:13, color:'#1B5E20', fontWeight:700 }}>Seção mais ativa: <strong>{porSecao[0].secao}</strong> ({Math.round((porSecao[0].total/totalAprovadas)*100)}% das folgas)</span></div>}
             <div style={{ background:'#E3F2FD', borderRadius:8, padding:'8px 12px', display:'flex', gap:8, alignItems:'center' }}><span style={{ fontSize:16 }}>📈</span><span style={{ fontSize:13, color:'#0D47A1', fontWeight:700 }}>Média de {mediaDia.toFixed(1)} folgas por dia da semana</span></div>
           </div>
-        </Card>
+        </div>
       )}
 
-      <Card>
+      <div style={{ background:'#fff', borderRadius:12, padding:'16px 18px', boxShadow:'0 2px 12px #00000012', marginBottom:10 }}>
         <h4 style={{ fontSize:13, fontWeight:800, color:'#1a3a5c', marginBottom:12 }}>⚙️ Capacidade Operacional</h4>
         <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:10 }}>
           {[
@@ -719,10 +880,10 @@ function Dashboard({ solicitacoes, policiais, onAtualizarPolicial, onRemoverPoli
             { l:'LTS Sanitário', v:policiais.filter(p=>(p.sit_sanitaria||'Apto A')==='LTS').length, c:'#6A1B9A' },
           ].map(s => <div key={s.l} style={{ background:'#f8fafc', borderRadius:10, padding:'12px 8px', textAlign:'center', border:'1px solid #e0e8f0' }}><div style={{ fontSize:22, fontWeight:900, color:s.c }}>{s.v}</div><div style={{ fontSize:10, color:'#6b8099', fontWeight:700 }}>{s.l}</div></div>)}
         </div>
-      </Card>
+      </div>
 
       {policiais.filter(p => (p.situacao||'Pronto') !== 'Pronto').length > 0 && (
-        <Card>
+        <div style={{ background:'#fff', borderRadius:12, padding:'16px 18px', boxShadow:'0 2px 12px #00000012', marginBottom:10 }}>
           <h4 style={{ fontSize:13, fontWeight:800, color:'#1a3a5c', marginBottom:12 }}>🚨 Policiais Afastados</h4>
           {SITUACOES.filter(sit => sit !== 'Pronto').map(sit => {
             const afastados = policiais.filter(p => (p.situacao||'Pronto') === sit);
@@ -743,7 +904,7 @@ function Dashboard({ solicitacoes, policiais, onAtualizarPolicial, onRemoverPoli
               </div>
             );
           })}
-        </Card>
+        </div>
       )}
 
       <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:10, marginBottom:20 }}>
@@ -751,232 +912,40 @@ function Dashboard({ solicitacoes, policiais, onAtualizarPolicial, onRemoverPoli
           .map(s => <div key={s.l} style={{ background:'#fff', borderRadius:10, padding:'14px 10px', boxShadow:'0 2px 8px #00000012', textAlign:'center' }}><div style={{ fontSize:26, fontWeight:900, color:s.c }}>{s.v}</div><div style={{ fontSize:11, color:'#6b8099', fontWeight:700 }}>{s.l}</div></div>)}
       </div>
 
-      <Card>
+      <div style={{ background:'#fff', borderRadius:12, padding:'16px 18px', boxShadow:'0 2px 12px #00000012', marginBottom:10 }}>
         <h4 style={{ fontSize:13, fontWeight:800, color:'#1a3a5c', marginBottom:14 }}>Situação Sanitária do Efetivo</h4>
         <div style={{ display:'flex', gap:10, flexWrap:'wrap' }}>
           {ssCards.map(s => <div key={s.label} style={{ flex:1, minWidth:90, background:s.cor+'18', borderRadius:10, padding:'12px 8px', textAlign:'center', border:`2px solid ${s.cor}` }}><div style={{ fontSize:22 }}>{s.emoji}</div><div style={{ fontSize:20, fontWeight:900, color:s.cor }}>{s.total}</div><div style={{ fontSize:10, color:'#6b8099', fontWeight:700 }}>{s.label}</div></div>)}
         </div>
-      </Card>
+      </div>
 
-      <Card>
+      <div style={{ background:'#fff', borderRadius:12, padding:'16px 18px', boxShadow:'0 2px 12px #00000012', marginBottom:10 }}>
         <h4 style={{ fontSize:13, fontWeight:800, color:'#1a3a5c', marginBottom:14 }}>Situação do Efetivo</h4>
         <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
           {sitData.map(s => <div key={s.name} style={{ background:s.name==='Pronto'?'#E8F5E9':'#FFEBEE', borderRadius:8, padding:'8px 14px', textAlign:'center' }}><div style={{ fontSize:18, fontWeight:900, color:s.name==='Pronto'?'#1B5E20':'#B71C1C' }}>{s.value}</div><div style={{ fontSize:11, color:'#6b8099', fontWeight:700 }}>{s.name}</div></div>)}
         </div>
-      </Card>
+      </div>
 
-      <Card>
+      <div style={{ background:'#fff', borderRadius:12, padding:'16px 18px', boxShadow:'0 2px 12px #00000012', marginBottom:10 }}>
         <h4 style={{ fontSize:13, fontWeight:800, color:'#1a3a5c', marginBottom:14 }}>Folgas aprovadas por dia da semana</h4>
         {aprovadas.length === 0 ? <p style={{ color:'#aab', fontSize:13 }}>Nenhuma folga aprovada ainda.</p>
           : <ResponsiveContainer width="100%" height={200}><BarChart data={porDia} margin={{ top:5, right:10, left:-20, bottom:5 }}><CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" /><XAxis dataKey="dia" tick={{ fontSize:11 }} /><YAxis tick={{ fontSize:11 }} allowDecimals={false} /><Tooltip /><Bar dataKey="Folgas" fill="#0D47A1" radius={[4,4,0,0]} /><Bar dataKey="Concessões" fill="#6A1B9A" radius={[4,4,0,0]} /></BarChart></ResponsiveContainer>}
-      </Card>
+      </div>
 
-      <Card>
+      <div style={{ background:'#fff', borderRadius:12, padding:'16px 18px', boxShadow:'0 2px 12px #00000012', marginBottom:10 }}>
         <h4 style={{ fontSize:13, fontWeight:800, color:'#1a3a5c', marginBottom:14 }}>Distribuição por seção (%)</h4>
         {porSecao.length === 0 ? <p style={{ color:'#aab', fontSize:13 }}>Nenhuma folga aprovada ainda.</p>
           : <><ResponsiveContainer width="100%" height={220}><PieChart><Pie data={porSecao} dataKey="total" nameKey="secao" cx="50%" cy="50%" outerRadius={80} label={({ secao, total }) => `${secao} ${Math.round((total/totalAprovadas)*100)}%`} labelLine={false} fontSize={9}>{porSecao.map((_,i) => <Cell key={i} fill={CORES_GRAFICO[i%CORES_GRAFICO.length]} />)}</Pie><Tooltip formatter={(v,n) => [`${v} folgas (${Math.round((v/totalAprovadas)*100)}%)`, n]} /></PieChart></ResponsiveContainer><div style={{ display:'flex', flexWrap:'wrap', gap:6, marginTop:8 }}>{porSecao.map((s,i) => <span key={s.secao} style={{ background:CORES_GRAFICO[i%CORES_GRAFICO.length], color:'#fff', borderRadius:6, padding:'2px 8px', fontSize:11, fontWeight:700 }}>{s.secao}: {s.total} ({Math.round((s.total/totalAprovadas)*100)}%)</span>)}</div></>}
-      </Card>
+      </div>
+
+      {/* COMPONENTE CANVAS ADICIONADO AQUI! */}
+      <div style={{ marginTop: 20 }}>
+        <GraficoGanttCanvas policiais={policiais} />
+      </div>
+
     </div>
   );
 }
-
-// ========== CALENDÁRIO (ORIGINAL COMPLETO) ==========
-function CalendarioFolgas({ solicitacoes }) {
-  const aprovadas = solicitacoes.filter(s => s.status === 'aprovado');
-  const [filtroSecao, setFiltroSecao] = useState('todas');
-  const [semanaCalendario, setSemanaCalendario] = useState(() => getInicioSemana(new Date()));
-
-  function semanaAnteriorCal() { const d = new Date(semanaCalendario); d.setDate(d.getDate()-7); setSemanaCalendario(d); }
-  function proximaSemanaCalendario() { const d = new Date(semanaCalendario); d.setDate(d.getDate()+7); setSemanaCalendario(d); }
-
-  const fimSemana = new Date(semanaCalendario);
-  fimSemana.setDate(fimSemana.getDate() + 6);
-  const isoInicio = semanaCalendario.toISOString().split('T')[0];
-  const isoFim = fimSemana.toISOString().split('T')[0];
-  const aprovadasSemana = aprovadas.filter(s => s.semana >= isoInicio && s.semana <= isoFim);
-  const filtradas = filtroSecao === 'todas' ? aprovadasSemana : aprovadasSemana.filter(s => s.secao === filtroSecao);
-
-  return (
-    <div>
-      <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', background:'#f0f4f8', borderRadius:10, padding:'8px 14px', marginBottom:12 }}>
-        <button onClick={semanaAnteriorCal} style={{ ...btnSm, background:'#fff', color:'#1a3a5c' }}>← Anterior</button>
-        <span style={{ fontWeight:800, color:'#1a3a5c', fontSize:13 }}>{formatarSemana(semanaCalendario)}</span>
-        <button onClick={proximaSemanaCalendario} style={{ ...btnSm, background:'#fff', color:'#1a3a5c' }}>Próxima →</button>
-      </div>
-      <select value={filtroSecao} onChange={e => setFiltroSecao(e.target.value)} style={{ ...inp, marginBottom:12 }}>
-        <option value="todas">Todas as seções</option>
-        {SECOES.map(s => <option key={s}>{s}</option>)}
-      </select>
-      <div style={{ display:'flex', gap:6, marginBottom:8 }}>
-        <span style={{ background:'#E3F2FD', color:'#0D47A1', borderRadius:6, padding:'3px 10px', fontSize:12, fontWeight:700 }}>🌙 Folga</span>
-        <span style={{ background:'#F3E5F5', color:'#6A1B9A', borderRadius:6, padding:'3px 10px', fontSize:12, fontWeight:700 }}>🎖️ Concessão</span>
-      </div>
-      <div style={{ overflowX:'auto' }}>
-        <table style={{ width:'100%', borderCollapse:'collapse', minWidth:600 }}>
-          <thead><tr>{DIAS.map(d => <th key={d} style={{ background:'#1a3a5c', color:'#fff', padding:'10px 6px', fontSize:12, fontWeight:800, textAlign:'center', border:'1px solid #0d2340' }}>{d}</th>)}</tr></thead>
-          <tbody><tr>{DIAS.map(dia => { const dodia = filtradas.filter(s => s.dia === dia); return (<td key={dia} style={{ verticalAlign:'top', padding:6, border:'1px solid #d0dce8', background:'#f8fafc', minWidth:80 }}>{dodia.length === 0 ? <span style={{ color:'#ccc', fontSize:11 }}>—</span> : dodia.map(s => (<div key={s.id} style={{ background:s.motivo==='Concessão'?'#F3E5F5':'#E3F2FD', color:s.motivo==='Concessão'?'#6A1B9A':'#0D47A1', borderRadius:6, padding:'4px 6px', marginBottom:4, fontSize:11, fontWeight:700 }}><div>{s.policial_nome.split(' ').slice(0,2).join(' ')}</div><div style={{ fontSize:10, opacity:0.8 }}>{s.secao&&s.secao!=='—'?s.secao:'Não vinculada'}</div></div>))}{dodia.length > 0 && <div style={{ fontSize:10, color:'#6b8099', marginTop:2, textAlign:'right' }}>{dodia.length} folga{dodia.length>1?'s':''}</div>}</td>); })}</tr></tbody>
-        </table>
-      </div>
-      {filtradas.length === 0 && <p style={{ color:'#aab', fontSize:13, textAlign:'center', marginTop:20 }}>Nenhuma folga aprovada nesta semana.</p>}
-    </div>
-  );
-}
-
-// ========== TELA DE SERVIÇO ==========
-function TelaServico({ solicitacoes, policiais }) {
-  const hoje = new Date().toISOString().split('T')[0];
-  const [dataSelecionada, setDataSelecionada] = useState(hoje);
-  const [secaoFiltro, setSecaoFiltro] = useState('todas');
-
-  const diaSemana = DIAS[new Date(dataSelecionada + 'T12:00:00').getDay() === 0 ? 6 : new Date(dataSelecionada + 'T12:00:00').getDay() - 1];
-
-  // Folgas aprovadas naquele dia (semana contém a data selecionada e dia da semana bate)
-  const folgasNoDia = solicitacoes.filter(s =>
-    s.status === 'aprovado' &&
-    s.dia === diaSemana &&
-    s.semana <= dataSelecionada &&
-    (() => {
-      const inicioSemana = new Date(s.semana + 'T00:00:00');
-      const fimSemana = new Date(inicioSemana);
-      fimSemana.setDate(fimSemana.getDate() + 6);
-      const data = new Date(dataSelecionada + 'T00:00:00');
-      return data >= inicioSemana && data <= fimSemana;
-    })()
-  );
-
-  const policiaisfiltrados = secaoFiltro === 'todas' ? policiais : policiais.filter(p => p.secao === secaoFiltro);
-
-  const deServico = policiaisfiltrados.filter(p => {
-    const temFolga = folgasNoDia.find(s => s.policial_id === p.id);
-    const afastado = (p.situacao || 'Pronto') !== 'Pronto';
-    return !temFolga && !afastado;
-  });
-
-  const deFolga = policiaisfiltrados.filter(p => folgasNoDia.find(s => s.policial_id === p.id));
-
-  const afastados = policiaisfiltrados.filter(p => {
-    const temFolga = folgasNoDia.find(s => s.policial_id === p.id);
-    return !temFolga && (p.situacao || 'Pronto') !== 'Pronto';
-  });
-
-  const totalEfetivo = policiaisfiltrados.length;
-  const pctServico = totalEfetivo > 0 ? Math.round((deServico.length / totalEfetivo) * 100) : 0;
-
-  return (
-    <div>
-      <h3 style={{ fontSize:15, fontWeight:800, color:'#1a3a5c', marginBottom:14 }}>🪖 Efetivo de Serviço</h3>
-
-      {/* FILTROS */}
-      <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8, marginBottom:14 }}>
-        <div>
-          <label style={lbl}>Data</label>
-          <input type="date" value={dataSelecionada} onChange={e => setDataSelecionada(e.target.value)} style={inp} />
-        </div>
-        <div>
-          <label style={lbl}>Seção</label>
-          <select value={secaoFiltro} onChange={e => setSecaoFiltro(e.target.value)} style={inp}>
-            <option value="todas">Todas as seções</option>
-            {SECOES.map(s => <option key={s}>{s}</option>)}
-          </select>
-        </div>
-      </div>
-
-      {/* DIA DA SEMANA */}
-      <div style={{ background:'linear-gradient(135deg,#0d2340,#1e4d7b)', borderRadius:10, padding:'12px 16px', marginBottom:14, display:'flex', justifyContent:'space-between', alignItems:'center' }}>
-        <div>
-          <div style={{ color:'#8db4d8', fontSize:11, fontWeight:600 }}>DIA SELECIONADO</div>
-          <div style={{ color:'#fff', fontSize:16, fontWeight:800 }}>{diaSemana}-feira · {new Date(dataSelecionada + 'T12:00:00').toLocaleDateString('pt-BR')}</div>
-        </div>
-        <div style={{ textAlign:'right' }}>
-          <div style={{ color:'#8db4d8', fontSize:11, fontWeight:600 }}>DISPONÍVEIS</div>
-          <div style={{ color:'#fff', fontSize:22, fontWeight:900 }}>{deServico.length} <span style={{ fontSize:13, fontWeight:400 }}>/ {totalEfetivo}</span></div>
-        </div>
-      </div>
-
-      {/* CARDS DE RESUMO */}
-      <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:10, marginBottom:14 }}>
-        <div style={{ background:'#E8F5E9', borderRadius:10, padding:'12px 8px', textAlign:'center', border:'2px solid #A5D6A7' }}>
-          <div style={{ fontSize:26, fontWeight:900, color:'#1B5E20' }}>{deServico.length}</div>
-          <div style={{ fontSize:11, color:'#1B5E20', fontWeight:700 }}>🟢 De Serviço</div>
-          <div style={{ fontSize:10, color:'#6b8099', marginTop:2 }}>{pctServico}% do efetivo</div>
-        </div>
-        <div style={{ background:'#E3F2FD', borderRadius:10, padding:'12px 8px', textAlign:'center', border:'2px solid #90CAF9' }}>
-          <div style={{ fontSize:26, fontWeight:900, color:'#0D47A1' }}>{deFolga.length}</div>
-          <div style={{ fontSize:11, color:'#0D47A1', fontWeight:700 }}>🌙 De Folga</div>
-        </div>
-        <div style={{ background:'#FFEBEE', borderRadius:10, padding:'12px 8px', textAlign:'center', border:'2px solid #EF9A9A' }}>
-          <div style={{ fontSize:26, fontWeight:900, color:'#B71C1C' }}>{afastados.length}</div>
-          <div style={{ fontSize:11, color:'#B71C1C', fontWeight:700 }}>🚨 Afastados</div>
-        </div>
-      </div>
-
-      {/* DE SERVIÇO */}
-      {deServico.length > 0 && (
-        <Card>
-          <h4 style={{ fontSize:13, fontWeight:800, color:'#1B5E20', marginBottom:10 }}>🟢 De Serviço ({deServico.length})</h4>
-          <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
-            {deServico.map(p => (
-              <div key={p.id} style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'8px 10px', background:'#f8fafc', borderRadius:8, border:'1px solid #e0e8f0' }}>
-                <div>
-                  <span style={{ fontWeight:700, color:'#1a3a5c', fontSize:13 }}>{p.patente} {p.nome}</span>
-                  <span style={{ color:'#6b8099', fontSize:11, marginLeft:8 }}>Mat. {p.matricula}</span>
-                </div>
-                <div style={{ display:'flex', gap:6, alignItems:'center' }}>
-                  {p.secao && <span style={{ background:'#e8f0fe', color:'#3d5a9e', borderRadius:6, padding:'2px 8px', fontSize:11, fontWeight:700 }}>{p.secao}</span>}
-                  <SSBadge p={p} />
-                </div>
-              </div>
-            ))}
-          </div>
-        </Card>
-      )}
-
-      {/* DE FOLGA */}
-      {deFolga.length > 0 && (
-        <Card>
-          <h4 style={{ fontSize:13, fontWeight:800, color:'#0D47A1', marginBottom:10 }}>🌙 De Folga/Concessão ({deFolga.length})</h4>
-          <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
-            {deFolga.map(p => {
-              const folga = folgasNoDia.find(s => s.policial_id === p.id);
-              return (
-                <div key={p.id} style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'8px 10px', background:'#f0f6ff', borderRadius:8, border:'1px solid #d0dce8' }}>
-                  <div>
-                    <span style={{ fontWeight:700, color:'#1a3a5c', fontSize:13 }}>{p.patente} {p.nome}</span>
-                    <span style={{ color:'#6b8099', fontSize:11, marginLeft:8 }}>Mat. {p.matricula}</span>
-                  </div>
-                  <MotivoBadge motivo={folga?.motivo || 'Folga'} />
-                </div>
-              );
-            })}
-          </div>
-        </Card>
-      )}
-
-      {/* AFASTADOS */}
-      {afastados.length > 0 && (
-        <Card>
-          <h4 style={{ fontSize:13, fontWeight:800, color:'#B71C1C', marginBottom:10 }}>🚨 Afastados ({afastados.length})</h4>
-          <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
-            {afastados.map(p => (
-              <div key={p.id} style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'8px 10px', background:'#fff5f5', borderRadius:8, border:'1px solid #EF9A9A' }}>
-                <div>
-                  <span style={{ fontWeight:700, color:'#1a3a5c', fontSize:13 }}>{p.patente} {p.nome}</span>
-                  <span style={{ color:'#6b8099', fontSize:11, marginLeft:8 }}>Mat. {p.matricula}</span>
-                </div>
-                <SituacaoBadge situacao={p.situacao || 'Pronto'} />
-              </div>
-            ))}
-          </div>
-        </Card>
-      )}
-
-      {deServico.length === 0 && deFolga.length === 0 && afastados.length === 0 && (
-        <p style={{ color:'#aab', fontSize:13, textAlign:'center', padding:20 }}>Nenhum policial encontrado para os filtros selecionados.</p>
-      )}
-    </div>
-  );
-}
-
 // ========== LOGIN DO POLICIAL (v2.0 com busca por nome) ==========
 function LoginPolicial({ onLogin }) {
   const [policiais, setPoliciais] = useState([]);
