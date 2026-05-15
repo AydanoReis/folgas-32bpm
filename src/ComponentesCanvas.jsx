@@ -1,345 +1,305 @@
-import React, { useEffect, useRef, useState, useMemo } from 'react';
+import React, { useRef, useEffect, useState } from 'react';
 
-// ============================================================================
-// 1. COMPONENTE: GRÁFICO DE GANTT (Linha do Tempo de Férias/LTS)
-// ============================================================================
+// ==========================================
+// 1. GRÁFICO DE GANTT (LINHA DO TEMPO)
+// ==========================================
 export function GraficoGanttCanvas({ policiais }) {
-const canvasRef = useRef(null);
-const [tooltip, setTooltip] = useState(null);
+  const canvasRef = useRef(null);
 
-// Filtrar apenas policiais afastados (Férias ou LTS/Apto B/Apto C com data de fim)
-const afastados = useMemo(() => {
-return policiais.filter(p => {
-const taDeFerias = p.situacao === 'Férias' && p.ferias_inicio && p.ferias_fim;
-const taLTS = (p.sit_sanitaria === 'LTS' || p.sit_sanitaria === 'Apto B' || p.sit_sanitaria === 'Apto C') && p.ss_inicio && p.ss_fim;
-return taDeFerias || taLTS;
-}).map(p => {
-const tipo = p.situacao === 'Férias' ? 'Férias' : p.sit_sanitaria;
-const inicioStr = p.situacao === 'Férias' ? p.ferias_inicio : p.ss_inicio;
-const fimStr = p.situacao === 'Férias' ? p.ferias_fim : p.ss_fim;
-return {
-id: p.id,
-nome: ${p.patente} ${p.nome.split(' ').slice(0, 2).join(' ')},
-tipo: tipo,
-inicio: new Date(inicioStr + 'T00:00:00'),
-fim: new Date(fimStr + 'T23:59:59'),
-};
-}).sort((a, b) => a.inicio - b.inicio);
-}, [policiais]);
-
-useEffect(() => {
-if (afastados.length === 0) return;
-
-const canvas = canvasRef.current;
-const ctx = canvas.getContext('2d');
-const dpr = window.devicePixelRatio || 1;
-
-// Configurações dimensionais
-const alturaLinha = 30;
-const padding = 20;
-const labelWidth = 150;
-const canvasWidth = 800; // Largura fixa para exemplo
-const canvasHeight = (afastados.length * alturaLinha) + 50 + padding * 2;
-
-canvas.width = canvasWidth * dpr;
-canvas.height = canvasHeight * dpr;
-ctx.scale(dpr, dpr);
-canvas.style.width = `${canvasWidth}px`;
-canvas.style.height = `${canvasHeight}px`;
-
-ctx.clearRect(0, 0, canvasWidth, canvasHeight);
-
-// Encontrar data mínima e máxima para o eixo X
-const hoje = new Date();
-hoje.setHours(0,0,0,0);
-let minData = new Date(hoje);
-minData.setDate(minData.getDate() - 7); // Começa 7 dias atrás
-
-let maxData = new Date(hoje);
-maxData.setDate(maxData.getDate() + 30); // Vai até 30 dias no futuro
-
-afastados.forEach(a => {
-  if (a.inicio < minData) minData = new Date(a.inicio);
-  if (a.fim > maxData) maxData = new Date(a.fim);
-});
-
-const tempoTotal = maxData - minData;
-const larguraTimeline = canvasWidth - labelWidth - padding * 2;
-
-// Função para converter Data em posição X no Canvas
-const dataParaX = (data) => {
-  const proporcao = (data - minData) / tempoTotal;
-  return labelWidth + padding + (proporcao * larguraTimeline);
-};
-
-// 1. Desenhar Fundo e Linha do Hoje
-ctx.fillStyle = '#f8fafc';
-ctx.fillRect(labelWidth + padding, padding, larguraTimeline, canvasHeight - padding * 2);
-
-const xHoje = dataParaX(hoje);
-if (xHoje >= labelWidth + padding && xHoje <= canvasWidth - padding) {
-  ctx.beginPath();
-  ctx.moveTo(xHoje, padding);
-  ctx.lineTo(xHoje, canvasHeight - padding);
-  ctx.strokeStyle = '#B71C1C'; // Linha vermelha para HOJE
-  ctx.lineWidth = 2;
-  ctx.setLineDash([5, 5]); // Linha tracejada
-  ctx.stroke();
-  ctx.setLineDash([]); // Resetar
-  
-  ctx.fillStyle = '#B71C1C';
-  ctx.font = 'bold 10px Inter';
-  ctx.fillText('HOJE', xHoje - 12, padding - 5);
-}
-
-// 2. Desenhar as Barras
-afastados.forEach((afastamento, index) => {
-  const y = padding + 30 + (index * alturaLinha);
-  
-  // Texto (Nome do Policial)
-  ctx.fillStyle = '#1a3a5c';
-  ctx.font = 'bold 11px Inter';
-  ctx.fillText(afastamento.nome, padding, y + 15);
-
-  // Calcular Posição e Tamanho da Barra
-  const xInicio = Math.max(dataParaX(afastamento.inicio), labelWidth + padding);
-  const xFim = Math.min(dataParaX(afastamento.fim), canvasWidth - padding);
-  const larguraBarra = Math.max(xFim - xInicio, 4); // Mínimo de 4px para não sumir
-
-  // Escolher cor baseado no tipo
-  let corFundo = '#E3F2FD'; let corBorda = '#0D47A1';
-  if (afastamento.tipo === 'Férias') { corFundo = '#E8F5E9'; corBorda = '#1B5E20'; }
-  if (afastamento.tipo === 'LTS') { corFundo = '#F3E5F5'; corBorda = '#6A1B9A'; }
-  if (afastamento.tipo === 'Apto B') { corFundo = '#FFF8E1'; corBorda = '#F9A825'; }
-
-  // Desenhar Retângulo (Barra do Gantt)
-  ctx.fillStyle = corFundo;
-  ctx.beginPath();
-  ctx.roundRect(xInicio, y, larguraBarra, 20, 4);
-  ctx.fill();
-  ctx.strokeStyle = corBorda;
-  ctx.lineWidth = 1.5;
-  ctx.stroke();
-});
-
-
-}, [afastados]);
-
-if (afastados.length === 0) return <p style={{ fontSize:13, color:'#6b8099' }}>Nenhum policial com férias ou LTS registrado no momento.;
-
-return (
-<div style={{ overflowX: 'auto', background: '#fff', padding: '16px', borderRadius: '12px', boxShadow: '0 2px 12px #00000012' }}>
-<h4 style={{ fontSize: 14, fontWeight: 800, color: '#1a3a5c', marginBottom: 12 }}>📊 Linha do Tempo de Afastamentos
-
-
-);
-}
-
-// ============================================================================
-// 3. COMPONENTE: QUADRO TÁTICO (Drag and Drop Interativo)
-// ============================================================================
-export function QuadroTaticoCanvas({ policiais, secoesDisponiveis }) {
-const canvasRef = useRef(null);
-const [prontos] = useState(() => policiais.filter(p => (p.situacao || 'Pronto') === 'Pronto'));
-
-// Estado interno para gerenciar a posição das "fichas"
-const [fichas, setFichas] = useState([]);
-const [zonas, setZonas] = useState([]);
-
-// Inicializar zonas e fichas apenas uma vez
-useEffect(() => {
-// Criar as Zonas (Seções/Viaturas)
-const novasZonas = secoesDisponiveis.map((secao, i) => ({
-nome: secao,
-x: 300 + (i % 3) * 160, // Distribuir em colunas
-y: 50 + Math.floor(i / 3) * 120, // Distribuir em linhas
-width: 140,
-height: 100
-}));
-setZonas(novasZonas);
-
-// Criar as Fichas (Policiais Prontos) empilhadas no lado esquerdo
-const novasFichas = prontos.map((p, i) => ({
-  id: p.id,
-  texto: p.nome.split(' ').slice(0, 2).join(' '), // Nome curto
-  x: 20,
-  y: 50 + (i * 35),
-  width: 120,
-  height: 28,
-  cor: '#fff',
-  isDragging: false
-}));
-setFichas(novasFichas);
-
-
-}, []); // Roda apenas na montagem
-
-// Motor de Desenho do Quadro Tático
-useEffect(() => {
-if (fichas.length === 0 || zonas.length === 0) return;
-
-const canvas = canvasRef.current;
-const ctx = canvas.getContext('2d');
-const dpr = window.devicePixelRatio || 1;
-
-canvas.width = 800 * dpr;
-canvas.height = 600 * dpr;
-ctx.scale(dpr, dpr);
-canvas.style.width = '800px';
-canvas.style.height = '600px';
-
-const desenhar = () => {
-  ctx.clearRect(0, 0, 800, 600);
-  
-  // Fundo
-  ctx.fillStyle = '#f0f2f5';
-  ctx.fillRect(0, 0, 800, 600);
-
-  // Título Esquerdo
-  ctx.fillStyle = '#1a3a5c';
-  ctx.font = 'bold 12px Inter';
-  ctx.fillText('EFETIVO DISPONÍVEL', 20, 30);
-
-  // Desenhar Zonas (Caixas das Seções)
-  zonas.forEach(zona => {
-    ctx.fillStyle = '#e8f0fe';
-    ctx.strokeStyle = '#0D47A1';
-    ctx.lineWidth = 2;
-    ctx.setLineDash([5, 5]); // Borda tracejada
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
     
-    ctx.beginPath();
-    ctx.roundRect(zona.x, zona.y, zona.width, zona.height, 8);
-    ctx.fill();
-    ctx.stroke();
-    ctx.setLineDash([]); // Reset
+    // Filtrar apenas policiais com férias ou LTS ativas/futuras
+    const afastados = policiais.filter(p => 
+      (p.situacao === 'Férias' && p.ferias_inicio && p.ferias_fim) || 
+      (p.sit_sanitaria !== 'Apto A' && p.ss_inicio && p.ss_fim)
+    );
 
-    ctx.fillStyle = '#0D47A1';
-    ctx.font = 'bold 12px Inter';
-    ctx.fillText(zona.nome, zona.x + 10, zona.y + 20);
-  });
+    // Ajustar tamanho do canvas baseado na quantidade de dados
+    const alturaNecessaria = Math.max(200, 60 + (afastados.length * 30));
+    canvas.height = alturaNecessaria;
+    canvas.width = canvas.parentElement.clientWidth || 700;
+    const { width, height } = canvas;
 
-  // Desenhar Fichas (Policiais)
-  // Desenhamos as que não estão sendo arrastadas primeiro
-  const paraDesenhar = [...fichas].sort((a, b) => (a.isDragging ? 1 : -1));
+    // Limpar fundo
+    ctx.fillStyle = '#f8fafc';
+    ctx.fillRect(0, 0, width, height);
 
-  paraDesenhar.forEach(ficha => {
-    // Sombra se estiver arrastando
-    if (ficha.isDragging) {
-      ctx.shadowColor = 'rgba(0,0,0,0.3)';
-      ctx.shadowBlur = 10;
-      ctx.shadowOffsetX = 5;
-      ctx.shadowOffsetY = 5;
-    } else {
-      ctx.shadowColor = 'transparent';
+    if (afastados.length === 0) {
+      ctx.fillStyle = '#6b8099';
+      ctx.font = 'bold 14px Inter, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('Nenhum afastamento prolongado programado.', width / 2, height / 2);
+      return;
     }
 
-    ctx.fillStyle = ficha.isDragging ? '#E3F2FD' : ficha.cor;
-    ctx.strokeStyle = '#d0dce8';
-    ctx.lineWidth = 1;
+    // Configurações do Grid e Linha do Tempo
+    const hoje = new Date();
+    hoje.setHours(0,0,0,0);
+    const diasParaFrente = 30; // Mostrar 30 dias na linha do tempo
+    const larguraDia = (width - 150) / diasParaFrente; // 150px reservados para os nomes
     
-    ctx.beginPath();
-    ctx.roundRect(ficha.x, ficha.y, ficha.width, ficha.height, 4);
-    ctx.fill();
-    ctx.stroke();
-
-    ctx.shadowColor = 'transparent'; // Resetar sombra para o texto
+    // Desenhar cabeçalho dos dias
     ctx.fillStyle = '#1a3a5c';
-    ctx.font = 'bold 11px Inter';
-    ctx.fillText(ficha.texto, ficha.x + 8, ficha.y + 18);
-  });
-};
+    ctx.fillRect(0, 0, width, 30);
+    ctx.fillStyle = '#ffffff';
+    ctx.font = 'bold 10px Inter, sans-serif';
+    ctx.textAlign = 'center';
 
-// Chamar o desenho
-requestAnimationFrame(desenhar);
-
-
-}, [fichas, zonas]); // Redesenha sempre que o estado das fichas mudar
-
-// Lógica de Mouse para Drag and Drop
-const handleMouseDown = (e) => {
-const canvas = canvasRef.current;
-const rect = canvas.getBoundingClientRect();
-const mouseX = e.clientX - rect.left;
-const mouseY = e.clientY - rect.top;
-
-// Verificar se clicou em alguma ficha (de trás pra frente para pegar a de cima)
-for (let i = fichas.length - 1; i >= 0; i--) {
-  const ficha = fichas[i];
-  if (mouseX >= ficha.x && mouseX <= ficha.x + ficha.width &&
-      mouseY >= ficha.y && mouseY <= ficha.y + ficha.height) {
-    
-    // Marca a ficha como 'arrastando' e guarda o offset do clique
-    const novasFichas = [...fichas];
-    novasFichas[i].isDragging = true;
-    novasFichas[i].offsetX = mouseX - ficha.x;
-    novasFichas[i].offsetY = mouseY - ficha.y;
-    setFichas(novasFichas);
-    break; // Arrasta apenas uma
-  }
-}
-
-
-};
-
-const handleMouseMove = (e) => {
-const arrastando = fichas.find(f => f.isDragging);
-if (!arrastando) return;
-
-const canvas = canvasRef.current;
-const rect = canvas.getBoundingClientRect();
-const mouseX = e.clientX - rect.left;
-const mouseY = e.clientY - rect.top;
-
-// Atualiza X e Y da ficha baseada no mouse
-setFichas(prev => prev.map(f => {
-  if (f.id === arrastando.id) {
-    return { ...f, x: mouseX - f.offsetX, y: mouseY - f.offsetY };
-  }
-  return f;
-}));
-
-
-};
-
-const handleMouseUp = () => {
-// Soltou o mouse. Vamos verificar se caiu dentro de alguma Zona
-setFichas(prev => prev.map(ficha => {
-if (ficha.isDragging) {
-let caiuNaZona = false;
-
-    // Verifica colisão com cada zona
-    zonas.forEach(zona => {
-      // Checagem simples: O centro da ficha está dentro da zona?
-      const centroX = ficha.x + ficha.width / 2;
-      const centroY = ficha.y + ficha.height / 2;
+    for (let i = 0; i <= diasParaFrente; i++) {
+      const dataCol = new Date(hoje);
+      dataCol.setDate(dataCol.getDate() + i);
+      const x = 150 + (i * larguraDia);
       
-      if (centroX >= zona.x && centroX <= zona.x + zona.width &&
-          centroY >= zona.y && centroY <= zona.y + zona.height) {
-        caiuNaZona = true;
+      // Linhas verticais do grid
+      ctx.beginPath();
+      ctx.strokeStyle = '#e2e8f0';
+      ctx.moveTo(x, 30);
+      ctx.lineTo(x, height);
+      ctx.stroke();
+
+      // Texto do dia (mostrar a cada 2 dias para não amontoar)
+      if (i % 2 === 0) {
+        ctx.fillText(`${dataCol.getDate()}/${dataCol.getMonth() + 1}`, x + (larguraDia/2), 20);
+      }
+    }
+
+    // Desenhar as barras de cada policial
+    ctx.textAlign = 'left';
+    afastados.forEach((p, index) => {
+      const y = 40 + (index * 30);
+      
+      // Desenhar Nome
+      ctx.fillStyle = '#1a3a5c';
+      ctx.font = 'bold 11px Inter, sans-serif';
+      ctx.fillText(`${p.patente} ${p.nome.split(' ')[0]}`, 10, y + 15);
+
+      // Calcular posição da barra
+      const isFerias = p.situacao === 'Férias';
+      const inicioStr = isFerias ? p.ferias_inicio : p.ss_inicio;
+      const fimStr = isFerias ? p.ferias_fim : p.ss_fim;
+      
+      const dtInicio = new Date(inicioStr + 'T00:00:00');
+      const dtFim = new Date(fimStr + 'T00:00:00');
+      
+      // Diferença em dias em relação a hoje
+      const diffInicio = Math.ceil((dtInicio - hoje) / (1000 * 60 * 60 * 24));
+      const diffFim = Math.ceil((dtFim - hoje) / (1000 * 60 * 60 * 24));
+
+      // Limitar a barra para caber na tela (0 a 30 dias)
+      const startX = 150 + (Math.max(0, diffInicio) * larguraDia);
+      const endX = 150 + (Math.min(diasParaFrente, Math.max(0, diffFim + 1)) * larguraDia);
+      const barWidth = Math.max(0, endX - startX);
+
+      if (barWidth > 0 && diffFim >= 0 && diffInicio <= diasParaFrente) {
+        // Cor baseada no tipo de afastamento
+        ctx.fillStyle = isFerias ? '#F9A825' : (p.sit_sanitaria === 'Apto B' ? '#F57F17' : '#B71C1C');
+        
+        // Desenhar barra arredondada (simulada)
+        ctx.beginPath();
+        ctx.roundRect(startX + 2, y + 2, barWidth - 4, 20, 6);
+        ctx.fill();
+
+        // Texto dentro da barra
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 9px Inter, sans-serif';
+        const label = isFerias ? 'Férias' : p.sit_sanitaria;
+        if (barWidth > 40) {
+          ctx.fillText(label, startX + 6, y + 15);
+        }
       }
     });
 
-    // Se caiu na zona, fica verdinho. Se não, fica branco normal
-    return { ...ficha, isDragging: false, cor: caiuNaZona ? '#E8F5E9' : '#fff' };
-  }
-  return ficha;
-}));
+  }, [policiais]);
+
+  return (
+    <div style={{ background: '#fff', borderRadius: 12, padding: 16, boxShadow: '0 2px 12px #00000012' }}>
+      <h4 style={{ fontSize:14, fontWeight:800, color:'#1a3a5c', marginBottom:12 }}>📅 Linha do Tempo (Próximos 30 dias)</h4>
+      <div style={{ overflowX: 'auto' }}>
+        <canvas ref={canvasRef} style={{ display: 'block', minWidth: 600, border: '1px solid #e2e8f0', borderRadius: 8 }} />
+      </div>
+    </div>
+  );
+}
 
 
-};
+// ==========================================
+// 2. QUADRO TÁTICO (DRAG AND DROP)
+// ==========================================
+export function QuadroTaticoCanvas({ policiais, secoesDisponiveis }) {
+  const canvasRef = useRef(null);
+  const [fichas, setFichas] = useState([]);
+  const [arrastando, setArrastando] = useState(null);
 
-return (
-<div style={{ background: '#fff', padding: '16px', borderRadius: '12px', boxShadow: '0 2px 12px #00000012' }}>
-<h4 style={{ fontSize: 14, fontWeight: 800, color: '#1a3a5c', marginBottom: 6 }}>🪖 Quadro Tático de Serviço
-<p style={{ fontSize: 11, color: '#6b8099', marginBottom: 12 }}>Arraste os policiais disponíveis para montar o policiamento do dia.
-<canvas
-ref={canvasRef}
-onMouseDown={handleMouseDown}
-onMouseMove={handleMouseMove}
-onMouseUp={handleMouseUp}
-onMouseLeave={handleMouseUp} // Se o mouse sair do canvas, solta a ficha
-style={{ cursor: 'grab', border: '1px solid #e0e8f0', borderRadius: '8px' }}
-/>
+  // Inicializar fichas apenas na primeira vez ou quando a lista mudar drasticamente
+  useEffect(() => {
+    const prontos = policiais.filter(p => p.situacao === 'Pronto' || !p.situacao);
+    
+    const novasFichas = prontos.map((p, i) => ({
+      id: p.id,
+      texto: `${p.patente} ${p.nome.split(' ')[0]}`,
+      // Posicionar inicialmente do lado esquerdo (banco de reservas)
+      x: 20 + (i % 2) * 110, 
+      y: 50 + Math.floor(i / 2) * 40,
+      w: 100,
+      h: 30,
+      secaoOriginal: p.secao
+    }));
+    
+    setFichas(novasFichas);
+  }, [policiais]);
 
-);
+  // Função principal de desenho
+  const desenhar = () => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    const { width, height } = canvas;
+
+    // Fundo
+    ctx.fillStyle = '#0d2340'; // Cor do quadro tático
+    ctx.fillRect(0, 0, width, height);
+
+    // Linha divisória
+    ctx.strokeStyle = 'rgba(255,255,255,0.2)';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(250, 0);
+    ctx.lineTo(250, height);
+    ctx.stroke();
+
+    // Títulos das áreas
+    ctx.fillStyle = '#8db4d8';
+    ctx.font = 'bold 12px Inter, sans-serif';
+    ctx.fillText('EFETIVO DISPONÍVEL', 20, 25);
+    ctx.fillText('ALOCAÇÃO TÁTICA (SEÇÕES / POSTOS)', 270, 25);
+
+    // Desenhar caixas das Seções (Zonas de soltar)
+    const zonas = secoesDisponiveis.slice(0, 6); // Mostrar até 6 zonas para caber
+    zonas.forEach((secao, i) => {
+      const zx = 270 + (i % 2) * 200;
+      const zy = 50 + Math.floor(i / 2) * 120;
+      
+      // Fundo da seção
+      ctx.fillStyle = 'rgba(255,255,255,0.05)';
+      ctx.strokeStyle = 'rgba(255,255,255,0.3)';
+      ctx.setLineDash([5, 5]);
+      ctx.beginPath();
+      ctx.roundRect(zx, zy, 180, 100, 8);
+      ctx.fill();
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      // Título da seção
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 11px Inter, sans-serif';
+      ctx.fillText(`📍 ${secao}`, zx + 10, zy + 20);
+    });
+
+    // Desenhar Fichas dos Policiais
+    fichas.forEach(ficha => {
+      // Sombra da ficha
+      ctx.shadowColor = 'rgba(0,0,0,0.3)';
+      ctx.shadowBlur = 6;
+      ctx.shadowOffsetY = 3;
+      
+      // Fundo da ficha (se estiver sendo arrastada, fica amarela)
+      ctx.fillStyle = arrastando === ficha.id ? '#FFD54F' : '#ffffff';
+      ctx.beginPath();
+      ctx.roundRect(ficha.x, ficha.y, ficha.w, ficha.h, 6);
+      ctx.fill();
+      
+      // Resetar sombra para o texto
+      ctx.shadowColor = 'transparent';
+      
+      // Texto da ficha
+      ctx.fillStyle = '#1a3a5c';
+      ctx.font = 'bold 11px Inter, sans-serif';
+      ctx.fillText(ficha.texto, ficha.x + 10, ficha.y + 19);
+      
+      // Indicador de seção original
+      if (ficha.secaoOriginal) {
+        ctx.fillStyle = '#e2e8f0';
+        ctx.beginPath();
+        ctx.roundRect(ficha.x + ficha.w - 12, ficha.y + 4, 8, 8, 4);
+        ctx.fill();
+      }
+    });
+  };
+
+  // Redesenhar sempre que fichas ou arrastando mudarem
+  useEffect(() => {
+    desenhar();
+  }, [fichas, arrastando]);
+
+  // Eventos de Mouse para Drag and Drop
+  const handleMouseDown = (e) => {
+    const rect = canvasRef.current.getBoundingClientRect();
+    const mx = e.clientX - rect.left;
+    const my = e.clientY - rect.top;
+
+    // Verificar se clicou em alguma ficha (de trás pra frente para pegar a que está por cima)
+    for (let i = fichas.length - 1; i >= 0; i--) {
+      const f = fichas[i];
+      if (mx >= f.x && mx <= f.x + f.w && my >= f.y && my <= f.y + f.h) {
+        setArrastando(f.id);
+        break;
+      }
+    }
+  };
+
+  const handleMouseMove = (e) => {
+    if (!arrastando) return;
+    const rect = canvasRef.current.getBoundingClientRect();
+    const mx = e.clientX - rect.left;
+    const my = e.clientY - rect.top;
+
+    setFichas(prev => prev.map(f => 
+      f.id === arrastando ? { ...f, x: mx - f.w/2, y: my - f.h/2 } : f
+    ));
+  };
+
+  const handleMouseUp = () => {
+    setArrastando(null);
+  };
+
+  return (
+    <div style={{ background: '#fff', borderRadius: 12, padding: 16, boxShadow: '0 2px 12px #00000012' }}>
+      <h4 style={{ fontSize:14, fontWeight:800, color:'#1a3a5c', marginBottom:6 }}>🗺️ Quadro Tático Interativo</h4>
+      <p style={{ fontSize:11, color:'#6b8099', marginBottom:12 }}>Clique e arraste os policiais do efetivo disponível para alocá-los nas seções (apenas visualização tática).</p>
+      
+      <canvas 
+        ref={canvasRef} 
+        width={700} 
+        height={400} 
+        style={{ width: '100%', borderRadius: 8, cursor: arrastando ? 'grabbing' : 'grab' }} 
+        onMouseDown={handleMouseDown}
+        onMouseMove={handleMouseMove}
+        onMouseUp={handleMouseUp}
+        onMouseLeave={handleMouseUp}
+      />
+    </div>
+  );
+}
+
+export default function PreviewCanvas() {
+  const mockPoliciais = [
+    { id: 1, nome: "SILVA", patente: "CB PM", situacao: "Férias", ferias_inicio: "2026-05-10", ferias_fim: "2026-05-25", secao: "P1" },
+    { id: 2, nome: "SANTOS", patente: "3º SGT PM", sit_sanitaria: "Apto B", ss_inicio: "2026-05-12", ss_fim: "2026-05-18", secao: "P3" },
+    { id: 3, nome: "OLIVEIRA", patente: "SD PM", situacao: "Pronto", secao: "P4" },
+    { id: 4, nome: "COSTA", patente: "CB PM", situacao: "Pronto", secao: "Rancho" }
+  ];
+  const mockSecoes = ['P1', 'P3', 'P4', 'P5', 'Rancho', 'Secretaria'];
+
+  return (
+    <div style={{ padding: 20, fontFamily: 'Inter, sans-serif', background: '#f0f2f5', minHeight: '100vh' }}>
+      <h2 style={{ color: '#1a3a5c', marginBottom: 20 }}>Pré-visualização dos Componentes</h2>
+      <GraficoGanttCanvas policiais={mockPoliciais} />
+      <div style={{ marginTop: 30 }}>
+        <QuadroTaticoCanvas policiais={mockPoliciais} secoesDisponiveis={mockSecoes} />
+      </div>
+    </div>
+  );
 }
