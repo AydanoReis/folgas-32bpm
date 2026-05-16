@@ -799,8 +799,8 @@ function Dashboard({ solicitacoes, policiais, onAtualizarPolicial, onRemoverPoli
         <Card>
           <h4 style={{ fontSize:13, fontWeight:800, color:'#1a3a5c', marginBottom:12 }}>🚨 Policiais Afastados</h4>
 
-          {/* SITUAÇÃO ADMINISTRATIVA (Férias, LE, LTS admin, etc) */}
-          {SITUACOES.filter(sit => sit !== 'Pronto').map(sit => {
+          {/* SITUAÇÃO ADMINISTRATIVA (Férias, LE, etc — exceto LTS que é tratado separadamente) */}
+          {SITUACOES.filter(sit => sit !== 'Pronto' && sit !== 'LTS').map(sit => {
             const afastados = policiais.filter(p => (p.situacao||'Pronto') === sit);
             if (afastados.length === 0) return null;
             const isFerias = sit === 'Férias';
