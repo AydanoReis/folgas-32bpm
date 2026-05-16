@@ -610,8 +610,7 @@ function gerarPDF(solicitacoes, policiais, semanaAtual) {
     y += 10;
 
     // Situações administrativas
-    SITUACOES.filter(sit => sit !== 'Pronto').forEach(sit => {
-      const grupo = afastadosSit.filter(p => (p.situacao||'Pronto') === sit);
+SITUACOES.filter(sit => sit !== 'Pronto' && sit !== 'LTS').forEach(sit => {      const grupo = afastadosSit.filter(p => (p.situacao||'Pronto') === sit);
       if (grupo.length === 0) return;
       if (y > pageH - 30) { doc.addPage(); cabecalhoPagina('POLICIAIS AFASTADOS (continuação)'); y = 22; }
       doc.setFillColor(255,235,238); doc.roundedRect(10, y, pageW-20, 7, 1, 1, 'F');
