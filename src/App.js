@@ -595,6 +595,81 @@ function gerarPDF(solicitacoes, policiais, semanaAtual) {
     });
   }
 
+  // =====================
+  // BLOCO DE AFASTADOS
+  // =====================
+  const afastadosSit = policiais.filter(p => (p.situacao||'Pronto') !== 'Pronto');
+  const afastadosLTS = policiais.filter(p => (p.sit_sanitaria||'Apto A') === 'LTS');
+
+  if (afastadosSit.length > 0 || afastadosLTS.length > 0) {
+    if (y > pageH - 60) { doc.addPage(); cabecalhoPagina('POLICIAIS AFASTADOS'); y = 22; }
+
+    doc.setFillColor(30,77,123); doc.roundedRect(10, y, pageW-20, 8, 1, 1, 'F');
+    doc.setTextColor(255,255,255); doc.setFontSize(8); doc.setFont('helvetica','bold');
+    doc.text('POLICIAIS AFASTADOS', 15, y+5.5);
+    y += 10;
+
+    // Situações administrativas
+    SITUACOES.filter(sit => sit !== 'Pronto').forEach(sit => {
+      const grupo = afastadosSit.filter(p => (p.situacao||'Pronto') === sit);
+      if (grupo.length === 0) return;
+      if (y > pageH - 30) { doc.addPage(); cabecalhoPagina('POLICIAIS AFASTADOS (continuação)'); y = 22; }
+      doc.setFillColor(255,235,238); doc.roundedRect(10, y, pageW-20, 7, 1, 1, 'F');
+      doc.setTextColor(183,28,28); doc.setFontSize(7); doc.setFont('helvetica','bold');
+      doc.text(`${sit.toUpperCase()} (${grupo.length})`, 15, y+5);
+      y += 8;
+      doc.autoTable({
+        startY: y,
+        head: [['Patente / Nome', 'Início', 'Término', 'Situação']],
+        body: grupo.map(p => {
+          const ini = p.ferias_inicio ? new Date(p.ferias_inicio+'T00:00:00').toLocaleDateString('pt-BR') : '—';
+          const fim = p.ferias_fim ? new Date(p.ferias_fim+'T00:00:00').toLocaleDateString('pt-BR') : '—';
+          const dias = p.ferias_fim ? diasParaRetorno(p.ferias_fim) : null;
+          const sitLabel = dias === null ? '—' : dias < 0 ? 'VENCIDO' : dias === 0 ? 'Retorna hoje' : `${dias} dias`;
+          return [`${p.patente} ${p.nome}`, ini, fim, sitLabel];
+        }),
+        theme: 'grid',
+        headStyles: { fillColor:[183,28,28], textColor:255, fontStyle:'bold', fontSize:7, cellPadding:2 },
+        bodyStyles: { fontSize:7, cellPadding:2 },
+        columnStyles: { 0:{ cellWidth:80 }, 1:{ cellWidth:24, halign:'center' }, 2:{ cellWidth:24, halign:'center' }, 3:{ cellWidth:24, halign:'center' } },
+        didParseCell: (data) => {
+          if (data.section==='body' && data.row.index%2===0) data.cell.styles.fillColor=[255,245,245];
+        },
+        margin: { left:10, right:10 },
+      });
+      y = doc.lastAutoTable.finalY + 4;
+    });
+
+    // LTS Sanitário
+    if (afastadosLTS.length > 0) {
+      if (y > pageH - 30) { doc.addPage(); cabecalhoPagina('POLICIAIS AFASTADOS (continuação)'); y = 22; }
+      doc.setFillColor(243,229,245); doc.roundedRect(10, y, pageW-20, 7, 1, 1, 'F');
+      doc.setTextColor(106,27,154); doc.setFontSize(7); doc.setFont('helvetica','bold');
+      doc.text(`LTS SANITARIO (${afastadosLTS.length})`, 15, y+5);
+      y += 8;
+      doc.autoTable({
+        startY: y,
+        head: [['Patente / Nome', 'Início LTS', 'Término LTS', 'Situação']],
+        body: afastadosLTS.map(p => {
+          const ini = p.ss_inicio ? new Date(p.ss_inicio+'T00:00:00').toLocaleDateString('pt-BR') : '—';
+          const fim = p.ss_fim ? new Date(p.ss_fim+'T00:00:00').toLocaleDateString('pt-BR') : '—';
+          const dias = p.ss_fim ? diasParaRetorno(p.ss_fim) : null;
+          const sitLabel = dias === null ? 'Sem data' : dias < 0 ? 'VENCIDO' : dias === 0 ? 'Encerra hoje' : `${dias} dias`;
+          return [`${p.patente} ${p.nome}`, ini, fim, sitLabel];
+        }),
+        theme: 'grid',
+        headStyles: { fillColor:[106,27,154], textColor:255, fontStyle:'bold', fontSize:7, cellPadding:2 },
+        bodyStyles: { fontSize:7, cellPadding:2 },
+        columnStyles: { 0:{ cellWidth:80 }, 1:{ cellWidth:24, halign:'center' }, 2:{ cellWidth:24, halign:'center' }, 3:{ cellWidth:24, halign:'center' } },
+        didParseCell: (data) => {
+          if (data.section==='body' && data.row.index%2===0) data.cell.styles.fillColor=[250,245,255];
+        },
+        margin: { left:10, right:10 },
+      });
+      y = doc.lastAutoTable.finalY + 4;
+    }
+  }
+
   rodape(3);
   doc.save(`relatorio-32bpm-${periodoStr.replace(/\//g,'-').replace(/ /g,'')}.pdf`);
 }
@@ -720,28 +795,61 @@ function Dashboard({ solicitacoes, policiais, onAtualizarPolicial, onRemoverPoli
         </div>
       </Card>
 
-      {policiais.filter(p => (p.situacao||'Pronto') !== 'Pronto').length > 0 && (
+      {policiais.filter(p => (p.situacao||'Pronto') !== 'Pronto' || (p.sit_sanitaria||'Apto A') === 'LTS').length > 0 && (
         <Card>
           <h4 style={{ fontSize:13, fontWeight:800, color:'#1a3a5c', marginBottom:12 }}>🚨 Policiais Afastados</h4>
+
+          {/* SITUAÇÃO ADMINISTRATIVA (Férias, LE, LTS admin, etc) */}
           {SITUACOES.filter(sit => sit !== 'Pronto').map(sit => {
             const afastados = policiais.filter(p => (p.situacao||'Pronto') === sit);
             if (afastados.length === 0) return null;
+            const isFerias = sit === 'Férias';
             return (
               <div key={sit} style={{ marginBottom:12 }}>
                 <div style={{ fontWeight:800, color:'#B71C1C', fontSize:12, marginBottom:6, background:'#FFEBEE', borderRadius:6, padding:'4px 10px', display:'inline-block' }}>{sit} ({afastados.length})</div>
-                {afastados.map(p => { const dias = diasParaRetorno(p.ferias_fim); return (
-                  <div key={p.id} style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'5px 0', borderBottom:'1px solid #f0f4f8', flexWrap:'wrap', gap:6 }}>
-                    <span style={{ fontWeight:700, color:'#1a3a5c', fontSize:12 }}>{p.patente} {p.nome}</span>
-                    <div style={{ display:'flex', gap:6, alignItems:'center' }}>
-                      {p.ferias_fim && <span style={{ color:'#6b8099', fontSize:11 }}>{p.ferias_inicio?new Date(p.ferias_inicio+'T00:00:00').toLocaleDateString('pt-BR'):'—'} → {new Date(p.ferias_fim+'T00:00:00').toLocaleDateString('pt-BR')}</span>}
-                      {dias!==null&&dias>=0&&<span style={{ background:dias<=3?'#B71C1C':'#1B5E20', color:'#fff', borderRadius:6, padding:'1px 8px', fontSize:11, fontWeight:800 }}>{dias===0?'Retorna hoje!':dias===1?'1 dia':`${dias} dias`}</span>}
-                      {dias!==null&&dias<0&&<span style={{ background:'#7B5800', color:'#fff', borderRadius:6, padding:'1px 8px', fontSize:11, fontWeight:800 }}>Vencido</span>}
+                {afastados.map(p => {
+                  const dataInicio = isFerias ? p.ferias_inicio : null;
+                  const dataFim = isFerias ? p.ferias_fim : null;
+                  const dias = dataFim ? diasParaRetorno(dataFim) : null;
+                  return (
+                    <div key={p.id} style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'5px 0', borderBottom:'1px solid #f0f4f8', flexWrap:'wrap', gap:6 }}>
+                      <span style={{ fontWeight:700, color:'#1a3a5c', fontSize:12 }}>{p.patente} {p.nome}</span>
+                      <div style={{ display:'flex', gap:6, alignItems:'center' }}>
+                        {dataFim && <span style={{ color:'#6b8099', fontSize:11 }}>{dataInicio?new Date(dataInicio+'T00:00:00').toLocaleDateString('pt-BR'):'—'} → {new Date(dataFim+'T00:00:00').toLocaleDateString('pt-BR')}</span>}
+                        {dias!==null&&dias>=0&&<span style={{ background:dias<=3?'#B71C1C':'#1B5E20', color:'#fff', borderRadius:6, padding:'1px 8px', fontSize:11, fontWeight:800 }}>{dias===0?'Retorna hoje!':dias===1?'1 dia':`${dias} dias`}</span>}
+                        {dias!==null&&dias<0&&<span style={{ background:'#7B5800', color:'#fff', borderRadius:6, padding:'1px 8px', fontSize:11, fontWeight:800 }}>Vencido</span>}
+                      </div>
                     </div>
-                  </div>
-                ); })}
+                  );
+                })}
               </div>
             );
           })}
+
+          {/* LTS SANITÁRIO */}
+          {(() => {
+            const ltsPolcs = policiais.filter(p => (p.sit_sanitaria||'Apto A') === 'LTS');
+            if (ltsPolcs.length === 0) return null;
+            return (
+              <div style={{ marginBottom:12 }}>
+                <div style={{ fontWeight:800, color:'#6A1B9A', fontSize:12, marginBottom:6, background:'#F3E5F5', borderRadius:6, padding:'4px 10px', display:'inline-block' }}>🟣 LTS Sanitário ({ltsPolcs.length})</div>
+                {ltsPolcs.map(p => {
+                  const dias = p.ss_fim ? diasParaRetorno(p.ss_fim) : null;
+                  return (
+                    <div key={p.id} style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'5px 0', borderBottom:'1px solid #f0f4f8', flexWrap:'wrap', gap:6 }}>
+                      <span style={{ fontWeight:700, color:'#1a3a5c', fontSize:12 }}>{p.patente} {p.nome}</span>
+                      <div style={{ display:'flex', gap:6, alignItems:'center' }}>
+                        {p.ss_fim && <span style={{ color:'#6b8099', fontSize:11 }}>{p.ss_inicio?new Date(p.ss_inicio+'T00:00:00').toLocaleDateString('pt-BR'):'—'} → {new Date(p.ss_fim+'T00:00:00').toLocaleDateString('pt-BR')}</span>}
+                        {dias!==null&&dias>=0&&<span style={{ background:dias<=3?'#6A1B9A':'#1B5E20', color:'#fff', borderRadius:6, padding:'1px 8px', fontSize:11, fontWeight:800 }}>{dias===0?'Encerra hoje!':dias===1?'1 dia':`${dias} dias`}</span>}
+                        {dias!==null&&dias<0&&<span style={{ background:'#7B5800', color:'#fff', borderRadius:6, padding:'1px 8px', fontSize:11, fontWeight:800 }}>Vencido</span>}
+                        {!p.ss_fim&&<span style={{ color:'#aab', fontSize:11 }}>Sem data cadastrada</span>}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          })()}
         </Card>
       )}
 
