@@ -602,8 +602,7 @@ function gerarPDF(solicitacoes, policiais, semanaAtual) {
   const afastadosLTS = policiais.filter(p => (p.sit_sanitaria||'Apto A') === 'LTS');
 
   if (afastadosSit.length > 0 || afastadosLTS.length > 0) {
-    if (y > pageH - 60) { doc.addPage(); cabecalhoPagina('POLICIAIS AFASTADOS'); y = 22; }
-
+    doc.addPage(); cabecalhoPagina('POLICIAIS AFASTADOS'); y = 22;
     doc.setFillColor(30,77,123); doc.roundedRect(10, y, pageW-20, 8, 1, 1, 'F');
     doc.setTextColor(255,255,255); doc.setFontSize(8); doc.setFont('helvetica','bold');
     doc.text('POLICIAIS AFASTADOS', 15, y+5.5);
