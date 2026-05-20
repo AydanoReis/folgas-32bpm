@@ -2013,43 +2013,39 @@ export default function App() {
           {/* ── PAINEL DIREITO (form) ── */}
           <div className="login-right">
 
-            {/* Mobile: foto de fundo */}
-            <div style={{ position:'absolute', inset:0, backgroundImage:'url(/batalhao.jpg)', backgroundSize:'cover', backgroundPosition:'center 30%', opacity:0.06 }} />
-            <div style={{ position:'absolute', inset:0, background:'#070f1e', opacity:0.92 }} />
+            {/* Mobile: foto de fundo sutil */}
+            <div style={{ position:'absolute', inset:0, backgroundImage:'url(/batalhao.jpg)', backgroundSize:'cover', backgroundPosition:'center 30%', opacity:0.05 }} />
 
-            {/* Wrapper de conteúdo — limita largura e centraliza no painel direito */}
-            <div style={{ width:'100%', maxWidth:420, position:'relative', zIndex:1 }}>
+            {/* Wrapper — max 360px, direto no painel sem card */}
+            <div style={{ width:'100%', maxWidth:360, position:'relative', zIndex:1 }}>
 
-            {/* Mobile: header com logo */}
-            <div className="login-mobile-header" style={{ textAlign:'center', marginBottom:28 }}>
-              <img src="/logo.jpeg" alt="32 BPM" style={{ height:72, width:72, objectFit:'contain', borderRadius:'50%', border:'2px solid rgba(251,191,36,0.4)', boxShadow:'0 8px 24px rgba(0,0,0,0.5)', marginBottom:14, display:'block', margin:'0 auto 14px' }} />
-              <p style={{ color:'#fbbf24', fontSize:9, fontWeight:700, letterSpacing:'0.25em', textTransform:'uppercase', margin:'0 0 4px' }}>PMERJ · 6° CPA</p>
-              <h1 style={{ color:'#fff', fontWeight:700, fontSize:32, margin:0, fontFamily:"'Rajdhani',sans-serif" }}>32º BPM</h1>
-              <p style={{ color:'#475569', fontSize:12, margin:'4px 0 0' }}>Controle de Folgas</p>
-            </div>
-
-            {/* Desktop: header do form */}
-            <div className="login-desktop-header" style={{ marginBottom:28 }}>
-              <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:16 }}>
-                <div style={{ width:28, height:1, background:'#fbbf24' }} />
-                <span style={{ color:'#fbbf24', fontSize:9, fontWeight:700, letterSpacing:'0.3em', textTransform:'uppercase' }}>Acesso Restrito</span>
+              {/* Mobile: header com logo */}
+              <div className="login-mobile-header" style={{ textAlign:'center', marginBottom:32 }}>
+                <img src="/logo.jpeg" alt="32 BPM" style={{ height:72, width:72, objectFit:'contain', borderRadius:'50%', border:'2px solid rgba(251,191,36,0.4)', display:'block', margin:'0 auto 14px' }} />
+                <p style={{ color:'#fbbf24', fontSize:9, fontWeight:700, letterSpacing:'0.25em', textTransform:'uppercase', margin:'0 0 4px' }}>PMERJ · 6° CPA</p>
+                <h1 style={{ color:'#fff', fontWeight:700, fontSize:32, margin:0, fontFamily:"'Rajdhani',sans-serif" }}>32º BPM</h1>
+                <p style={{ color:'#475569', fontSize:12, margin:'4px 0 0' }}>Controle de Folgas</p>
               </div>
-              <h2 style={{ color:'#fff', fontWeight:700, fontSize:42, margin:'0 0 8px', fontFamily:"'Rajdhani',sans-serif", lineHeight:1 }}>Entrar</h2>
-              <p style={{ color:'#475569', fontSize:12, margin:0 }}>Sistema restrito ao efetivo do 32º BPM.</p>
-            </div>
 
-            {/* Card com abas e form */}
-            <div style={{ background:'#0d1a2e', borderRadius:14, border:'1px solid rgba(255,255,255,0.07)', overflow:'hidden', boxShadow:'0 20px 48px rgba(0,0,0,0.5)' }}>
+              {/* Header do form */}
+              <div style={{ marginBottom:32 }}>
+                <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:16 }}>
+                  <div style={{ width:28, height:1, background:'#fbbf24' }} />
+                  <span style={{ color:'#fbbf24', fontSize:9, fontWeight:700, letterSpacing:'0.3em', textTransform:'uppercase' }}>Acesso Restrito</span>
+                </div>
+                <h2 style={{ color:'#fff', fontWeight:700, fontSize:48, margin:'0 0 8px', fontFamily:"'Rajdhani',sans-serif", lineHeight:1 }}>Entrar</h2>
+                <p style={{ color:'#475569', fontSize:12, margin:0 }}>Sistema restrito ao efetivo do 32º BPM.</p>
+              </div>
 
-              {/* ABAS */}
-              <div style={{ display:'flex', borderBottom:'1px solid rgba(255,255,255,0.06)' }}>
+              {/* Abas — sem card, só linha */}
+              <div style={{ display:'flex', borderBottom:'1px solid rgba(255,255,255,0.07)', marginBottom:28 }}>
                 {[
                   { id:'policial', label:'Sou Policial' },
                   { id:'gestor', label:'Sou Gestor' },
                 ].map(a => (
                   <button key={a.id} onClick={() => setAbaLogin(a.id)} style={{
-                    flex:1, padding:'13px 8px',
-                    fontWeight:700, fontSize:11,
+                    flex:1, padding:'10px 8px',
+                    fontWeight:700, fontSize:10,
                     cursor:'pointer', border:'none',
                     borderBottom: abaLogin === a.id ? '2px solid #fbbf24' : '2px solid transparent',
                     background:'transparent',
@@ -2063,40 +2059,37 @@ export default function App() {
                 ))}
               </div>
 
-              {/* CONTEÚDO */}
-              <div style={{ padding:'24px 28px 28px' }}>
-                {abaLogin === 'policial' && (
-                  <LoginPolicial onLogin={p => { setUsuarioSel(p); setModo('policial'); }} />
-                )}
-                {abaLogin === 'gestor' && (
-                  <div>
-                    <p style={{ color:'#475569', fontSize:12, fontWeight:500, marginBottom:20, marginTop:0 }}>
-                      Acesso restrito a gestores autorizados.
-                    </p>
-                    <label style={lbl}>Senha de acesso</label>
-                    <input
-                      type="password"
-                      value={senhaGestor}
-                      onChange={e => setSenhaGestor(e.target.value)}
-                      onKeyDown={e => e.key === 'Enter' && loginGestor()}
-                      placeholder="••••••"
-                      style={{ ...inp, marginBottom:6 }}
-                    />
-                    {erroSenha && <p style={{ color:'#f87171', fontSize:12, marginBottom:4 }}>Senha incorreta. Tente novamente.</p>}
-                    <button onClick={loginGestor} style={btnPrimary}>Entrar</button>
-                  </div>
-                )}
+              {/* Conteúdo das abas */}
+              {abaLogin === 'policial' && (
+                <LoginPolicial onLogin={p => { setUsuarioSel(p); setModo('policial'); }} />
+              )}
+              {abaLogin === 'gestor' && (
+                <div>
+                  <p style={{ color:'#475569', fontSize:12, marginBottom:20 }}>
+                    Acesso restrito a gestores autorizados.
+                  </p>
+                  <label style={lbl}>Senha de acesso</label>
+                  <input
+                    type="password"
+                    value={senhaGestor}
+                    onChange={e => setSenhaGestor(e.target.value)}
+                    onKeyDown={e => e.key === 'Enter' && loginGestor()}
+                    placeholder="••••••"
+                    style={{ ...inp, marginBottom:6 }}
+                  />
+                  {erroSenha && <p style={{ color:'#f87171', fontSize:12, marginBottom:4 }}>Senha incorreta. Tente novamente.</p>}
+                  <button onClick={loginGestor} style={btnPrimary}>Entrar</button>
+                </div>
+              )}
+
+              {/* Rodapé */}
+              <div style={{ display:'flex', alignItems:'center', gap:12, marginTop:32 }}>
+                <div style={{ flex:1, height:1, background:'rgba(255,255,255,0.04)' }} />
+                <span style={{ fontSize:9, color:'#334155', fontWeight:500, letterSpacing:'0.12em', textTransform:'uppercase' }}>PMERJ · 32º BPM</span>
+                <div style={{ flex:1, height:1, background:'rgba(255,255,255,0.04)' }} />
               </div>
 
-              {/* RODAPÉ */}
-              <div style={{ borderTop:'1px solid rgba(255,255,255,0.04)', padding:'10px 28px', textAlign:'center' }}>
-                <span style={{ fontSize:10, color:'#1e293b', fontWeight:500, letterSpacing:'0.08em' }}>
-                  Polícia Militar do Estado do Rio de Janeiro · 32º BPM
-                </span>
-              </div>
             </div>
-
-            </div>{/* fim wrapper conteúdo */}
           </div>
         </div>
       )}
