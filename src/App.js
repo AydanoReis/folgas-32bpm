@@ -1968,10 +1968,6 @@ export default function App() {
         <div className="login-split" style={{
           minHeight:'calc(100vh - 58px)',
           display:'flex',
-          flexDirection:'column',
-          alignItems:'center',
-          justifyContent:'center',
-          padding:'24px 16px',
           position:'relative',
           background:'#070f1e',
         }}>
