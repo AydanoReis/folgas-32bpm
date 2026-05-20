@@ -60,3 +60,36 @@ button:focus-visible {
 .font-heading {
   font-family: 'Rajdhani', sans-serif;
 }
+
+/* ── Split login layout ── */
+.login-left {
+  display: none;
+}
+@media (min-width: 1024px) {
+  .login-split {
+    flex-direction: row !important;
+    padding: 0 !important;
+    align-items: stretch !important;
+    justify-content: flex-start !important;
+  }
+  .login-left {
+    display: flex;
+    width: 58%;
+    position: relative;
+    flex-direction: column;
+    justify-content: flex-end;
+    padding-bottom: 64px;
+    padding-left: 64px;
+    padding-right: 48px;
+    flex-shrink: 0;
+  }
+  .login-right {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 48px 32px;
+    position: relative;
+    min-height: 0 !important;
+  }
+}
