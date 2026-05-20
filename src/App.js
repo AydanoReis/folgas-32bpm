@@ -2011,7 +2011,7 @@ export default function App() {
           </div>
 
           {/* ── PAINEL DIREITO (form) ── */}
-          <div className="login-right" style={{ width:'100%', maxWidth:420, zIndex:1 }}>
+          <div className="login-right" style={{ zIndex:1 }}>
 
             {/* Mobile: foto de fundo */}
             <div style={{ position:'absolute', inset:0, backgroundImage:'url(/batalhao.jpg)', backgroundSize:'cover', backgroundPosition:'center 30%', opacity:0.06 }} />
