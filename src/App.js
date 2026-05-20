@@ -1979,10 +1979,10 @@ export default function App() {
             backgroundImage:'url(/batalhao.jpg)',
             backgroundSize:'cover',
             backgroundPosition:'center 30%',
-            opacity:0.07,
+            filter:'brightness(0.3) saturate(0.7)',
           }} />
           {/* OVERLAY */}
-          <div style={{ position:'absolute', inset:0, background:'linear-gradient(160deg, #020810 0%, #0a1628 100%)' }} />
+          <div style={{ position:'absolute', inset:0, background:'linear-gradient(160deg, rgba(2,8,16,0.80) 0%, rgba(10,22,40,0.70) 100%)' }} />
 
           {/* CARD DE LOGIN */}
           <div style={{
