@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Rajdhani:wght@600;700&family=Inter:wght@300;400;500;600;700;800;900&display=swap');
 
 *, *::before, *::after {
   box-sizing: border-box;
@@ -13,8 +13,8 @@ html, body {
 body {
   font-family: 'Inter', 'Segoe UI', Tahoma, sans-serif;
   font-size: 14px;
-  color: #1a3a5c;
-  background: #f0f2f5;
+  color: #e2e8f0;
+  background: #070f1e;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
@@ -23,29 +23,40 @@ body {
   min-height: 100vh;
 }
 
-/* Scrollbar discreta */
-::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
-}
-::-webkit-scrollbar-track {
-  background: #f0f2f5;
-}
-::-webkit-scrollbar-thumb {
-  background: #c0cdd8;
-  border-radius: 3px;
-}
-::-webkit-scrollbar-thumb:hover {
-  background: #a0b0bf;
-}
+/* Scrollbar discreta dark */
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: #0d1a2e; }
+::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.2); }
 
-/* Inputs e selects mais refinados */
 input, select, textarea {
   font-family: inherit;
 }
 
-/* Remove outline padrÃ£o feio do browser */
+/* Input dark theme global */
+input, select, textarea {
+  background: rgba(255,255,255,0.04) !important;
+  border-color: rgba(255,255,255,0.1) !important;
+  color: #e2e8f0 !important;
+}
+input::placeholder { color: #475569 !important; }
+input:focus, select:focus, textarea:focus {
+  border-color: rgba(251,191,36,0.5) !important;
+  background: rgba(255,255,255,0.07) !important;
+  outline: none !important;
+}
+
+select option {
+  background: #0d1a2e;
+  color: #e2e8f0;
+}
+
 button:focus-visible {
-  outline: 2px solid #1a3a5c;
+  outline: 2px solid #fbbf24;
   outline-offset: 2px;
+}
+
+/* Fonte display militar para títulos */
+.font-heading {
+  font-family: 'Rajdhani', sans-serif;
 }
