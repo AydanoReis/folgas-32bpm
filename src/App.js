@@ -1965,102 +1965,136 @@ export default function App() {
 
       {/* TELA DE LOGIN */}
       {modo === 'login' && (
-        <div style={{
-          minHeight:'calc(100vh - 74px)',
-          position:'relative',
+        <div className="login-split" style={{
+          minHeight:'calc(100vh - 58px)',
           display:'flex',
+          flexDirection:'column',
           alignItems:'center',
           justifyContent:'center',
           padding:'24px 16px',
+          position:'relative',
+          background:'#070f1e',
         }}>
-          {/* FOTO DE FUNDO */}
-          <div style={{
-            position:'absolute', inset:0,
-            backgroundImage:'url(/batalhao.jpg)',
-            backgroundSize:'cover',
-            backgroundPosition:'center 30%',
-            filter:'brightness(0.3) saturate(0.7)',
-          }} />
-          {/* OVERLAY */}
-          <div style={{ position:'absolute', inset:0, background:'linear-gradient(160deg, rgba(2,8,16,0.80) 0%, rgba(10,22,40,0.70) 100%)' }} />
 
-          {/* CARD DE LOGIN */}
-          <div style={{
-            position:'relative', zIndex:1,
-            width:'100%', maxWidth:400,
-            background:'#0d1a2e',
-            borderRadius:16,
-            boxShadow:'0 24px 64px rgba(0,0,0,0.6)',
-            overflow:'hidden',
-            border:'1px solid rgba(255,255,255,0.07)',
-          }}>
-            {/* TOPO DO CARD */}
-            <div style={{ background:'linear-gradient(135deg,#020810,#0a1628)', padding:'32px 32px 24px', textAlign:'center', borderBottom:'1px solid rgba(255,255,255,0.05)', position:'relative' }}>
-              <div style={{ position:'absolute', top:0, left:0, right:0, height:'2px', background:'#fbbf24' }} />
-              <img src="/logo.jpeg" alt="32 BPM" style={{ height:60, width:60, objectFit:'contain', marginBottom:14, borderRadius:'50%', border:'2px solid rgba(251,191,36,0.4)', boxShadow:'0 8px 24px rgba(0,0,0,0.4)' }} />
-              <h1 style={{ color:'#fff', fontWeight:700, fontSize:20, margin:0, letterSpacing:0.5, fontFamily:"'Rajdhani',sans-serif" }}>Acesso ao Sistema</h1>
-              <p style={{ color:'#475569', fontSize:11, fontWeight:500, margin:'8px 0 0', letterSpacing:'0.1em', textTransform:'uppercase' }}>
-                Efetivo do 32º BPM
+          {/* ── PAINEL ESQUERDO (desktop) ── */}
+          <div className="login-left">
+            {/* Foto de fundo */}
+            <div style={{
+              position:'absolute', inset:0,
+              backgroundImage:'url(/batalhao.jpg)',
+              backgroundSize:'cover',
+              backgroundPosition:'center 30%',
+              filter:'brightness(0.3) saturate(0.7)',
+            }} />
+            {/* Gradiente overlay */}
+            <div style={{ position:'absolute', inset:0, background:'linear-gradient(to right, rgba(2,8,16,0.95) 0%, rgba(10,22,40,0.80) 60%, #070f1e 100%)' }} />
+            <div style={{ position:'absolute', inset:0, background:'linear-gradient(to top, rgba(2,8,16,0.90) 0%, transparent 50%)' }} />
+            {/* Linha âmbar esquerda */}
+            <div style={{ position:'absolute', left:0, top:0, bottom:0, width:3, background:'#fbbf24' }} />
+
+            {/* Branding */}
+            <div style={{ position:'relative', zIndex:1 }}>
+              <img src="/logo.jpeg" alt="32 BPM" style={{ height:84, width:84, objectFit:'contain', marginBottom:20, borderRadius:'50%', border:'2px solid rgba(251,191,36,0.4)', boxShadow:'0 12px 32px rgba(0,0,0,0.5)', display:'block' }} />
+              <p style={{ color:'#fbbf24', fontSize:10, fontWeight:700, letterSpacing:'0.3em', textTransform:'uppercase', margin:'0 0 14px' }}>
+                Polícia Militar · Estado do Rio de Janeiro
+              </p>
+              <h1 style={{ color:'#fff', fontWeight:700, fontSize:64, lineHeight:1, margin:'0 0 10px', fontFamily:"'Rajdhani',sans-serif", letterSpacing:'-1px' }}>
+                32º BPM
+              </h1>
+              <div style={{ display:'flex', alignItems:'center', gap:14, marginBottom:18 }}>
+                <div style={{ width:48, height:1, background:'#fbbf24' }} />
+                <span style={{ color:'#475569', fontSize:13, letterSpacing:'0.12em' }}>SEPM · 6° CPA</span>
+              </div>
+              <p style={{ color:'#cbd5e1', fontSize:22, fontWeight:600, margin:'0 0 8px', fontFamily:"'Rajdhani',sans-serif" }}>
+                Controle de Folgas
+              </p>
+              <p style={{ color:'#475569', fontSize:13, margin:0, lineHeight:1.6, maxWidth:280 }}>
+                PCSV · Expediente Semanal — controle e gestão de folgas do efetivo.
               </p>
             </div>
+          </div>
 
-            {/* ABAS */}
-            <div style={{ display:'flex', borderBottom:'1px solid rgba(255,255,255,0.06)' }}>
-              {[
-                { id:'policial', label:'Sou Policial' },
-                { id:'gestor', label:'Sou Gestor' },
-              ].map(a => (
-                <button key={a.id} onClick={() => setAbaLogin(a.id)} style={{
-                  flex:1, padding:'13px 8px',
-                  fontWeight:700,
-                  fontSize:11,
-                  cursor:'pointer',
-                  border:'none',
-                  borderBottom: abaLogin === a.id ? '2px solid #fbbf24' : '2px solid transparent',
-                  background:'transparent',
-                  color: abaLogin === a.id ? '#fbbf24' : '#475569',
-                  transition:'all 0.15s',
-                  letterSpacing:'0.12em',
-                  textTransform:'uppercase',
-                  marginBottom:'-1px',
-                }}>
-                  {a.label}
-                </button>
-              ))}
+          {/* ── PAINEL DIREITO (form) ── */}
+          <div className="login-right" style={{ width:'100%', maxWidth:420, zIndex:1 }}>
+
+            {/* Mobile: foto de fundo */}
+            <div style={{ position:'absolute', inset:0, backgroundImage:'url(/batalhao.jpg)', backgroundSize:'cover', backgroundPosition:'center 30%', opacity:0.06 }} />
+            <div style={{ position:'absolute', inset:0, background:'#070f1e', opacity:0.92 }} />
+
+            {/* Mobile: header com logo */}
+            <div className="login-mobile-header" style={{ textAlign:'center', marginBottom:28, position:'relative', zIndex:1 }}>
+              <img src="/logo.jpeg" alt="32 BPM" style={{ height:72, width:72, objectFit:'contain', borderRadius:'50%', border:'2px solid rgba(251,191,36,0.4)', boxShadow:'0 8px 24px rgba(0,0,0,0.5)', marginBottom:14, display:'block', margin:'0 auto 14px' }} />
+              <p style={{ color:'#fbbf24', fontSize:9, fontWeight:700, letterSpacing:'0.25em', textTransform:'uppercase', margin:'0 0 4px' }}>PMERJ · 6° CPA</p>
+              <h1 style={{ color:'#fff', fontWeight:700, fontSize:32, margin:0, fontFamily:"'Rajdhani',sans-serif" }}>32º BPM</h1>
+              <p style={{ color:'#475569', fontSize:12, margin:'4px 0 0' }}>Controle de Folgas</p>
             </div>
 
-            {/* CONTEÚDO DAS ABAS */}
-            <div style={{ padding:'24px 32px 28px' }}>
-              {abaLogin === 'policial' && (
-                <LoginPolicial onLogin={p => { setUsuarioSel(p); setModo('policial'); }} />
-              )}
-              {abaLogin === 'gestor' && (
-                <div>
-                  <p style={{ color:'#475569', fontSize:12, fontWeight:500, marginBottom:20, marginTop:0 }}>
-                    Acesso restrito a gestores autorizados.
-                  </p>
-                  <label style={lbl}>Senha de acesso</label>
-                  <input
-                    type="password"
-                    value={senhaGestor}
-                    onChange={e => setSenhaGestor(e.target.value)}
-                    onKeyDown={e => e.key === 'Enter' && loginGestor()}
-                    placeholder="••••••"
-                    style={{ ...inp, marginBottom:6 }}
-                  />
-                  {erroSenha && <p style={{ color:'#f87171', fontSize:12, marginBottom:4 }}>Senha incorreta. Tente novamente.</p>}
-                  <button onClick={loginGestor} style={btnPrimary}>
-                    Entrar
+            {/* Desktop: header do form */}
+            <div className="login-desktop-header" style={{ marginBottom:28, position:'relative', zIndex:1 }}>
+              <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:16 }}>
+                <div style={{ width:28, height:1, background:'#fbbf24' }} />
+                <span style={{ color:'#fbbf24', fontSize:9, fontWeight:700, letterSpacing:'0.3em', textTransform:'uppercase' }}>Acesso Restrito</span>
+              </div>
+              <h2 style={{ color:'#fff', fontWeight:700, fontSize:42, margin:'0 0 8px', fontFamily:"'Rajdhani',sans-serif", lineHeight:1 }}>Entrar</h2>
+              <p style={{ color:'#475569', fontSize:12, margin:0 }}>Sistema restrito ao efetivo do 32º BPM.</p>
+            </div>
+
+            {/* Card com abas e form */}
+            <div style={{ position:'relative', zIndex:1, background:'#0d1a2e', borderRadius:14, border:'1px solid rgba(255,255,255,0.07)', overflow:'hidden', boxShadow:'0 20px 48px rgba(0,0,0,0.5)' }}>
+
+              {/* ABAS */}
+              <div style={{ display:'flex', borderBottom:'1px solid rgba(255,255,255,0.06)' }}>
+                {[
+                  { id:'policial', label:'Sou Policial' },
+                  { id:'gestor', label:'Sou Gestor' },
+                ].map(a => (
+                  <button key={a.id} onClick={() => setAbaLogin(a.id)} style={{
+                    flex:1, padding:'13px 8px',
+                    fontWeight:700, fontSize:11,
+                    cursor:'pointer', border:'none',
+                    borderBottom: abaLogin === a.id ? '2px solid #fbbf24' : '2px solid transparent',
+                    background:'transparent',
+                    color: abaLogin === a.id ? '#fbbf24' : '#475569',
+                    transition:'all 0.15s',
+                    letterSpacing:'0.12em', textTransform:'uppercase',
+                    marginBottom:'-1px',
+                  }}>
+                    {a.label}
                   </button>
-                </div>
-              )}
-            </div>
+                ))}
+              </div>
 
-            {/* RODAPÉ DO CARD */}
-            <div style={{ borderTop:'1px solid rgba(255,255,255,0.05)', padding:'12px 32px', textAlign:'center' }}>
-              <span style={{ fontSize:10, color:'#334155', fontWeight:500, letterSpacing:'0.08em' }}>
-                Polícia Militar do Estado do Rio de Janeiro · 32º BPM
-              </span>
+              {/* CONTEÚDO */}
+              <div style={{ padding:'24px 28px 28px' }}>
+                {abaLogin === 'policial' && (
+                  <LoginPolicial onLogin={p => { setUsuarioSel(p); setModo('policial'); }} />
+                )}
+                {abaLogin === 'gestor' && (
+                  <div>
+                    <p style={{ color:'#475569', fontSize:12, fontWeight:500, marginBottom:20, marginTop:0 }}>
+                      Acesso restrito a gestores autorizados.
+                    </p>
+                    <label style={lbl}>Senha de acesso</label>
+                    <input
+                      type="password"
+                      value={senhaGestor}
+                      onChange={e => setSenhaGestor(e.target.value)}
+                      onKeyDown={e => e.key === 'Enter' && loginGestor()}
+                      placeholder="••••••"
+                      style={{ ...inp, marginBottom:6 }}
+                    />
+                    {erroSenha && <p style={{ color:'#f87171', fontSize:12, marginBottom:4 }}>Senha incorreta. Tente novamente.</p>}
+                    <button onClick={loginGestor} style={btnPrimary}>Entrar</button>
+                  </div>
+                )}
+              </div>
+
+              {/* RODAPÉ */}
+              <div style={{ borderTop:'1px solid rgba(255,255,255,0.04)', padding:'10px 28px', textAlign:'center' }}>
+                <span style={{ fontSize:10, color:'#1e293b', fontWeight:500, letterSpacing:'0.08em' }}>
+                  Polícia Militar do Estado do Rio de Janeiro · 32º BPM
+                </span>
+              </div>
             </div>
           </div>
         </div>
