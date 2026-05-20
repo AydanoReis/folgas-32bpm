@@ -2067,8 +2067,7 @@ export default function App() {
 
       {/* TELAS INTERNAS */}
       {modo !== 'login' && (
-        <div style={{ maxWidth:740, margin:'28px auto', padding:'0 14px' }}>
-          {modo === 'policial' && usuarioSel && <TelaSolicitacao usuario={usuarioSel} />}
+<div style={{ maxWidth:740, margin:'28px auto', padding:'0 14px', color:'#e2e8f0' }}>          {modo === 'policial' && usuarioSel && <TelaSolicitacao usuario={usuarioSel} />}
           {modo === 'gestor' && gestorLogado && <TelaGestor gestorLogado={gestorLogado} />}
         </div>
       )}
