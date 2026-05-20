@@ -71,6 +71,10 @@ button:focus-visible {
 .login-left {
   display: none;
 }
+/* Mobile: mostra header interno do card, esconde o desktop */
+.login-mobile-header { display: block; }
+.login-desktop-header { display: none; }
+
 @media (min-width: 1024px) {
   .login-split {
     flex-direction: row;
@@ -96,6 +100,8 @@ button:focus-visible {
     justify-content: center;
     padding: 48px 32px;
     position: relative;
-    min-height: 0 !important;
   }
+  /* Desktop: esconde header do card (já tem o painel esquerdo) */
+  .login-mobile-header { display: none; }
+  .login-desktop-header { display: block; }
 }
