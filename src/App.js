@@ -2118,8 +2118,22 @@ export default function App() {
 
       {/* TELAS INTERNAS */}
       {modo !== 'login' && (
-        <div style={{ maxWidth:740, margin:'28px auto', padding:'0 14px', color:'#e2e8f0' }}> {modo === 'policial' && usuarioSel && <TelaSolicitacao usuario={usuarioSel} />}
-          {modo === 'gestor' && gestorLogado && <TelaGestor gestorLogado={gestorLogado} />}
+        <div style={{
+          maxWidth: 1100,
+          margin: '24px auto',
+          padding: '0 16px',
+        }}>
+          <div style={{
+            background: '#0d1a2e',
+            border: '1px solid rgba(255,255,255,0.05)',
+            borderRadius: 12,
+            padding: '32px 28px',
+            color: '#e2e8f0',
+            boxShadow: '0 1px 0 rgba(255,255,255,0.03) inset, 0 8px 32px rgba(0,0,0,0.25)',
+          }}>
+            {modo === 'policial' && usuarioSel && <TelaSolicitacao usuario={usuarioSel} />}
+            {modo === 'gestor' && gestorLogado && <TelaGestor gestorLogado={gestorLogado} />}
+          </div>
         </div>
       )}
     </div>
