@@ -1980,10 +1980,9 @@ export default function App() {
               backgroundImage:'url(/batalhao.jpg)',
               backgroundSize:'cover',
               backgroundPosition:'center 30%',
-              filter:'brightness(0.3) saturate(0.7)',
             }} />
-            {/* Gradiente overlay */}
-            <div style={{ position:'absolute', inset:0, background:'linear-gradient(to right, rgba(2,8,16,0.95) 0%, rgba(10,22,40,0.80) 60%, #070f1e 100%)' }} />
+            {/* Gradiente overlay — igual ao escaladiaria */}
+            <div style={{ position:'absolute', inset:0, background:'linear-gradient(to right, rgba(2,8,16,0.95) 0%, rgba(10,22,40,0.75) 60%, #070f1e 100%)' }} />
             <div style={{ position:'absolute', inset:0, background:'linear-gradient(to top, rgba(2,8,16,0.90) 0%, transparent 50%)' }} />
             {/* Linha âmbar esquerda */}
             <div style={{ position:'absolute', left:0, top:0, bottom:0, width:3, background:'#fbbf24' }} />
@@ -2010,22 +2009,11 @@ export default function App() {
             </div>
           </div>
 
-          {/* ── PAINEL DIREITO (form) ── */}
+          {/* ── PAINEL DIREITO (form) — fundo escuro puro ── */}
           <div className="login-right">
-
-            {/* Mobile: foto de fundo sutil */}
-            <div style={{ position:'absolute', inset:0, backgroundImage:'url(/batalhao.jpg)', backgroundSize:'cover', backgroundPosition:'center 30%', opacity:0.05 }} />
 
             {/* Wrapper — max 360px, direto no painel sem card */}
             <div style={{ width:'100%', maxWidth:360, position:'relative', zIndex:1 }}>
-
-              {/* Mobile: header com logo */}
-              <div className="login-mobile-header" style={{ textAlign:'center', marginBottom:32 }}>
-                <img src="/logo.jpeg" alt="32 BPM" style={{ height:72, width:72, objectFit:'contain', borderRadius:'50%', border:'2px solid rgba(251,191,36,0.4)', display:'block', margin:'0 auto 14px' }} />
-                <p style={{ color:'#fbbf24', fontSize:9, fontWeight:700, letterSpacing:'0.25em', textTransform:'uppercase', margin:'0 0 4px' }}>PMERJ · 6° CPA</p>
-                <h1 style={{ color:'#fff', fontWeight:700, fontSize:32, margin:0, fontFamily:"'Rajdhani',sans-serif" }}>32º BPM</h1>
-                <p style={{ color:'#475569', fontSize:12, margin:'4px 0 0' }}>Controle de Folgas</p>
-              </div>
 
               {/* Header do form */}
               <div style={{ marginBottom:32 }}>
