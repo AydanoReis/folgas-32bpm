@@ -2011,14 +2011,17 @@ export default function App() {
           </div>
 
           {/* ── PAINEL DIREITO (form) ── */}
-          <div className="login-right" style={{ zIndex:1 }}>
+          <div className="login-right">
 
             {/* Mobile: foto de fundo */}
             <div style={{ position:'absolute', inset:0, backgroundImage:'url(/batalhao.jpg)', backgroundSize:'cover', backgroundPosition:'center 30%', opacity:0.06 }} />
             <div style={{ position:'absolute', inset:0, background:'#070f1e', opacity:0.92 }} />
 
+            {/* Wrapper de conteúdo — limita largura e centraliza no painel direito */}
+            <div style={{ width:'100%', maxWidth:420, position:'relative', zIndex:1 }}>
+
             {/* Mobile: header com logo */}
-            <div className="login-mobile-header" style={{ textAlign:'center', marginBottom:28, position:'relative', zIndex:1 }}>
+            <div className="login-mobile-header" style={{ textAlign:'center', marginBottom:28 }}>
               <img src="/logo.jpeg" alt="32 BPM" style={{ height:72, width:72, objectFit:'contain', borderRadius:'50%', border:'2px solid rgba(251,191,36,0.4)', boxShadow:'0 8px 24px rgba(0,0,0,0.5)', marginBottom:14, display:'block', margin:'0 auto 14px' }} />
               <p style={{ color:'#fbbf24', fontSize:9, fontWeight:700, letterSpacing:'0.25em', textTransform:'uppercase', margin:'0 0 4px' }}>PMERJ · 6° CPA</p>
               <h1 style={{ color:'#fff', fontWeight:700, fontSize:32, margin:0, fontFamily:"'Rajdhani',sans-serif" }}>32º BPM</h1>
@@ -2026,7 +2029,7 @@ export default function App() {
             </div>
 
             {/* Desktop: header do form */}
-            <div className="login-desktop-header" style={{ marginBottom:28, position:'relative', zIndex:1 }}>
+            <div className="login-desktop-header" style={{ marginBottom:28 }}>
               <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:16 }}>
                 <div style={{ width:28, height:1, background:'#fbbf24' }} />
                 <span style={{ color:'#fbbf24', fontSize:9, fontWeight:700, letterSpacing:'0.3em', textTransform:'uppercase' }}>Acesso Restrito</span>
@@ -2036,7 +2039,7 @@ export default function App() {
             </div>
 
             {/* Card com abas e form */}
-            <div style={{ position:'relative', zIndex:1, background:'#0d1a2e', borderRadius:14, border:'1px solid rgba(255,255,255,0.07)', overflow:'hidden', boxShadow:'0 20px 48px rgba(0,0,0,0.5)' }}>
+            <div style={{ background:'#0d1a2e', borderRadius:14, border:'1px solid rgba(255,255,255,0.07)', overflow:'hidden', boxShadow:'0 20px 48px rgba(0,0,0,0.5)' }}>
 
               {/* ABAS */}
               <div style={{ display:'flex', borderBottom:'1px solid rgba(255,255,255,0.06)' }}>
@@ -2092,6 +2095,8 @@ export default function App() {
                 </span>
               </div>
             </div>
+
+            </div>{/* fim wrapper conteúdo */}
           </div>
         </div>
       )}
