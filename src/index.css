@@ -62,15 +62,21 @@ button:focus-visible {
 }
 
 /* ── Split login layout ── */
+.login-split {
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 24px 16px;
+}
 .login-left {
   display: none;
 }
 @media (min-width: 1024px) {
   .login-split {
-    flex-direction: row !important;
-    padding: 0 !important;
-    align-items: stretch !important;
-    justify-content: flex-start !important;
+    flex-direction: row;
+    padding: 0;
+    align-items: stretch;
+    justify-content: flex-start;
   }
   .login-left {
     display: flex;
