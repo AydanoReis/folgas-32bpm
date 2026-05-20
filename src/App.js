@@ -1930,6 +1930,17 @@ export default function App() {
   const [senhaGestor, setSenhaGestor] = useState('');
   const [erroSenha, setErroSenha] = useState(false);
 
+  // Viewport tracking — split layout fica autônomo via inline styles,
+  // não depende do CSS externo ser carregado corretamente.
+  const [isDesktop, setIsDesktop] = useState(
+    typeof window !== 'undefined' ? window.innerWidth >= 1024 : true
+  );
+  useEffect(() => {
+    const onResize = () => setIsDesktop(window.innerWidth >= 1024);
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
+
   useEffect(() => {
     const sessao = carregarSessao();
     if (sessao) {
@@ -1968,12 +1979,25 @@ export default function App() {
         <div className="login-split" style={{
           minHeight:'calc(100vh - 58px)',
           display:'flex',
+          flexDirection: isDesktop ? 'row' : 'column',
+          alignItems: isDesktop ? 'stretch' : 'center',
+          justifyContent: isDesktop ? 'flex-start' : 'center',
           position:'relative',
           background:'#070f1e',
         }}>
 
-          {/* ── PAINEL ESQUERDO (desktop) ── */}
-          <div className="login-left">
+          {/* ── PAINEL ESQUERDO (só desktop) ── */}
+          {isDesktop && (
+          <div className="login-left" style={{
+            display:'flex',
+            flexDirection:'column',
+            justifyContent:'flex-end',
+            width:'58%',
+            flexShrink:0,
+            position:'relative',
+            padding:'0 48px 64px 64px',
+            overflow:'hidden',
+          }}>
             {/* Foto de fundo */}
             <div style={{
               position:'absolute', inset:0,
@@ -2008,9 +2032,19 @@ export default function App() {
               </p>
             </div>
           </div>
+          )}
 
           {/* ── PAINEL DIREITO (form) — fundo escuro puro ── */}
-          <div className="login-right">
+          <div className="login-right" style={{
+            flex: isDesktop ? 1 : 'initial',
+            width: isDesktop ? 'auto' : '100%',
+            display:'flex',
+            alignItems:'center',
+            justifyContent:'center',
+            padding: isDesktop ? '48px 32px' : '48px 24px',
+            position:'relative',
+            background:'#070f1e',
+          }}>
 
             {/* Wrapper — max 360px, direto no painel sem card */}
             <div style={{ width:'100%', maxWidth:360, position:'relative', zIndex:1 }}>
