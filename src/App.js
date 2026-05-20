@@ -87,9 +87,9 @@ function ContadorFolgas({ solicitacoes, policialId, compact = false }) {
   );
 }
 
-const inp = { width:'100%', padding:'10px 12px', borderRadius:8, border:'1.5px solid #d0dce8', fontSize:14, color:'#1a3a5c', background:'#f8fafc', boxSizing:'border-box', outline:'none' };
-const lbl = { display:'block', fontSize:11, fontWeight:800, color:'#4a6580', marginBottom:5, textTransform:'uppercase', letterSpacing:0.5 };
-const btnPrimary = { display:'block', width:'100%', padding:'12px', background:'linear-gradient(135deg,#0d2340,#1e4d7b)', color:'#fff', border:'none', borderRadius:8, fontWeight:800, fontSize:14, cursor:'pointer', marginTop:12 };
+const inp = { width:'100%', padding:'10px 14px', borderRadius:8, border:'1.5px solid rgba(255,255,255,0.1)', fontSize:14, color:'#e2e8f0', background:'rgba(255,255,255,0.04)', boxSizing:'border-box', outline:'none', transition:'border-color 0.2s, background 0.2s' };
+const lbl = { display:'block', fontSize:10, fontWeight:800, color:'#64748b', marginBottom:6, textTransform:'uppercase', letterSpacing:1.5 };
+const btnPrimary = { display:'block', width:'100%', padding:'13px', background:'#fbbf24', color:'#000', border:'none', borderRadius:8, fontWeight:800, fontSize:13, cursor:'pointer', marginTop:12, letterSpacing:'0.12em', textTransform:'uppercase' };
 const btnSm = { padding:'6px 13px', borderRadius:7, fontWeight:700, fontSize:12, cursor:'pointer', border:'none' };
 
 function getInicioSemana(date) {
@@ -1949,18 +1949,18 @@ export default function App() {
   const [abaLogin, setAbaLogin] = useState('policial');
 
   return (
-    <div style={{ minHeight:'100vh', background:'#f0f2f5', fontFamily:"'Inter','Segoe UI',sans-serif" }}>
+    <div style={{ minHeight:'100vh', background:'#070f1e', fontFamily:"'Inter','Segoe UI',sans-serif" }}>
 
       {/* CABEÇALHO */}
-      <div style={{ background:'linear-gradient(135deg,#0d2340 0%,#1a3a5c 60%,#1e4d7b 100%)', padding:'16px 24px', display:'flex', alignItems:'center', justifyContent:'space-between', boxShadow:'0 4px 20px #00000040' }}>
+      <div style={{ background:'#070f1e', borderTop:'3px solid #fbbf24', padding:'13px 24px', display:'flex', alignItems:'center', justifyContent:'space-between', borderBottom:'1px solid rgba(255,255,255,0.05)', boxShadow:'0 4px 24px rgba(0,0,0,0.5)' }}>
         <div style={{ display:'flex', alignItems:'center', gap:12 }}>
-          <img src="/logo.jpeg" alt="32 BPM" style={{ height:42, width:42, objectFit:'contain' }} />
+          <img src="/logo.jpeg" alt="32 BPM" style={{ height:36, width:36, objectFit:'contain', borderRadius:'50%', border:'1.5px solid rgba(251,191,36,0.4)' }} />
           <div>
-            <div style={{ color:'#fff', fontWeight:700, fontSize:17, letterSpacing:0.3 }}>32º BPM — Controle de Folgas</div>
-            <div style={{ color:'#8db4d8', fontSize:11, fontWeight:400 }}>PCSV · Expediente Semanal · v2.1</div>
+            <div style={{ color:'#fff', fontWeight:700, fontSize:15, letterSpacing:0.5, fontFamily:"'Rajdhani',sans-serif" }}>32º BPM — Controle de Folgas</div>
+            <div style={{ color:'#475569', fontSize:9, fontWeight:600, letterSpacing:'0.18em', textTransform:'uppercase' }}>PCSV · Expediente Semanal · v2.1</div>
           </div>
         </div>
-        {modo !== 'login' && <button onClick={sair} style={{ background:'rgba(255,255,255,0.12)', color:'#fff', border:'1px solid rgba(255,255,255,0.25)', borderRadius:8, padding:'7px 14px', cursor:'pointer', fontSize:13, fontWeight:600 }}>← Sair</button>}
+        {modo !== 'login' && <button onClick={sair} style={{ background:'rgba(255,255,255,0.05)', color:'#94a3b8', border:'1px solid rgba(255,255,255,0.1)', borderRadius:8, padding:'6px 14px', cursor:'pointer', fontSize:11, fontWeight:600, letterSpacing:'0.1em', textTransform:'uppercase' }}>← Sair</button>}
       </div>
 
       {/* TELA DE LOGIN */}
@@ -1979,49 +1979,50 @@ export default function App() {
             backgroundImage:'url(/batalhao.jpg)',
             backgroundSize:'cover',
             backgroundPosition:'center 30%',
-            filter:'brightness(0.35) saturate(0.8)',
+            opacity:0.07,
           }} />
-          {/* OVERLAY AZUL */}
-          <div style={{
-            position:'absolute', inset:0,
-            background:'linear-gradient(160deg, rgba(13,35,64,0.72) 0%, rgba(30,77,123,0.55) 100%)',
-          }} />
+          {/* OVERLAY */}
+          <div style={{ position:'absolute', inset:0, background:'linear-gradient(160deg, #020810 0%, #0a1628 100%)' }} />
 
           {/* CARD DE LOGIN */}
           <div style={{
             position:'relative', zIndex:1,
-            width:'100%', maxWidth:420,
-            background:'#fff',
+            width:'100%', maxWidth:400,
+            background:'#0d1a2e',
             borderRadius:16,
-            boxShadow:'0 20px 60px rgba(0,0,0,0.35)',
+            boxShadow:'0 24px 64px rgba(0,0,0,0.6)',
             overflow:'hidden',
+            border:'1px solid rgba(255,255,255,0.07)',
           }}>
             {/* TOPO DO CARD */}
-            <div style={{ background:'linear-gradient(135deg,#0d2340,#1e4d7b)', padding:'28px 32px 24px', textAlign:'center' }}>
-              <img src="/logo.jpeg" alt="32 BPM" style={{ height:56, width:56, objectFit:'contain', marginBottom:12 }} />
-              <h1 style={{ color:'#fff', fontWeight:700, fontSize:18, margin:0, letterSpacing:0.2 }}>Acesso ao Sistema</h1>
-              <p style={{ color:'#8db4d8', fontSize:12, fontWeight:400, margin:'6px 0 0' }}>
-                Sistema restrito ao uso do efetivo do 32º BPM
+            <div style={{ background:'linear-gradient(135deg,#020810,#0a1628)', padding:'32px 32px 24px', textAlign:'center', borderBottom:'1px solid rgba(255,255,255,0.05)', position:'relative' }}>
+              <div style={{ position:'absolute', top:0, left:0, right:0, height:'2px', background:'#fbbf24' }} />
+              <img src="/logo.jpeg" alt="32 BPM" style={{ height:60, width:60, objectFit:'contain', marginBottom:14, borderRadius:'50%', border:'2px solid rgba(251,191,36,0.4)', boxShadow:'0 8px 24px rgba(0,0,0,0.4)' }} />
+              <h1 style={{ color:'#fff', fontWeight:700, fontSize:20, margin:0, letterSpacing:0.5, fontFamily:"'Rajdhani',sans-serif" }}>Acesso ao Sistema</h1>
+              <p style={{ color:'#475569', fontSize:11, fontWeight:500, margin:'8px 0 0', letterSpacing:'0.1em', textTransform:'uppercase' }}>
+                Efetivo do 32º BPM
               </p>
             </div>
 
             {/* ABAS */}
-            <div style={{ display:'flex', borderBottom:'2px solid #f0f2f5' }}>
+            <div style={{ display:'flex', borderBottom:'1px solid rgba(255,255,255,0.06)' }}>
               {[
-                { id:'policial', label:'👮 Sou Policial' },
-                { id:'gestor', label:'🗂️ Sou Gestor' },
+                { id:'policial', label:'Sou Policial' },
+                { id:'gestor', label:'Sou Gestor' },
               ].map(a => (
                 <button key={a.id} onClick={() => setAbaLogin(a.id)} style={{
-                  flex:1, padding:'14px 8px',
-                  fontWeight: abaLogin === a.id ? 700 : 500,
-                  fontSize:13,
+                  flex:1, padding:'13px 8px',
+                  fontWeight:700,
+                  fontSize:11,
                   cursor:'pointer',
                   border:'none',
-                  borderBottom: abaLogin === a.id ? '3px solid #1a3a5c' : '3px solid transparent',
-                  background:'#fff',
-                  color: abaLogin === a.id ? '#1a3a5c' : '#6b8099',
+                  borderBottom: abaLogin === a.id ? '2px solid #fbbf24' : '2px solid transparent',
+                  background:'transparent',
+                  color: abaLogin === a.id ? '#fbbf24' : '#475569',
                   transition:'all 0.15s',
-                  marginBottom:'-2px',
+                  letterSpacing:'0.12em',
+                  textTransform:'uppercase',
+                  marginBottom:'-1px',
                 }}>
                   {a.label}
                 </button>
@@ -2035,7 +2036,7 @@ export default function App() {
               )}
               {abaLogin === 'gestor' && (
                 <div>
-                  <p style={{ color:'#6b8099', fontSize:13, fontWeight:400, marginBottom:20, marginTop:0 }}>
+                  <p style={{ color:'#475569', fontSize:12, fontWeight:500, marginBottom:20, marginTop:0 }}>
                     Acesso restrito a gestores autorizados.
                   </p>
                   <label style={lbl}>Senha de acesso</label>
@@ -2047,8 +2048,8 @@ export default function App() {
                     placeholder="••••••"
                     style={{ ...inp, marginBottom:6 }}
                   />
-                  {erroSenha && <p style={{ color:'#B71C1C', fontSize:12, marginBottom:4 }}>Senha incorreta. Tente novamente.</p>}
-                  <button onClick={loginGestor} style={{ ...btnPrimary, marginTop:12, letterSpacing:0.5, textTransform:'uppercase', fontSize:13 }}>
+                  {erroSenha && <p style={{ color:'#f87171', fontSize:12, marginBottom:4 }}>Senha incorreta. Tente novamente.</p>}
+                  <button onClick={loginGestor} style={btnPrimary}>
                     Entrar
                   </button>
                 </div>
@@ -2056,8 +2057,8 @@ export default function App() {
             </div>
 
             {/* RODAPÉ DO CARD */}
-            <div style={{ borderTop:'1px solid #f0f2f5', padding:'12px 32px', textAlign:'center' }}>
-              <span style={{ fontSize:11, color:'#aab', fontWeight:400 }}>
+            <div style={{ borderTop:'1px solid rgba(255,255,255,0.05)', padding:'12px 32px', textAlign:'center' }}>
+              <span style={{ fontSize:10, color:'#334155', fontWeight:500, letterSpacing:'0.08em' }}>
                 Polícia Militar do Estado do Rio de Janeiro · 32º BPM
               </span>
             </div>
@@ -2067,7 +2068,7 @@ export default function App() {
 
       {/* TELAS INTERNAS */}
       {modo !== 'login' && (
-<div style={{ maxWidth:740, margin:'28px auto', padding:'0 14px', color:'#e2e8f0' }}>          {modo === 'policial' && usuarioSel && <TelaSolicitacao usuario={usuarioSel} />}
+        <div style={{ maxWidth:740, margin:'28px auto', padding:'0 14px', color:'#e2e8f0' }}> {modo === 'policial' && usuarioSel && <TelaSolicitacao usuario={usuarioSel} />}
           {modo === 'gestor' && gestorLogado && <TelaGestor gestorLogado={gestorLogado} />}
         </div>
       )}
