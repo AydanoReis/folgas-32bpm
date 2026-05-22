@@ -24,7 +24,7 @@ const EMAILJS_SERVICE_ID = 'service_97rq307';
 const EMAILJS_TEMPLATE_ID = 'template_y0wm9hp';
 const EMAILJS_PUBLIC_KEY = 'VmM8b5g2hP9fKqsm-';
 
-const DIAS = ['Segunda','Terça','Quarta','Quinta','Sexta','Sábado','Domingo'];
+const DIAS = ['Segunda','Terça','Quarta','Quinta','Sexta'];
 const SECOES = ['P1','P3','P4','P5','Conferência','Tesouraria','Secretaria','Almoxarifado','SMT','SMB','Rancho','Ordenança','AJD','PCSV','Ed. Física','Técnica','Obra','Faxina','Gabinete Médico','Gabinete Odontológico'];
 const MOTIVOS = ['Folga','Concessão'];
 const SIT_SANITARIA_LTS = ['Apto A','Apto B','Apto C','LTS'];
@@ -87,9 +87,9 @@ function ContadorFolgas({ solicitacoes, policialId, compact = false }) {
   );
 }
 
-const inp = { width:'100%', padding:'10px 12px', borderRadius:8, border:'1.5px solid #d0dce8', fontSize:14, color:'#1a3a5c', background:'#f8fafc', boxSizing:'border-box', outline:'none' };
-const lbl = { display:'block', fontSize:11, fontWeight:800, color:'#4a6580', marginBottom:5, textTransform:'uppercase', letterSpacing:0.5 };
-const btnPrimary = { display:'block', width:'100%', padding:'12px', background:'linear-gradient(135deg,#0d2340,#1e4d7b)', color:'#fff', border:'none', borderRadius:8, fontWeight:800, fontSize:14, cursor:'pointer', marginTop:12 };
+const inp = { width:'100%', padding:'10px 14px', borderRadius:8, border:'1.5px solid rgba(255,255,255,0.1)', fontSize:14, color:'#e2e8f0', background:'rgba(255,255,255,0.04)', boxSizing:'border-box', outline:'none', transition:'border-color 0.2s, background 0.2s' };
+const lbl = { display:'block', fontSize:10, fontWeight:800, color:'#64748b', marginBottom:6, textTransform:'uppercase', letterSpacing:1.5 };
+const btnPrimary = { display:'block', width:'100%', padding:'13px', background:'#fbbf24', color:'#000', border:'none', borderRadius:8, fontWeight:800, fontSize:13, cursor:'pointer', marginTop:12, letterSpacing:'0.12em', textTransform:'uppercase' };
 const btnSm = { padding:'6px 13px', borderRadius:7, fontWeight:700, fontSize:12, cursor:'pointer', border:'none' };
 
 function getInicioSemana(date) {
@@ -602,16 +602,14 @@ function gerarPDF(solicitacoes, policiais, semanaAtual) {
   const afastadosLTS = policiais.filter(p => (p.sit_sanitaria||'Apto A') === 'LTS');
 
   if (afastadosSit.length > 0 || afastadosLTS.length > 0) {
-    if (y > pageH - 60) { doc.addPage(); cabecalhoPagina('POLICIAIS AFASTADOS'); y = 22; }
-
+    doc.addPage(); cabecalhoPagina('POLICIAIS AFASTADOS'); y = 22;
     doc.setFillColor(30,77,123); doc.roundedRect(10, y, pageW-20, 8, 1, 1, 'F');
     doc.setTextColor(255,255,255); doc.setFontSize(8); doc.setFont('helvetica','bold');
     doc.text('POLICIAIS AFASTADOS', 15, y+5.5);
     y += 10;
 
     // Situações administrativas
-    SITUACOES.filter(sit => sit !== 'Pronto').forEach(sit => {
-      const grupo = afastadosSit.filter(p => (p.situacao||'Pronto') === sit);
+SITUACOES.filter(sit => sit !== 'Pronto' && sit !== 'LTS').forEach(sit => {      const grupo = afastadosSit.filter(p => (p.situacao||'Pronto') === sit);
       if (grupo.length === 0) return;
       if (y > pageH - 30) { doc.addPage(); cabecalhoPagina('POLICIAIS AFASTADOS (continuação)'); y = 22; }
       doc.setFillColor(255,235,238); doc.roundedRect(10, y, pageW-20, 7, 1, 1, 'F');
@@ -1335,7 +1333,7 @@ function TelaGestor({ gestorLogado }) {
   const [policiais, setPoliciais] = useState([]);
   const [gestores, setGestores] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [filtroStatus, setFiltroStatus] = useState('pendente'); // aprovadas ocultas por padrão
+  const [filtroStatus, setFiltroStatus] = useState('todos');
   const [filtroSecao, setFiltroSecao] = useState('todas');
   const [filtroDia, setFiltroDia] = useState('todos');
   const [filtroMotivo, setFiltroMotivo] = useState('todos');
@@ -1609,15 +1607,8 @@ function TelaGestor({ gestorLogado }) {
               {DIAS.map(d => <option key={d}>{d}</option>)}
             </select>
           </div>
-          {/* Aviso de aprovadas ocultas */}
-          {filtroStatus === 'pendente' && stats.aprovadas > 0 && (
-            <div style={{ background:'#E8F5E9', border:'1px solid #A5D6A7', borderRadius:8, padding:'8px 14px', marginBottom:12, fontSize:12, color:'#1B5E20', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
-              <span>✅ {stats.aprovadas} solicitação(ões) aprovada(s) esta semana</span>
-              <button onClick={() => setFiltroStatus('aprovado')} style={{ padding:'4px 10px', borderRadius:6, fontWeight:700, fontSize:11, cursor:'pointer', border:'none', background:'#1B5E20', color:'#fff' }}>Ver aprovadas</button>
-            </div>
-          )}
           {paginadasSolic.dados.length === 0
-            ? <p style={{ color:'#aab', fontSize:13, textAlign:'center', padding:20 }}>{filtroStatus === 'pendente' ? 'Nenhuma pendente esta semana ✅' : 'Nenhuma solicitação nesta semana.'}</p>
+            ? <p style={{ color:'#aab', fontSize:13, textAlign:'center', padding:20 }}>Nenhuma solicitação nesta semana.</p>
             : (
               <>
                 {paginadasSolic.dados.map(s => {
@@ -1797,32 +1788,19 @@ function TelaGestor({ gestorLogado }) {
                 <div style={{ flex:1 }}>
                   <div style={{ fontWeight:800, color:'#1a3a5c', fontSize:13 }}>{p.patente} {p.nome}</div>
                   <div style={{ color:'#6b8099', fontSize:12, marginTop:2 }}>Mat. {p.matricula}</div>
-                  {/* ✅ Editar Patente e RG */}
-                  <div style={{ display:'flex', gap:6, flexWrap:'wrap', marginTop:8 }}>
-                    <div style={{ flex:'1 1 140px' }}>
-                      <label style={{ display:'block', fontSize:9, fontWeight:800, color:'#4a6580', marginBottom:4, textTransform:'uppercase', letterSpacing:1 }}>Patente</label>
-                      <select value={p.patente||''} onChange={e => atualizarPolicial(p.id,'patente',e.target.value)} style={{ width:'100%', padding:'5px 8px', borderRadius:8, border:'1.5px solid #d0dce8', fontSize:12, color:'#1a3a5c', background:'#f8fafc', boxSizing:'border-box', outline:'none' }}>
-                        {['TEN CEL PM','MAJ PM','CAP PM','1º TEN PM','2º TEN PM','SUB TEN PM','1º SGT PM','2º SGT PM','3º SGT PM','CB PM','SD PM'].map(pt => <option key={pt}>{pt}</option>)}
-                      </select>
-                    </div>
-                    <div style={{ flex:'1 1 100px' }}>
-                      <label style={{ display:'block', fontSize:9, fontWeight:800, color:'#4a6580', marginBottom:4, textTransform:'uppercase', letterSpacing:1 }}>Matrícula / RG</label>
-                      <input value={p.matricula||''} onChange={e => atualizarPolicial(p.id,'matricula',e.target.value)} style={{ width:'100%', padding:'5px 8px', borderRadius:8, border:'1.5px solid #d0dce8', fontSize:12, color:'#1a3a5c', background:'#f8fafc', boxSizing:'border-box', outline:'none' }} />
-                    </div>
-                  </div>
                   <ContadorFolgas solicitacoes={solicitacoes} policialId={p.id} compact={true} />
                   <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:6, marginTop:8, width:'100%' }}>
-                    <div style={{ minWidth:0 }}><label style={{ ...lbl, fontSize:10 }}>Seção</label><select value={p.secao||''} onChange={e => atualizarPolicial(p.id,'secao',e.target.value)} style={{ width:'100%', padding:'6px 8px', borderRadius:8, border:'1.5px solid #d0dce8', fontSize:12, color:'#1a3a5c', background:'#f8fafc', boxSizing:'border-box', outline:'none' }}><option value="">— Não definida —</option>{SECOES.map(s => <option key={s}>{s}</option>)}</select></div>
-                    <div style={{ minWidth:0 }}><label style={{ ...lbl, fontSize:10 }}>Sit. Sanitária</label><select value={p.sit_sanitaria||'Apto A'} onChange={e => atualizarPolicial(p.id,'sit_sanitaria',e.target.value)} style={{ width:'100%', padding:'6px 8px', borderRadius:8, border:'1.5px solid #d0dce8', fontSize:12, color:'#1a3a5c', background:'#f8fafc', boxSizing:'border-box', outline:'none' }}>{SIT_SANITARIA_LTS.map(s => <option key={s}>{s}</option>)}</select></div>
-                    <div style={{ minWidth:0 }}><label style={{ ...lbl, fontSize:10 }}>Situação</label><select value={p.situacao||'Pronto'} onChange={e => atualizarPolicial(p.id,'situacao',e.target.value)} style={{ width:'100%', padding:'6px 8px', borderRadius:8, border:'1.5px solid #d0dce8', fontSize:12, color:'#1a3a5c', background:'#f8fafc', boxSizing:'border-box', outline:'none' }}>{SITUACOES.map(s => <option key={s}>{s}</option>)}</select></div>
-                    <div style={{ minWidth:0 }}><label style={{ ...lbl, fontSize:10 }}>Restrições</label><select value={p.restricao||'Sem restrição'} onChange={e => atualizarPolicial(p.id,'restricao',e.target.value)} style={{ width:'100%', padding:'6px 8px', borderRadius:8, border:'1.5px solid #d0dce8', fontSize:12, color:'#1a3a5c', background:'#f8fafc', boxSizing:'border-box', outline:'none' }}>{RESTRICOES.map(s => <option key={s}>{s}</option>)}</select></div>
+                    <div style={{ minWidth:0 }}><label style={{ ...lbl, fontSize:10 }}>Seção</label><select value={p.secao||''} onChange={e => atualizarPolicial(p.id,'secao',e.target.value)} style={{ ...inp, fontSize:12, padding:'6px 8px' }}><option value="">— Não definida —</option>{SECOES.map(s => <option key={s}>{s}</option>)}</select></div>
+                    <div style={{ minWidth:0 }}><label style={{ ...lbl, fontSize:10 }}>Sit. Sanitária</label><select value={p.sit_sanitaria||'Apto A'} onChange={e => atualizarPolicial(p.id,'sit_sanitaria',e.target.value)} style={{ ...inp, fontSize:12, padding:'6px 8px' }}>{SIT_SANITARIA_LTS.map(s => <option key={s}>{s}</option>)}</select></div>
+                    <div style={{ minWidth:0 }}><label style={{ ...lbl, fontSize:10 }}>Situação</label><select value={p.situacao||'Pronto'} onChange={e => atualizarPolicial(p.id,'situacao',e.target.value)} style={{ ...inp, fontSize:12, padding:'6px 8px' }}>{SITUACOES.map(s => <option key={s}>{s}</option>)}</select></div>
+                    <div style={{ minWidth:0 }}><label style={{ ...lbl, fontSize:10 }}>Restrições</label><select value={p.restricao||'Sem restrição'} onChange={e => atualizarPolicial(p.id,'restricao',e.target.value)} style={{ ...inp, fontSize:12, padding:'6px 8px' }}>{RESTRICOES.map(s => <option key={s}>{s}</option>)}</select></div>
                   </div>
                   {p.situacao === 'Férias' && (
                     <div style={{ marginTop:8, background:'#FFF8E1', borderRadius:8, padding:'10px' }}>
                       <div style={{ fontSize:11, fontWeight:800, color:'#E65100', marginBottom:8 }}>🟠 Período de Férias</div>
                       <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
-                        <div style={{ flex:1, minWidth:120 }}><label style={{ ...lbl, fontSize:10 }}>Início das Férias</label><input type="date" value={p.ferias_inicio||''} onChange={e => atualizarPolicial(p.id,'ferias_inicio',e.target.value)} style={{ width:'100%', padding:'6px 8px', borderRadius:8, border:'1.5px solid #d0dce8', fontSize:12, color:'#1a3a5c', background:'#f8fafc', boxSizing:'border-box', outline:'none' }} /></div>
-                        <div style={{ flex:1, minWidth:120 }}><label style={{ ...lbl, fontSize:10 }}>Fim das Férias</label><input type="date" value={p.ferias_fim||''} onChange={e => atualizarPolicial(p.id,'ferias_fim',e.target.value)} style={{ width:'100%', padding:'6px 8px', borderRadius:8, border:'1.5px solid #d0dce8', fontSize:12, color:'#1a3a5c', background:'#f8fafc', boxSizing:'border-box', outline:'none' }} /></div>
+                        <div style={{ flex:1, minWidth:120 }}><label style={{ ...lbl, fontSize:10 }}>Início das Férias</label><input type="date" value={p.ferias_inicio||''} onChange={e => atualizarPolicial(p.id,'ferias_inicio',e.target.value)} style={{ ...inp, fontSize:12, padding:'6px 8px' }} /></div>
+                        <div style={{ flex:1, minWidth:120 }}><label style={{ ...lbl, fontSize:10 }}>Fim das Férias</label><input type="date" value={p.ferias_fim||''} onChange={e => atualizarPolicial(p.id,'ferias_fim',e.target.value)} style={{ ...inp, fontSize:12, padding:'6px 8px' }} /></div>
                       </div>
                       {p.ferias_fim && diasParaRetorno(p.ferias_fim) !== null && (
                         <div style={{ marginTop:6 }}>
@@ -1839,8 +1817,8 @@ function TelaGestor({ gestorLogado }) {
                         {p.sit_sanitaria==='Apto B' ? '🟡' : p.sit_sanitaria==='Apto C' ? '🔴' : '🟣'} Período do {p.sit_sanitaria}
                       </div>
                       <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
-                        <div style={{ flex:1, minWidth:120 }}><label style={{ ...lbl, fontSize:10 }}>Data de Início</label><input type="date" value={p.ss_inicio||''} onChange={e => atualizarPolicial(p.id,'ss_inicio',e.target.value)} style={{ width:'100%', padding:'6px 8px', borderRadius:8, border:'1.5px solid #d0dce8', fontSize:12, color:'#1a3a5c', background:'#f8fafc', boxSizing:'border-box', outline:'none' }} /></div>
-                        <div style={{ flex:1, minWidth:120 }}><label style={{ ...lbl, fontSize:10 }}>Data de Fim</label><input type="date" value={p.ss_fim||''} onChange={e => atualizarPolicial(p.id,'ss_fim',e.target.value)} style={{ width:'100%', padding:'6px 8px', borderRadius:8, border:'1.5px solid #d0dce8', fontSize:12, color:'#1a3a5c', background:'#f8fafc', boxSizing:'border-box', outline:'none' }} /></div>
+                        <div style={{ flex:1, minWidth:120 }}><label style={{ ...lbl, fontSize:10 }}>Data de Início</label><input type="date" value={p.ss_inicio||''} onChange={e => atualizarPolicial(p.id,'ss_inicio',e.target.value)} style={{ ...inp, fontSize:12, padding:'6px 8px' }} /></div>
+                        <div style={{ flex:1, minWidth:120 }}><label style={{ ...lbl, fontSize:10 }}>Data de Fim</label><input type="date" value={p.ss_fim||''} onChange={e => atualizarPolicial(p.id,'ss_fim',e.target.value)} style={{ ...inp, fontSize:12, padding:'6px 8px' }} /></div>
                       </div>
                       {p.ss_fim && diasParaRetorno(p.ss_fim) !== null && (
                         <div style={{ marginTop:6 }}>
@@ -1952,6 +1930,17 @@ export default function App() {
   const [senhaGestor, setSenhaGestor] = useState('');
   const [erroSenha, setErroSenha] = useState(false);
 
+  // Viewport tracking — split layout fica autônomo via inline styles,
+  // não depende do CSS externo ser carregado corretamente.
+  const [isDesktop, setIsDesktop] = useState(
+    typeof window !== 'undefined' ? window.innerWidth >= 1024 : true
+  );
+  useEffect(() => {
+    const onResize = () => setIsDesktop(window.innerWidth >= 1024);
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
+
   useEffect(() => {
     const sessao = carregarSessao();
     if (sessao) {
@@ -1971,93 +1960,134 @@ export default function App() {
   const [abaLogin, setAbaLogin] = useState('policial');
 
   return (
-    <div style={{ minHeight:'100vh', background:'#f0f2f5', fontFamily:"'Inter','Segoe UI',sans-serif" }}>
+    <div style={{ minHeight:'100vh', background:'#070f1e', fontFamily:"'Inter','Segoe UI',sans-serif" }}>
 
       {/* CABEÇALHO */}
-      <div style={{ background:'linear-gradient(135deg,#0d2340 0%,#1a3a5c 60%,#1e4d7b 100%)', padding:'16px 24px', display:'flex', alignItems:'center', justifyContent:'space-between', boxShadow:'0 4px 20px #00000040' }}>
+      <div style={{ background:'#070f1e', borderTop:'3px solid #fbbf24', padding:'13px 24px', display:'flex', alignItems:'center', justifyContent:'space-between', borderBottom:'1px solid rgba(255,255,255,0.05)', boxShadow:'0 4px 24px rgba(0,0,0,0.5)' }}>
         <div style={{ display:'flex', alignItems:'center', gap:12 }}>
-          <img src="/logo.jpeg" alt="32 BPM" style={{ height:42, width:42, objectFit:'contain' }} />
+          <img src="/logo.jpeg" alt="32 BPM" style={{ height:36, width:36, objectFit:'contain', borderRadius:'50%', border:'1.5px solid rgba(251,191,36,0.4)' }} />
           <div>
-            <div style={{ color:'#fff', fontWeight:700, fontSize:17, letterSpacing:0.3 }}>32º BPM — Controle de Folgas</div>
-            <div style={{ color:'#8db4d8', fontSize:11, fontWeight:400 }}>PCSV · Expediente Semanal · v2.1</div>
+            <div style={{ color:'#fff', fontWeight:700, fontSize:15, letterSpacing:0.5, fontFamily:"'Rajdhani',sans-serif" }}>32º BPM — Controle de Folgas</div>
+            <div style={{ color:'#475569', fontSize:9, fontWeight:600, letterSpacing:'0.18em', textTransform:'uppercase' }}>PCSV · Expediente Semanal · v2.1</div>
           </div>
         </div>
-        {modo !== 'login' && <button onClick={sair} style={{ background:'rgba(255,255,255,0.12)', color:'#fff', border:'1px solid rgba(255,255,255,0.25)', borderRadius:8, padding:'7px 14px', cursor:'pointer', fontSize:13, fontWeight:600 }}>← Sair</button>}
+        {modo !== 'login' && <button onClick={sair} style={{ background:'rgba(255,255,255,0.05)', color:'#94a3b8', border:'1px solid rgba(255,255,255,0.1)', borderRadius:8, padding:'6px 14px', cursor:'pointer', fontSize:11, fontWeight:600, letterSpacing:'0.1em', textTransform:'uppercase' }}>← Sair</button>}
       </div>
 
       {/* TELA DE LOGIN */}
       {modo === 'login' && (
-        <div style={{
-          minHeight:'calc(100vh - 74px)',
-          position:'relative',
+        <div className="login-split" style={{
+          minHeight:'calc(100vh - 58px)',
           display:'flex',
-          alignItems:'center',
-          justifyContent:'center',
-          padding:'24px 16px',
+          flexDirection: isDesktop ? 'row' : 'column',
+          alignItems: isDesktop ? 'stretch' : 'center',
+          justifyContent: isDesktop ? 'flex-start' : 'center',
+          position:'relative',
+          background:'#070f1e',
         }}>
-          {/* FOTO DE FUNDO */}
-          <div style={{
-            position:'absolute', inset:0,
-            backgroundImage:'url(/batalhao.jpg)',
-            backgroundSize:'cover',
-            backgroundPosition:'center 30%',
-            filter:'brightness(0.35) saturate(0.8)',
-          }} />
-          {/* OVERLAY AZUL */}
-          <div style={{
-            position:'absolute', inset:0,
-            background:'linear-gradient(160deg, rgba(13,35,64,0.72) 0%, rgba(30,77,123,0.55) 100%)',
-          }} />
 
-          {/* CARD DE LOGIN */}
-          <div style={{
-            position:'relative', zIndex:1,
-            width:'100%', maxWidth:420,
-            background:'#fff',
-            borderRadius:16,
-            boxShadow:'0 20px 60px rgba(0,0,0,0.35)',
+          {/* ── PAINEL ESQUERDO (só desktop) ── */}
+          {isDesktop && (
+          <div className="login-left" style={{
+            display:'flex',
+            flexDirection:'column',
+            justifyContent:'flex-end',
+            width:'58%',
+            flexShrink:0,
+            position:'relative',
+            padding:'0 48px 64px 64px',
             overflow:'hidden',
           }}>
-            {/* TOPO DO CARD */}
-            <div style={{ background:'linear-gradient(135deg,#0d2340,#1e4d7b)', padding:'28px 32px 24px', textAlign:'center' }}>
-              <img src="/logo.jpeg" alt="32 BPM" style={{ height:56, width:56, objectFit:'contain', marginBottom:12 }} />
-              <h1 style={{ color:'#fff', fontWeight:700, fontSize:18, margin:0, letterSpacing:0.2 }}>Acesso ao Sistema</h1>
-              <p style={{ color:'#8db4d8', fontSize:12, fontWeight:400, margin:'6px 0 0' }}>
-                Sistema restrito ao uso do efetivo do 32º BPM
+            {/* Foto de fundo */}
+            <div style={{
+              position:'absolute', inset:0,
+              backgroundImage:'url(/batalhao.jpg)',
+              backgroundSize:'cover',
+              backgroundPosition:'center 30%',
+            }} />
+            {/* Gradiente overlay — igual ao escaladiaria */}
+            <div style={{ position:'absolute', inset:0, background:'linear-gradient(to right, rgba(2,8,16,0.95) 0%, rgba(10,22,40,0.75) 60%, #070f1e 100%)' }} />
+            <div style={{ position:'absolute', inset:0, background:'linear-gradient(to top, rgba(2,8,16,0.90) 0%, transparent 50%)' }} />
+            {/* Linha âmbar esquerda */}
+            <div style={{ position:'absolute', left:0, top:0, bottom:0, width:3, background:'#fbbf24' }} />
+
+            {/* Branding */}
+            <div style={{ position:'relative', zIndex:1 }}>
+              <img src="/logo.jpeg" alt="32 BPM" style={{ height:84, width:84, objectFit:'contain', marginBottom:20, borderRadius:'50%', border:'2px solid rgba(251,191,36,0.4)', boxShadow:'0 12px 32px rgba(0,0,0,0.5)', display:'block' }} />
+              <p style={{ color:'#fbbf24', fontSize:10, fontWeight:700, letterSpacing:'0.3em', textTransform:'uppercase', margin:'0 0 14px' }}>
+                Polícia Militar · Estado do Rio de Janeiro
+              </p>
+              <h1 style={{ color:'#fff', fontWeight:700, fontSize:64, lineHeight:1, margin:'0 0 10px', fontFamily:"'Rajdhani',sans-serif", letterSpacing:'-1px' }}>
+                32º BPM
+              </h1>
+              <div style={{ display:'flex', alignItems:'center', gap:14, marginBottom:18 }}>
+                <div style={{ width:48, height:1, background:'#fbbf24' }} />
+                <span style={{ color:'#475569', fontSize:13, letterSpacing:'0.12em' }}>SEPM · 6° CPA</span>
+              </div>
+              <p style={{ color:'#cbd5e1', fontSize:22, fontWeight:600, margin:'0 0 8px', fontFamily:"'Rajdhani',sans-serif" }}>
+                Controle de Folgas
+              </p>
+              <p style={{ color:'#475569', fontSize:13, margin:0, lineHeight:1.6, maxWidth:280 }}>
+                PCSV · Expediente Semanal — controle e gestão de folgas do efetivo.
               </p>
             </div>
+          </div>
+          )}
 
-            {/* ABAS */}
-            <div style={{ display:'flex', borderBottom:'2px solid #f0f2f5' }}>
-              {[
-                { id:'policial', label:'👮 Sou Policial' },
-                { id:'gestor', label:'🗂️ Sou Gestor' },
-              ].map(a => (
-                <button key={a.id} onClick={() => setAbaLogin(a.id)} style={{
-                  flex:1, padding:'14px 8px',
-                  fontWeight: abaLogin === a.id ? 700 : 500,
-                  fontSize:13,
-                  cursor:'pointer',
-                  border:'none',
-                  borderBottom: abaLogin === a.id ? '3px solid #1a3a5c' : '3px solid transparent',
-                  background:'#fff',
-                  color: abaLogin === a.id ? '#1a3a5c' : '#6b8099',
-                  transition:'all 0.15s',
-                  marginBottom:'-2px',
-                }}>
-                  {a.label}
-                </button>
-              ))}
-            </div>
+          {/* ── PAINEL DIREITO (form) — fundo escuro puro ── */}
+          <div className="login-right" style={{
+            flex: isDesktop ? 1 : 'initial',
+            width: isDesktop ? 'auto' : '100%',
+            display:'flex',
+            alignItems:'center',
+            justifyContent:'center',
+            padding: isDesktop ? '48px 32px' : '48px 24px',
+            position:'relative',
+            background:'#070f1e',
+          }}>
 
-            {/* CONTEÚDO DAS ABAS */}
-            <div style={{ padding:'24px 32px 28px' }}>
+            {/* Wrapper — max 360px, direto no painel sem card */}
+            <div style={{ width:'100%', maxWidth:360, position:'relative', zIndex:1 }}>
+
+              {/* Header do form */}
+              <div style={{ marginBottom:32 }}>
+                <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:16 }}>
+                  <div style={{ width:28, height:1, background:'#fbbf24' }} />
+                  <span style={{ color:'#fbbf24', fontSize:9, fontWeight:700, letterSpacing:'0.3em', textTransform:'uppercase' }}>Acesso Restrito</span>
+                </div>
+                <h2 style={{ color:'#fff', fontWeight:700, fontSize:48, margin:'0 0 8px', fontFamily:"'Rajdhani',sans-serif", lineHeight:1 }}>Entrar</h2>
+                <p style={{ color:'#475569', fontSize:12, margin:0 }}>Sistema restrito ao efetivo do 32º BPM.</p>
+              </div>
+
+              {/* Abas — sem card, só linha */}
+              <div style={{ display:'flex', borderBottom:'1px solid rgba(255,255,255,0.07)', marginBottom:28 }}>
+                {[
+                  { id:'policial', label:'Sou Policial' },
+                  { id:'gestor', label:'Sou Gestor' },
+                ].map(a => (
+                  <button key={a.id} onClick={() => setAbaLogin(a.id)} style={{
+                    flex:1, padding:'10px 8px',
+                    fontWeight:700, fontSize:10,
+                    cursor:'pointer', border:'none',
+                    borderBottom: abaLogin === a.id ? '2px solid #fbbf24' : '2px solid transparent',
+                    background:'transparent',
+                    color: abaLogin === a.id ? '#fbbf24' : '#475569',
+                    transition:'all 0.15s',
+                    letterSpacing:'0.12em', textTransform:'uppercase',
+                    marginBottom:'-1px',
+                  }}>
+                    {a.label}
+                  </button>
+                ))}
+              </div>
+
+              {/* Conteúdo das abas */}
               {abaLogin === 'policial' && (
                 <LoginPolicial onLogin={p => { setUsuarioSel(p); setModo('policial'); }} />
               )}
               {abaLogin === 'gestor' && (
                 <div>
-                  <p style={{ color:'#6b8099', fontSize:13, fontWeight:400, marginBottom:20, marginTop:0 }}>
+                  <p style={{ color:'#475569', fontSize:12, marginBottom:20 }}>
                     Acesso restrito a gestores autorizados.
                   </p>
                   <label style={lbl}>Senha de acesso</label>
@@ -2069,19 +2099,18 @@ export default function App() {
                     placeholder="••••••"
                     style={{ ...inp, marginBottom:6 }}
                   />
-                  {erroSenha && <p style={{ color:'#B71C1C', fontSize:12, marginBottom:4 }}>Senha incorreta. Tente novamente.</p>}
-                  <button onClick={loginGestor} style={{ ...btnPrimary, marginTop:12, letterSpacing:0.5, textTransform:'uppercase', fontSize:13 }}>
-                    Entrar
-                  </button>
+                  {erroSenha && <p style={{ color:'#f87171', fontSize:12, marginBottom:4 }}>Senha incorreta. Tente novamente.</p>}
+                  <button onClick={loginGestor} style={btnPrimary}>Entrar</button>
                 </div>
               )}
-            </div>
 
-            {/* RODAPÉ DO CARD */}
-            <div style={{ borderTop:'1px solid #f0f2f5', padding:'12px 32px', textAlign:'center' }}>
-              <span style={{ fontSize:11, color:'#aab', fontWeight:400 }}>
-                Polícia Militar do Estado do Rio de Janeiro · 32º BPM
-              </span>
+              {/* Rodapé */}
+              <div style={{ display:'flex', alignItems:'center', gap:12, marginTop:32 }}>
+                <div style={{ flex:1, height:1, background:'rgba(255,255,255,0.04)' }} />
+                <span style={{ fontSize:9, color:'#334155', fontWeight:500, letterSpacing:'0.12em', textTransform:'uppercase' }}>PMERJ · 32º BPM</span>
+                <div style={{ flex:1, height:1, background:'rgba(255,255,255,0.04)' }} />
+              </div>
+
             </div>
           </div>
         </div>
@@ -2089,9 +2118,22 @@ export default function App() {
 
       {/* TELAS INTERNAS */}
       {modo !== 'login' && (
-        <div style={{ maxWidth:740, margin:'28px auto', padding:'0 14px' }}>
-          {modo === 'policial' && usuarioSel && <TelaSolicitacao usuario={usuarioSel} />}
-          {modo === 'gestor' && gestorLogado && <TelaGestor gestorLogado={gestorLogado} />}
+        <div style={{
+          maxWidth: 1100,
+          margin: '24px auto',
+          padding: '0 16px',
+        }}>
+          <div style={{
+            background: '#0d1a2e',
+            border: '1px solid rgba(255,255,255,0.05)',
+            borderRadius: 12,
+            padding: '32px 28px',
+            color: '#e2e8f0',
+            boxShadow: '0 1px 0 rgba(255,255,255,0.03) inset, 0 8px 32px rgba(0,0,0,0.25)',
+          }}>
+            {modo === 'policial' && usuarioSel && <TelaSolicitacao usuario={usuarioSel} />}
+            {modo === 'gestor' && gestorLogado && <TelaGestor gestorLogado={gestorLogado} />}
+          </div>
         </div>
       )}
     </div>
