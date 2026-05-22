@@ -51,6 +51,37 @@ select option {
   color: #e2e8f0;
 }
 
+/* Override: dentro de cards de fundo claro, inputs voltam ao tema light.
+   Resolve "fonte muito clara" em formulários sobre fundo branco
+   (form de solicitação do policial, adicionar efetivo, edição, etc). */
+.card-light input,
+.card-light select,
+.card-light textarea {
+  background: #f8fafc !important;
+  border-color: #d0dce8 !important;
+  color: #0f172a !important;
+}
+.card-light input::placeholder { color: #94a3b8 !important; }
+.card-light input:focus,
+.card-light select:focus,
+.card-light textarea:focus {
+  border-color: #1a3a5c !important;
+  background: #fff !important;
+  outline: none !important;
+}
+.card-light select option {
+  background: #fff;
+  color: #0f172a;
+}
+/* iOS/Safari: força tipografia legível em input[type=date] dentro de cards claros */
+.card-light input[type="date"]::-webkit-datetime-edit,
+.card-light input[type="date"]::-webkit-datetime-edit-text,
+.card-light input[type="date"]::-webkit-datetime-edit-month-field,
+.card-light input[type="date"]::-webkit-datetime-edit-day-field,
+.card-light input[type="date"]::-webkit-datetime-edit-year-field {
+  color: #0f172a;
+}
+
 button:focus-visible {
   outline: 2px solid #fbbf24;
   outline-offset: 2px;
