@@ -1333,7 +1333,8 @@ function TelaGestor({ gestorLogado }) {
   const [policiais, setPoliciais] = useState([]);
   const [gestores, setGestores] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [filtroStatus, setFiltroStatus] = useState('todos');
+  const [filtroStatus, setFiltroStatus] = useState('pendente');
+  const [filtroStatusTocado, setFiltroStatusTocado] = useState(false);
   const [filtroSecao, setFiltroSecao] = useState('todas');
   const [filtroDia, setFiltroDia] = useState('todos');
   const [filtroMotivo, setFiltroMotivo] = useState('todos');
@@ -1383,6 +1384,29 @@ function TelaGestor({ gestorLogado }) {
     intervalRef.current = setInterval(() => { carregar(); }, AUTO_REFRESH_INTERVAL);
     return () => clearInterval(intervalRef.current);
   }, [carregar]);
+
+  // Auto-default: se a aba abriu em "Pendentes" mas não há pendentes na semana,
+  // pula para "Aprovados" automaticamente. Só faz isso uma vez por troca de semana,
+  // e respeita escolha manual do gestor (filtroStatusTocado).
+  useEffect(() => {
+    if (filtroStatusTocado) return;
+    if (loading) return;
+    const inicio = semanaAtual.toISOString().split('T')[0];
+    const fim = new Date(semanaAtual); fim.setDate(fim.getDate() + 6);
+    const fimIso = fim.toISOString().split('T')[0];
+    const pendentesSemana = solicitacoes.filter(s =>
+      s.semana >= inicio && s.semana <= fimIso && s.status === 'pendente'
+    ).length;
+    if (filtroStatus === 'pendente' && pendentesSemana === 0) {
+      setFiltroStatus('aprovado');
+    }
+  }, [loading, semanaAtual, solicitacoes, filtroStatus, filtroStatusTocado]);
+
+  // Reseta "tocado" quando o gestor troca de semana — cada semana ganha seu próprio auto-default
+  useEffect(() => {
+    setFiltroStatusTocado(false);
+    setFiltroStatus('pendente');
+  }, [semanaAtual]);
 
   function semanaAnterior() { const d = new Date(semanaAtual); d.setDate(d.getDate()-7); setSemanaAtual(d); }
   function proximaSemana() { const d = new Date(semanaAtual); d.setDate(d.getDate()+7); setSemanaAtual(d); }
@@ -1586,13 +1610,80 @@ function TelaGestor({ gestorLogado }) {
             <button onClick={proximaSemana} style={{ ...btnSm, background:'#f0f4f8', color:'#1a3a5c' }}>Próxima →</button>
           </div>
           <button onClick={() => gerarPDF(solicitacoesSemana, policiais, semanaAtual)} style={{ ...btnPrimary, marginTop:0, marginBottom:14, background:'#1B5E20' }}>📄 Gerar Relatório PDF</button>
+
+          {/* Sub-abas de status — Pendentes / Aprovados / Todos */}
+          <div style={{ display:'flex', gap:6, marginBottom:14, flexWrap:'wrap' }}>
+            {[
+              { id:'pendente', label:'Pendentes', count: stats.pendentes, color:'#7B5800' },
+              { id:'aprovado', label:'Aprovados', count: stats.aprovadas, color:'#1B5E20' },
+              { id:'todos',    label:'Todos',     count: stats.total,     color:'#1a3a5c' },
+            ].map(t => {
+              const ativo = filtroStatus === t.id;
+              return (
+                <button
+                  key={t.id}
+                  onClick={() => { setFiltroStatus(t.id); setFiltroStatusTocado(true); setPaginaSolicitacoes(1); }}
+                  style={{
+                    padding:'8px 14px',
+                    borderRadius:8,
+                    fontWeight:700,
+                    cursor:'pointer',
+                    background: ativo ? t.color : '#f0f4f8',
+                    color: ativo ? '#fff' : '#2d4a63',
+                    border:'none',
+                    fontSize:12,
+                    display:'inline-flex',
+                    alignItems:'center',
+                    gap:8,
+                  }}
+                >
+                  <span>{t.label}</span>
+                  <span style={{
+                    background: ativo ? 'rgba(255,255,255,0.25)' : '#fff',
+                    color: ativo ? '#fff' : t.color,
+                    fontSize:11,
+                    fontWeight:800,
+                    padding:'2px 8px',
+                    borderRadius:10,
+                    minWidth:22,
+                    textAlign:'center',
+                  }}>{t.count}</span>
+                </button>
+              );
+            })}
+            {stats.recusadas > 0 && (
+              <button
+                onClick={() => { setFiltroStatus('recusado'); setFiltroStatusTocado(true); setPaginaSolicitacoes(1); }}
+                style={{
+                  padding:'8px 14px',
+                  borderRadius:8,
+                  fontWeight:700,
+                  cursor:'pointer',
+                  background: filtroStatus==='recusado' ? '#B71C1C' : '#f0f4f8',
+                  color: filtroStatus==='recusado' ? '#fff' : '#2d4a63',
+                  border:'none',
+                  fontSize:12,
+                  display:'inline-flex',
+                  alignItems:'center',
+                  gap:8,
+                }}
+              >
+                <span>Recusados</span>
+                <span style={{
+                  background: filtroStatus==='recusado' ? 'rgba(255,255,255,0.25)' : '#fff',
+                  color: filtroStatus==='recusado' ? '#fff' : '#B71C1C',
+                  fontSize:11,
+                  fontWeight:800,
+                  padding:'2px 8px',
+                  borderRadius:10,
+                  minWidth:22,
+                  textAlign:'center',
+                }}>{stats.recusadas}</span>
+              </button>
+            )}
+          </div>
+
           <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8, marginBottom:14 }}>
-            <select value={filtroStatus} onChange={e => setFiltroStatus(e.target.value)} style={inp}>
-              <option value="todos">Todos os status</option>
-              <option value="pendente">Pendente</option>
-              <option value="aprovado">Aprovado</option>
-              <option value="recusado">Recusado</option>
-            </select>
             <select value={filtroMotivo} onChange={e => setFiltroMotivo(e.target.value)} style={inp}>
               <option value="todos">Folga e Concessão</option>
               <option value="Folga">Somente Folgas</option>
