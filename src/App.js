@@ -1248,6 +1248,137 @@ function LoginPolicial({ onLogin }) {
   );
 }
 
+// ========== GRADE DE FOLGAS DA SEÇÃO ==========
+// Mostra para o policial, ao escolher uma semana de referência, quais folgas
+// já estão marcadas (aprovadas e pendentes) por colegas da mesma seção.
+// Ajuda a evitar concentração no mesmo dia.
+function GradeFolgasSecao({ folgas, meuId, secao, semana }) {
+  // Formata data ISO da semana ("2026-05-18") em "18/05 a 24/05"
+  function periodo() {
+    const ini = new Date(semana + 'T00:00:00');
+    const fim = new Date(ini); fim.setDate(fim.getDate() + 6);
+    const fmt = d => `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}`;
+    return `${fmt(ini)} a ${fmt(fim)}`;
+  }
+
+  // Agrupa folgas por dia da semana
+  const porDia = {};
+  DIAS.forEach(d => { porDia[d] = []; });
+  folgas.forEach(f => { if (porDia[f.dia]) porDia[f.dia].push(f); });
+
+  // Ordena cada dia: aprovadas primeiro, depois pendentes; "você" sempre primeiro
+  Object.keys(porDia).forEach(d => {
+    porDia[d].sort((a, b) => {
+      if (a.policial_id === meuId && b.policial_id !== meuId) return -1;
+      if (b.policial_id === meuId && a.policial_id !== meuId) return 1;
+      if (a.status === 'aprovado' && b.status !== 'aprovado') return -1;
+      if (b.status === 'aprovado' && a.status !== 'aprovado') return 1;
+      return 0;
+    });
+  });
+
+  const totalFolgas = folgas.length;
+
+  return (
+    <div style={{ background:'#f8fafc', border:'1px solid #e0e8f0', borderRadius:10, padding:'12px', marginBottom:14 }}>
+      <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:10, flexWrap:'wrap', gap:6 }}>
+        <div style={{ fontSize:11, fontWeight:800, color:'#1a3a5c', textTransform:'uppercase', letterSpacing:0.8 }}>
+          👥 Folgas já marcadas na <span style={{ color:'#0D47A1' }}>{secao}</span>
+        </div>
+        <span style={{ color:'#6b8099', fontSize:11 }}>{periodo()} · {totalFolgas} {totalFolgas === 1 ? 'pedido' : 'pedidos'}</span>
+      </div>
+
+      {totalFolgas === 0 ? (
+        <p style={{ color:'#94a3b8', fontSize:12, textAlign:'center', margin:'8px 0', fontStyle:'italic' }}>
+          Nenhum colega da sua seção pediu folga nessa semana ainda.
+        </p>
+      ) : (
+        <div style={{ display:'grid', gridTemplateColumns:'repeat(5, 1fr)', gap:4 }}>
+          {DIAS.map(d => {
+            const itens = porDia[d];
+            const isVazio = itens.length === 0;
+            return (
+              <div key={d} style={{
+                background: isVazio ? '#fff' : '#fff',
+                border: '1px solid #e0e8f0',
+                borderRadius: 8,
+                padding: '8px 6px',
+                minHeight: 80,
+                display:'flex',
+                flexDirection:'column',
+              }}>
+                <div style={{
+                  fontSize: 10,
+                  fontWeight: 800,
+                  color: isVazio ? '#aab' : '#1a3a5c',
+                  textTransform: 'uppercase',
+                  letterSpacing: 0.5,
+                  textAlign: 'center',
+                  paddingBottom: 4,
+                  marginBottom: 4,
+                  borderBottom: '1px solid #f0f4f8',
+                }}>
+                  {d.substring(0, 3)}
+                </div>
+                {isVazio ? (
+                  <div style={{ flex:1, display:'flex', alignItems:'center', justifyContent:'center', color:'#d0dce8', fontSize:14 }}>—</div>
+                ) : (
+                  <div style={{ display:'flex', flexDirection:'column', gap:3 }}>
+                    {itens.map(f => {
+                      const ehVoce = f.policial_id === meuId;
+                      const isPendente = f.status === 'pendente';
+                      const motivoCor = f.motivo === 'Concessão' ? '#6A1B9A' : '#0D47A1';
+                      const motivoBg = f.motivo === 'Concessão' ? '#F3E5F5' : '#E3F2FD';
+                      // Nome compacto: 2 primeiros nomes
+                      const nomeCompacto = f.policial_nome.split(' ').slice(0, 2).join(' ');
+                      return (
+                        <div key={f.id} style={{
+                          background: ehVoce ? '#FFF8E1' : motivoBg,
+                          border: ehVoce ? '1.5px solid #fbbf24' : `1px solid ${motivoCor}33`,
+                          borderRadius: 6,
+                          padding: '3px 6px',
+                          fontSize: 10,
+                          color: motivoCor,
+                          fontWeight: 700,
+                          opacity: isPendente ? 0.7 : 1,
+                          display:'flex',
+                          flexDirection:'column',
+                          gap:1,
+                          lineHeight:1.2,
+                        }}>
+                          <span style={{ display:'flex', alignItems:'center', gap:3, flexWrap:'wrap' }}>
+                            <span>{f.motivo === 'Concessão' ? '🎖️' : '🌙'}</span>
+                            <span style={{ color: ehVoce ? '#7B5800' : motivoCor, fontWeight: 800 }}>
+                              {ehVoce ? 'Você' : nomeCompacto}
+                            </span>
+                          </span>
+                          {isPendente && (
+                            <span style={{ fontSize:9, color:'#7B5800', fontWeight:700 }}>⏳ pendente</span>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      <div style={{ display:'flex', gap:10, justifyContent:'center', marginTop:8, flexWrap:'wrap' }}>
+        <span style={{ fontSize:10, color:'#6b8099', display:'flex', alignItems:'center', gap:3 }}>
+          <span>🌙</span><span>Folga</span>
+        </span>
+        <span style={{ fontSize:10, color:'#6b8099', display:'flex', alignItems:'center', gap:3 }}>
+          <span>🎖️</span><span>Concessão</span>
+        </span>
+        <span style={{ fontSize:10, color:'#6b8099' }}>⏳ pendente</span>
+      </div>
+    </div>
+  );
+}
+
 // ========== TELA DE SOLICITAÇÃO (Policial) ==========
 function TelaSolicitacao({ usuario }) {
   const [dia, setDia] = useState(null);
@@ -1262,6 +1393,7 @@ function TelaSolicitacao({ usuario }) {
   const [novoDiaTroca, setNovoDiaTroca] = useState('');
   const [paginaMinhas, setPaginaMinhas] = useState(1);
   const [usuarioLocal, setUsuarioLocal] = useState(usuario); // cópia local que reflete edição inline do email
+  const [folgasDaSecao, setFolgasDaSecao] = useState(null); // null = ainda não carregou; [] = carregou e está vazio
 
   const carregarMinhas = useCallback(async () => {
     setLoading(true);
@@ -1270,11 +1402,34 @@ function TelaSolicitacao({ usuario }) {
     setLoading(false);
   }, [usuario.id]);
 
+  // Carrega folgas da MESMA SEÇÃO do policial para a semana escolhida.
+  // Inclui aprovadas e pendentes; ignora recusadas. Mostra também o próprio
+  // policial (na grade ele aparece destacado como "você").
+  const carregarFolgasDaSecao = useCallback(async (semanaIso) => {
+    if (!semanaIso || !usuario.secao || usuario.secao === '—' || usuario.secao === '') {
+      setFolgasDaSecao([]);
+      return;
+    }
+    const { data } = await supabase
+      .from('solicitacoes')
+      .select('*')
+      .eq('secao', usuario.secao)
+      .eq('semana', semanaIso)
+      .in('status', ['pendente', 'aprovado']);
+    setFolgasDaSecao(data || []);
+  }, [usuario.secao]);
+
   useEffect(() => { carregarMinhas(); }, [carregarMinhas]);
   useEffect(() => {
     const interval = setInterval(() => { carregarMinhas(); }, AUTO_REFRESH_INTERVAL);
     return () => clearInterval(interval);
   }, [carregarMinhas]);
+
+  // Recarrega a grade da seção sempre que muda a semana de referência
+  useEffect(() => {
+    if (semana) carregarFolgasDaSecao(semana);
+    else setFolgasDaSecao(null);
+  }, [semana, carregarFolgasDaSecao]);
 
   const naoProto = usuario.situacao && usuario.situacao !== 'Pronto';
 
@@ -1326,6 +1481,7 @@ function TelaSolicitacao({ usuario }) {
     setMsg({ tipo:'ok', texto:'✅ Solicitação enviada com sucesso!' });
     setTimeout(() => setMsg(null), 4000);
     carregarMinhas();
+    if (semana) carregarFolgasDaSecao(semana);
   }
 
   async function cancelarSolicitacao(id) {
@@ -1373,6 +1529,18 @@ function TelaSolicitacao({ usuario }) {
             </div>
             <label style={lbl}>Semana de referência *</label>
             <input type="date" value={semana} onChange={e => setSemana(e.target.value)} style={{ ...inp, marginBottom:14 }} />
+
+            {/* Grade de folgas já marcadas na seção, na semana escolhida.
+                Não aparece se o policial não tem seção definida. */}
+            {semana && folgasDaSecao !== null && usuario.secao && usuario.secao !== '—' && usuario.secao !== '' && (
+              <GradeFolgasSecao
+                folgas={folgasDaSecao}
+                meuId={usuario.id}
+                secao={usuario.secao}
+                semana={semana}
+              />
+            )}
+
             <label style={lbl}>Seu email *</label>
             <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="seu.email@gmail.com" style={{ ...inp, marginBottom:4 }} />
             {usuarioLocal.email && email === usuarioLocal.email && (
