@@ -31,6 +31,7 @@ const SIT_SANITARIA_LTS = ['Apto A','Apto B','Apto C','LTS'];
 const SITUACOES = ['Pronto','Férias','LE','LTSPF','LTS','LP','Núpcias','Luto'];
 const RESTRICOES = ['Sem restrição','SP','CD','CRD','CHR'];
 const FUNCOES_GESTOR = ['','Comandante','SubComandante','Comandante de Cia','Chefe da P1','Brigada','Sargenteante'];
+const PATENTES = ['TEN CEL PM','MAJ PM','CAP PM','1º TEN PM','2º TEN PM','SUB TEN PM','1º SGT PM','2º SGT PM','3º SGT PM','CB PM','SD PM'];
 
 const COR_SS = { 'Apto A':'#1565C0', 'Apto B':'#F9A825', 'Apto C':'#B71C1C', 'LTS':'#6A1B9A' };
 const EMOJI_SS = { 'Apto A':'🔵', 'Apto B':'🟡', 'Apto C':'🔴', 'LTS':'🟣' };
@@ -133,6 +134,84 @@ function limparSessao() {
 function Card({ children, style }) {
   return <div className="card-light" style={{ background:'#fff', borderRadius:12, padding:'16px 18px', boxShadow:'0 2px 12px #00000012', marginBottom:10, ...style }}>{children}</div>;
 }
+
+/**
+ * Edição inline genérica: mostra um valor e um ícone de lápis.
+ * Ao clicar no lápis, vira input/select com botões ✓ e ✕.
+ *
+ * Props:
+ *   valor:    valor atual exibido
+ *   onSalvar: async (novoValor) => bool. Retornar true se salvou OK, false se inválido.
+ *   tipo:     'text' (default) ou 'select'
+ *   opcoes:   array de strings (se tipo='select')
+ *   validar:  fn opcional (valor) => string|null (msg de erro)
+ *   placeholder, style, inputStyle: passados pro elemento
+ */
+function EditavelInline({ valor, onSalvar, tipo = 'text', opcoes = [], validar, placeholder, style = {}, inputStyle = {} }) {
+  const [editando, setEditando] = useState(false);
+  const [v, setV] = useState(valor);
+  const [salvando, setSalvando] = useState(false);
+  const [erro, setErro] = useState(null);
+
+  // Sincroniza quando o valor externo muda (ex.: reload do supabase)
+  useEffect(() => { if (!editando) setV(valor); }, [valor, editando]);
+
+  async function salvar() {
+    if (validar) {
+      const msg = validar(v);
+      if (msg) { setErro(msg); return; }
+    }
+    if (v === valor) { setEditando(false); setErro(null); return; }
+    setSalvando(true);
+    const ok = await onSalvar(v);
+    setSalvando(false);
+    if (ok) { setEditando(false); setErro(null); }
+    else setErro('Erro ao salvar');
+  }
+
+  function cancelar() { setV(valor); setEditando(false); setErro(null); }
+
+  if (!editando) {
+    return (
+      <span style={{ display:'inline-flex', alignItems:'center', gap:6, ...style }}>
+        <span>{valor || <em style={{ color:'#aab' }}>—</em>}</span>
+        <button
+          onClick={() => setEditando(true)}
+          title="Editar"
+          style={{ background:'transparent', border:'none', cursor:'pointer', padding:'2px 4px', borderRadius:4, color:'#6b8099', fontSize:12, lineHeight:1 }}
+          onMouseEnter={e => e.currentTarget.style.background='#f0f4f8'}
+          onMouseLeave={e => e.currentTarget.style.background='transparent'}
+        >✏️</button>
+      </span>
+    );
+  }
+
+  const inputBase = { padding:'4px 8px', borderRadius:6, border:'1.5px solid #1a3a5c', background:'#fff', color:'#0f172a', fontSize:'inherit', fontWeight:'inherit', minWidth:0, ...inputStyle };
+
+  return (
+    <span style={{ display:'inline-flex', alignItems:'center', gap:6, flexWrap:'wrap', ...style }}>
+      {tipo === 'select' ? (
+        <select value={v} onChange={e => setV(e.target.value)} autoFocus style={inputBase}>
+          {opcoes.map(o => <option key={o} value={o}>{o}</option>)}
+        </select>
+      ) : (
+        <input
+          type="text"
+          value={v}
+          onChange={e => setV(e.target.value)}
+          onKeyDown={e => { if (e.key==='Enter') salvar(); if (e.key==='Escape') cancelar(); }}
+          placeholder={placeholder}
+          autoFocus
+          style={inputBase}
+        />
+      )}
+      <button onClick={salvar} disabled={salvando} title="Salvar" style={{ background:'#1B5E20', color:'#fff', border:'none', borderRadius:6, padding:'4px 8px', cursor:'pointer', fontSize:11, fontWeight:800, opacity:salvando?0.6:1 }}>✓</button>
+      <button onClick={cancelar} disabled={salvando} title="Cancelar" style={{ background:'#FFEBEE', color:'#B71C1C', border:'none', borderRadius:6, padding:'4px 8px', cursor:'pointer', fontSize:11, fontWeight:800 }}>✕</button>
+      {erro && <span style={{ color:'#B71C1C', fontSize:11, fontWeight:700 }}>{erro}</span>}
+    </span>
+  );
+}
+
 function Badge({ status }) {
   const s = CORES_STATUS[status] || CORES_STATUS.pendente;
   return <span style={{ background:s.bg, color:s.text, border:`1px solid ${s.border}`, padding:'3px 10px', borderRadius:20, fontSize:11, fontWeight:800, textTransform:'uppercase', letterSpacing:1 }}>{status}</span>;
@@ -1174,7 +1253,7 @@ function TelaSolicitacao({ usuario }) {
   const [dia, setDia] = useState(null);
   const [semana, setSemana] = useState('');
   const [motivo, setMotivo] = useState('');
-  const [email, setEmail] = useState('');
+  const [email, setEmail] = useState(usuario.email || '');
   const [minhas, setMinhas] = useState([]);
   const [loading, setLoading] = useState(true);
   const [enviando, setEnviando] = useState(false);
@@ -1182,6 +1261,7 @@ function TelaSolicitacao({ usuario }) {
   const [solicitandoTroca, setSolicitandoTroca] = useState(null);
   const [novoDiaTroca, setNovoDiaTroca] = useState('');
   const [paginaMinhas, setPaginaMinhas] = useState(1);
+  const [usuarioLocal, setUsuarioLocal] = useState(usuario); // cópia local que reflete edição inline do email
 
   const carregarMinhas = useCallback(async () => {
     setLoading(true);
@@ -1221,9 +1301,28 @@ function TelaSolicitacao({ usuario }) {
     }
     setEnviando(true);
     const { error } = await supabase.from('solicitacoes').insert({ policial_id:usuario.id, policial_nome:usuario.nome, matricula:usuario.matricula, patente:usuario.patente, secao:usuario.secao||'—', dia, semana, motivo, status:'pendente', email_policial:email });
+
+    // Se o email mudou (ou nunca foi salvo), persiste no cadastro do policial.
+    // Falha silenciosa: solicitação já foi enviada, não bloqueia em erro de coluna.
+    if (!error && email !== usuarioLocal.email) {
+      const { error: errEmail } = await supabase.from('policiais').update({ email }).eq('id', usuario.id);
+      if (!errEmail) {
+        setUsuarioLocal(u => ({ ...u, email }));
+        // Atualiza também a sessão para refletir nas próximas solicitações
+        try {
+          const tipo = sessionStorage.getItem('sessao_tipo');
+          if (tipo === 'policial') {
+            const sess = JSON.parse(sessionStorage.getItem('sessao_dados') || '{}');
+            sessionStorage.setItem('sessao_dados', JSON.stringify({ ...sess, email }));
+          }
+        } catch(e) {}
+      }
+    }
+
     setEnviando(false);
     if (error) { setMsg({ tipo:'erro', texto:'Erro ao enviar.' }); return; }
-    setDia(null); setSemana(''); setMotivo(''); setEmail('');
+    setDia(null); setSemana(''); setMotivo('');
+    // NÃO limpo o email — fica pré-preenchido para a próxima
     setMsg({ tipo:'ok', texto:'✅ Solicitação enviada com sucesso!' });
     setTimeout(() => setMsg(null), 4000);
     carregarMinhas();
@@ -1275,7 +1374,16 @@ function TelaSolicitacao({ usuario }) {
             <label style={lbl}>Semana de referência *</label>
             <input type="date" value={semana} onChange={e => setSemana(e.target.value)} style={{ ...inp, marginBottom:14 }} />
             <label style={lbl}>Seu email *</label>
-            <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="seu.email@gmail.com" style={{ ...inp, marginBottom:6 }} />
+            <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="seu.email@gmail.com" style={{ ...inp, marginBottom:4 }} />
+            {usuarioLocal.email && email === usuarioLocal.email && (
+              <p style={{ color:'#1B5E20', fontSize:11, marginBottom:6, fontWeight:600 }}>✓ Email salvo no seu cadastro</p>
+            )}
+            {usuarioLocal.email && email !== usuarioLocal.email && email && (
+              <p style={{ color:'#7B5800', fontSize:11, marginBottom:6, fontWeight:600 }}>ℹ Email diferente do cadastrado — será atualizado ao enviar</p>
+            )}
+            {!usuarioLocal.email && (
+              <p style={{ color:'#6b8099', fontSize:11, marginBottom:6 }}>Será salvo no seu cadastro para próximas solicitações</p>
+            )}
             {msg && <div style={{ padding:'10px 14px', borderRadius:8, marginTop:10, fontWeight:600, background:msg.tipo==='ok'?'#E8F5E9':'#FFEBEE', color:msg.tipo==='ok'?'#1B5E20':'#B71C1C' }}>{msg.texto}</div>}
             <button onClick={enviar} disabled={enviando} style={{ ...btnPrimary, opacity:enviando?0.7:1 }}>{enviando?'Enviando...':'Enviar Solicitação'}</button>
           </>
@@ -1498,8 +1606,17 @@ function TelaGestor({ gestorLogado }) {
   }
 
   async function atualizarPolicial(id, campo, valor) {
-    await supabase.from('policiais').update({ [campo]:valor }).eq('id', id);
+    // Anti-duplicata: se a edição é de matrícula, garante que não existe outra igual
+    if (campo === 'matricula') {
+      const v = String(valor||'').trim();
+      if (!validarMatricula(v)) { showToast('Matrícula inválida', 'erro'); return false; }
+      const conflito = policiais.find(p => p.id !== id && p.matricula === v);
+      if (conflito) { showToast(`Matrícula ${v} já pertence a ${conflito.nome}`, 'erro'); return false; }
+    }
+    const { error } = await supabase.from('policiais').update({ [campo]:valor }).eq('id', id);
+    if (error) { showToast('Erro ao salvar', 'erro'); return false; }
     setPoliciais(prev => prev.map(p => p.id === id ? { ...p, [campo]:valor } : p));
+    return true;
   }
 
   async function removerPolicial(id) {
@@ -1840,7 +1957,7 @@ function TelaGestor({ gestorLogado }) {
                 <div style={{ flex:1 }}><label style={lbl}>Matrícula *</label><input value={novaMatricula} onChange={e => setNovaMatricula(e.target.value)} placeholder="99999" style={inp} /></div>
                 <div style={{ flex:1 }}><label style={lbl}>Patente</label>
                   <select value={novaPatente} onChange={e => setNovaPatente(e.target.value)} style={inp}>
-                    {['TEN CEL PM','MAJ PM','CAP PM','1º TEN PM','2º TEN PM','SUB TEN PM','1º SGT PM','2º SGT PM','3º SGT PM','CB PM','SD PM'].map(p => <option key={p}>{p}</option>)}
+                    {PATENTES.map(p => <option key={p}>{p}</option>)}
                   </select>
                 </div>
               </div>
@@ -1877,8 +1994,31 @@ function TelaGestor({ gestorLogado }) {
             <Card key={p.id} style={{ padding:'12px 16px', border:(!p.secao||p.secao==='')?'2px solid #EF9A9A':'none' }}>
               <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', gap:10, flexWrap:'wrap' }}>
                 <div style={{ flex:1 }}>
-                  <div style={{ fontWeight:800, color:'#1a3a5c', fontSize:13 }}>{p.patente} {p.nome}</div>
-                  <div style={{ color:'#6b8099', fontSize:12, marginTop:2 }}>Mat. {p.matricula}</div>
+                  <div style={{ fontWeight:800, color:'#1a3a5c', fontSize:13, display:'flex', alignItems:'center', gap:6, flexWrap:'wrap' }}>
+                    <EditavelInline
+                      valor={p.patente}
+                      tipo="select"
+                      opcoes={PATENTES}
+                      onSalvar={v => atualizarPolicial(p.id, 'patente', v)}
+                      inputStyle={{ fontSize:13, fontWeight:800 }}
+                    />
+                    <span>{p.nome}</span>
+                  </div>
+                  <div style={{ color:'#6b8099', fontSize:12, marginTop:2, display:'flex', alignItems:'center', gap:6 }}>
+                    <span>Mat.</span>
+                    <EditavelInline
+                      valor={p.matricula}
+                      onSalvar={v => atualizarPolicial(p.id, 'matricula', String(v).trim())}
+                      placeholder="99999"
+                      validar={v => (!validarMatricula(String(v||'').trim()) ? 'Matrícula inválida' : null)}
+                      inputStyle={{ fontSize:12, fontWeight:600, width:90 }}
+                    />
+                  </div>
+                  {p.email && (
+                    <div style={{ color:'#6b8099', fontSize:12, marginTop:2 }}>
+                      📧 <span style={{ color:'#3d5a9e' }}>{p.email}</span>
+                    </div>
+                  )}
                   <ContadorFolgas solicitacoes={solicitacoes} policialId={p.id} compact={true} />
                   <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:6, marginTop:8, width:'100%' }}>
                     <div style={{ minWidth:0 }}><label style={{ ...lbl, fontSize:10 }}>Seção</label><select value={p.secao||''} onChange={e => atualizarPolicial(p.id,'secao',e.target.value)} style={{ ...inp, fontSize:12, padding:'6px 8px' }}><option value="">— Não definida —</option>{SECOES.map(s => <option key={s}>{s}</option>)}</select></div>
