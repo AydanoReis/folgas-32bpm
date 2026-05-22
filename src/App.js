@@ -131,7 +131,7 @@ function limparSessao() {
 }
 
 function Card({ children, style }) {
-  return <div style={{ background:'#fff', borderRadius:12, padding:'16px 18px', boxShadow:'0 2px 12px #00000012', marginBottom:10, ...style }}>{children}</div>;
+  return <div className="card-light" style={{ background:'#fff', borderRadius:12, padding:'16px 18px', boxShadow:'0 2px 12px #00000012', marginBottom:10, ...style }}>{children}</div>;
 }
 function Badge({ status }) {
   const s = CORES_STATUS[status] || CORES_STATUS.pendente;
