@@ -2322,6 +2322,166 @@ function TelaGestor({ gestorLogado }) {
   );
 }
 
+
+// ========== TELA PORTAL — Hub unificado de módulos (Gestor) ==========
+const MODULOS_PORTAL = [
+  {
+    id: 'folgas',
+    titulo: 'Controle de Folgas',
+    descricao: 'Solicitações, aprovações, escala semanal e relatórios do efetivo.',
+    icone: '📅',
+    cor: '#fbbf24',
+    tipo: 'interno',  // abre dentro do app (TelaGestor)
+    destino: 'gestor',
+    ativo: true,
+  },
+  {
+    id: 'ajd',
+    titulo: 'Procedimentos AJD',
+    descricao: 'Averiguações, IPMs, sindicâncias e demais procedimentos administrativos com alerta de prazo.',
+    icone: '⚖️',
+    cor: '#60a5fa',
+    tipo: 'externo',
+    destino: 'https://controlede-procedimentos.vercel.app',
+    ativo: true,
+  },
+  // Espaço reservado para próximos módulos — basta adicionar aqui
+  {
+    id: 'escala',
+    titulo: 'Escala de Serviço',
+    descricao: 'Em breve — escala diária do efetivo de serviço.',
+    icone: '🛡️',
+    cor: '#475569',
+    tipo: 'futuro',
+    destino: null,
+    ativo: false,
+  },
+  {
+    id: 'p3',
+    titulo: 'Operações / P-3',
+    descricao: 'Em breve — planejamento operacional e empregos.',
+    icone: '🎯',
+    cor: '#475569',
+    tipo: 'futuro',
+    destino: null,
+    ativo: false,
+  },
+];
+
+function TelaPortal({ gestor, onSelecionarInterno }) {
+  function abrirModulo(m) {
+    if (!m.ativo) return;
+    if (m.tipo === 'externo') {
+      window.open(m.destino, '_blank', 'noopener,noreferrer');
+    } else if (m.tipo === 'interno') {
+      onSelecionarInterno(m.destino);
+    }
+  }
+
+  return (
+    <div>
+      {/* Cabeçalho de boas-vindas */}
+      <div style={{ marginBottom: 28 }}>
+        <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:14 }}>
+          <div style={{ width:28, height:1, background:'#fbbf24' }} />
+          <span style={{ color:'#fbbf24', fontSize:10, fontWeight:700, letterSpacing:'0.3em', textTransform:'uppercase' }}>
+            Portal do Comando
+          </span>
+        </div>
+        <h1 style={{ color:'#fff', fontWeight:700, fontSize:38, margin:'0 0 6px', fontFamily:"'Rajdhani',sans-serif", lineHeight:1.05 }}>
+          Bem-vindo{gestor && gestor.nome ? `, ${gestor.nome.split(' ')[0]}` : ''}
+        </h1>
+        <p style={{ color:'#94a3b8', fontSize:14, margin:0 }}>
+          Selecione o módulo que deseja acessar. Mais funções serão adicionadas em breve.
+        </p>
+      </div>
+
+      {/* Grid de módulos */}
+      <div style={{
+        display:'grid',
+        gridTemplateColumns:'repeat(auto-fill, minmax(240px, 1fr))',
+        gap:16,
+      }}>
+        {MODULOS_PORTAL.map(m => (
+          <div
+            key={m.id}
+            onClick={() => abrirModulo(m)}
+            style={{
+              background: m.ativo ? 'rgba(255,255,255,0.03)' : 'rgba(255,255,255,0.015)',
+              border: `1px solid ${m.ativo ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.04)'}`,
+              borderLeft: `3px solid ${m.cor}`,
+              borderRadius: 10,
+              padding: '20px 18px',
+              cursor: m.ativo ? 'pointer' : 'not-allowed',
+              opacity: m.ativo ? 1 : 0.55,
+              transition: 'all 0.18s ease',
+              position: 'relative',
+              minHeight: 150,
+              display: 'flex',
+              flexDirection: 'column',
+            }}
+            onMouseEnter={e => {
+              if (!m.ativo) return;
+              e.currentTarget.style.background = 'rgba(255,255,255,0.06)';
+              e.currentTarget.style.transform = 'translateY(-2px)';
+              e.currentTarget.style.boxShadow = `0 8px 24px rgba(0,0,0,0.4), 0 0 0 1px ${m.cor}33`;
+            }}
+            onMouseLeave={e => {
+              if (!m.ativo) return;
+              e.currentTarget.style.background = 'rgba(255,255,255,0.03)';
+              e.currentTarget.style.transform = 'translateY(0)';
+              e.currentTarget.style.boxShadow = 'none';
+            }}
+          >
+            <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:12 }}>
+              <span style={{ fontSize:28 }}>{m.icone}</span>
+              {m.tipo === 'externo' && m.ativo && (
+                <span title="Abre em nova aba" style={{
+                  color: m.cor, fontSize: 10, fontWeight: 700,
+                  letterSpacing: '0.12em', textTransform: 'uppercase',
+                  background: `${m.cor}1a`, padding: '3px 7px', borderRadius: 4,
+                }}>↗ Nova aba</span>
+              )}
+              {m.tipo === 'futuro' && (
+                <span style={{
+                  color:'#64748b', fontSize:9, fontWeight:700,
+                  letterSpacing:'0.18em', textTransform:'uppercase',
+                  background:'rgba(100,116,139,0.12)', padding:'3px 7px', borderRadius:4,
+                }}>Em breve</span>
+              )}
+            </div>
+            <div style={{ color:'#fff', fontWeight:700, fontSize:17, marginBottom:6, fontFamily:"'Rajdhani',sans-serif", letterSpacing:'0.02em' }}>
+              {m.titulo}
+            </div>
+            <div style={{ color:'#94a3b8', fontSize:12.5, lineHeight:1.5, flex:1 }}>
+              {m.descricao}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Rodapé do portal */}
+      <div style={{
+        marginTop: 32,
+        paddingTop: 18,
+        borderTop: '1px solid rgba(255,255,255,0.05)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        flexWrap: 'wrap',
+        gap: 12,
+      }}>
+        <span style={{ color:'#475569', fontSize:11, letterSpacing:'0.08em' }}>
+          PMERJ · 32º BPM — Sistemas Integrados
+        </span>
+        <span style={{ color:'#334155', fontSize:10, fontWeight:600, letterSpacing:'0.12em', textTransform:'uppercase' }}>
+          v2.2 · Portal
+        </span>
+      </div>
+    </div>
+  );
+}
+
 export default function App() {
   const [modo, setModo] = useState('login');
   const [usuarioSel, setUsuarioSel] = useState(null);
@@ -2344,13 +2504,13 @@ export default function App() {
     const sessao = carregarSessao();
     if (sessao) {
       if (sessao.tipo === 'policial') { setUsuarioSel(sessao.dados); setModo('policial'); }
-      else if (sessao.tipo === 'gestor') { setGestorLogado(sessao.dados); setModo('gestor'); }
+      else if (sessao.tipo === 'gestor') { setGestorLogado(sessao.dados); setModo('portal'); }
     }
   }, []);
 
   async function loginGestor() {
     const { data } = await supabase.from('gestores').select('*').eq('senha', senhaGestor).single();
-    if (data) { salvarSessao('gestor', data); setGestorLogado(data); setModo('gestor'); setErroSenha(false); }
+    if (data) { salvarSessao('gestor', data); setGestorLogado(data); setModo('portal'); setErroSenha(false); }
     else setErroSenha(true);
   }
 
@@ -2367,10 +2527,23 @@ export default function App() {
           <img src="/logo.jpeg" alt="32 BPM" style={{ height:36, width:36, objectFit:'contain', borderRadius:'50%', border:'1.5px solid rgba(251,191,36,0.4)' }} />
           <div>
             <div style={{ color:'#fff', fontWeight:700, fontSize:15, letterSpacing:0.5, fontFamily:"'Rajdhani',sans-serif" }}>32º BPM — Controle de Folgas</div>
-            <div style={{ color:'#475569', fontSize:9, fontWeight:600, letterSpacing:'0.18em', textTransform:'uppercase' }}>PCSV · Expediente Semanal · v2.1</div>
+            <div style={{ color:'#475569', fontSize:9, fontWeight:600, letterSpacing:'0.18em', textTransform:'uppercase' }}>PCSV · Expediente Semanal · v2.2</div>
           </div>
         </div>
-        {modo !== 'login' && <button onClick={sair} style={{ background:'rgba(255,255,255,0.05)', color:'#94a3b8', border:'1px solid rgba(255,255,255,0.1)', borderRadius:8, padding:'6px 14px', cursor:'pointer', fontSize:11, fontWeight:600, letterSpacing:'0.1em', textTransform:'uppercase' }}>← Sair</button>}
+        {modo !== 'login' && (
+          <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+            {modo === 'gestor' && gestorLogado && (
+              <button
+                onClick={() => setModo('portal')}
+                title="Voltar ao portal de módulos"
+                style={{ background:'rgba(251,191,36,0.08)', color:'#fbbf24', border:'1px solid rgba(251,191,36,0.25)', borderRadius:8, padding:'6px 14px', cursor:'pointer', fontSize:11, fontWeight:700, letterSpacing:'0.1em', textTransform:'uppercase' }}
+              >
+                ← Portal
+              </button>
+            )}
+            <button onClick={sair} style={{ background:'rgba(255,255,255,0.05)', color:'#94a3b8', border:'1px solid rgba(255,255,255,0.1)', borderRadius:8, padding:'6px 14px', cursor:'pointer', fontSize:11, fontWeight:600, letterSpacing:'0.1em', textTransform:'uppercase' }}>← Sair</button>
+          </div>
+        )}
       </div>
 
       {/* TELA DE LOGIN */}
@@ -2530,6 +2703,7 @@ export default function App() {
             color: '#e2e8f0',
             boxShadow: '0 1px 0 rgba(255,255,255,0.03) inset, 0 8px 32px rgba(0,0,0,0.25)',
           }}>
+            {modo === 'portal' && gestorLogado && <TelaPortal gestor={gestorLogado} onSelecionarInterno={setModo} />}
             {modo === 'policial' && usuarioSel && <TelaSolicitacao usuario={usuarioSel} />}
             {modo === 'gestor' && gestorLogado && <TelaGestor gestorLogado={gestorLogado} />}
           </div>
