@@ -121,15 +121,10 @@ function nivelLabel(g) {
   if (g.nivel === 'master') return { label:'MASTER', bg:'#1B5E20', color:'#fff' };
   return { label:'GESTOR', bg:'#f0f4f8', color:'#6b8099' };
 }
-function salvarSessao(tipo, dados) {
-  try { sessionStorage.setItem('sessao_tipo', tipo); sessionStorage.setItem('sessao_dados', JSON.stringify(dados)); } catch(e) {}
-}
-function carregarSessao() {
-  try { const tipo = sessionStorage.getItem('sessao_tipo'); const dados = sessionStorage.getItem('sessao_dados'); return tipo && dados ? { tipo, dados: JSON.parse(dados) } : null; } catch(e) { return null; }
-}
-function limparSessao() {
-  try { sessionStorage.removeItem('sessao_tipo'); sessionStorage.removeItem('sessao_dados'); } catch(e) {}
-}
+// Auth agora é gerenciada pelo Supabase Auth (createClient com persistSession:true).
+// salvarSessao/carregarSessao/limparSessao foram removidos — a sessão vive no
+// localStorage do supabase-js sob a chave sb-<projectref>-auth-token, e o
+// onAuthStateChange no App() faz o roteamento.
 
 function Card({ children, style }) {
   return <div className="card-light" style={{ background:'#fff', borderRadius:12, padding:'16px 18px', boxShadow:'0 2px 12px #00000012', marginBottom:10, ...style }}>{children}</div>;
@@ -1161,26 +1156,29 @@ function TelaServico({ solicitacoes, policiais }) {
   );
 }
 
-// ========== LOGIN DO POLICIAL (v2.0 com busca por nome) ==========
-function LoginPolicial({ onLogin }) {
+// ========== LOGIN DO POLICIAL (v3.0 — Supabase Auth) ==========
+// Senha temporária padrão na Fase 2: <matricula>@32bpm. Quando o policial loga
+// com a senha temp pela primeira vez, o perfil tem precisa_trocar_senha=true e
+// ele é levado pra tela TrocaSenhaObrigatoria antes de qualquer outra coisa.
+function LoginPolicial() {
   const [policiais, setPoliciais] = useState([]);
   const [buscaLogin, setBuscaLogin] = useState('');
   const [policialSel, setPolicialSel] = useState(null);
   const [senha, setSenha] = useState('');
   const [erro, setErro] = useState('');
-  const [modo, setModo] = useState('login');
-  const [novaSenha, setNovaSenha] = useState('');
-  const [confirmarSenha, setConfirmarSenha] = useState('');
   const [carregando, setCarregando] = useState(true);
+  const [entrando, setEntrando] = useState(false);
   const [mostrarSugestoes, setMostrarSugestoes] = useState(false);
 
+  // View `policiais` = perfis WHERE role='policial'. GRANT SELECT TO anon
+  // garante que isso lê antes do usuário se autenticar.
   useEffect(() => {
     supabase.from('policiais').select('*').order('nome')
       .then(({ data }) => { setPoliciais(data || []); setCarregando(false); });
   }, []);
 
   const policiaisFiltrados = buscaLogin.length >= 2
-    ? policiais.filter(p => p.nome.toLowerCase().includes(buscaLogin.toLowerCase()) || p.matricula.includes(buscaLogin)).slice(0, 8)
+    ? policiais.filter(p => p.nome.toLowerCase().includes(buscaLogin.toLowerCase()) || (p.matricula||'').includes(buscaLogin)).slice(0, 8)
     : [];
 
   function selecionarPolicial(p) { setPolicialSel(p); setBuscaLogin(p.nome); setMostrarSugestoes(false); setErro(''); }
@@ -1188,34 +1186,17 @@ function LoginPolicial({ onLogin }) {
   async function entrar() {
     if (!policialSel) { setErro('Selecione seu nome na lista.'); return; }
     if (!senha) { setErro('Digite sua senha.'); return; }
-    if (!policialSel.senha) { setModo('cadastrar'); return; }
-    if (policialSel.senha !== senha) { setErro('Senha incorreta.'); return; }
-    salvarSessao('policial', policialSel);
-    onLogin(policialSel);
+    setEntrando(true);
+    // Email no auth.users foi padronizado em <matricula>@32bpm.local na Fase 2.
+    const email = `${policialSel.matricula}@32bpm.local`;
+    const { error } = await supabase.auth.signInWithPassword({ email, password: senha });
+    setEntrando(false);
+    if (error) {
+      setErro(`Senha incorreta. Primeiro acesso? Use a senha temporária: ${policialSel.matricula}@32bpm`);
+      return;
+    }
+    // Sucesso — onAuthStateChange no App() carrega o perfil e direciona.
   }
-
-  async function cadastrarSenha() {
-    if (!validarSenha(novaSenha)) { setErro('Senha deve ter no mínimo 4 caracteres.'); return; }
-    if (novaSenha !== confirmarSenha) { setErro('As senhas não coincidem.'); return; }
-    const { data, error } = await supabase.from('policiais').update({ senha:novaSenha }).eq('id', policialSel.id).select().single();
-    if (error || !data) { setErro('Erro ao criar senha.'); return; }
-    salvarSessao('policial', data);
-    onLogin(data);
-  }
-
-  if (modo === 'cadastrar') return (
-    <div>
-      <h2 style={{ color:'#1a3a5c', fontWeight:700, fontSize:16, marginBottom:4, marginTop:0 }}>Primeiro acesso</h2>
-      <p style={{ color:'#6b8099', fontSize:13, fontWeight:400, marginBottom:16 }}>Olá, <strong>{policialSel.nome}</strong>! Cadastre sua senha.</p>
-      <label style={lbl}>Nova senha *</label>
-      <input type="password" value={novaSenha} onChange={e=>setNovaSenha(e.target.value)} placeholder="Mínimo 4 caracteres" style={{ ...inp, marginBottom:10 }} />
-      <label style={lbl}>Confirmar senha *</label>
-      <input type="password" value={confirmarSenha} onChange={e=>setConfirmarSenha(e.target.value)} placeholder="Repita a senha" style={{ ...inp, marginBottom:6 }} />
-      {erro && <p style={{ color:'#B71C1C', fontSize:12, marginBottom:6 }}>{erro}</p>}
-      <button onClick={cadastrarSenha} style={{ ...btnPrimary, letterSpacing:0.5, textTransform:'uppercase', fontSize:13 }}>Cadastrar e Entrar</button>
-      <button onClick={() => setModo('login')} style={{ ...btnPrimary, background:'#f0f4f8', color:'#6b8099', marginTop:6 }}>Voltar</button>
-    </div>
-  );
 
   return (
     <div>
@@ -1242,8 +1223,8 @@ function LoginPolicial({ onLogin }) {
       <label style={lbl}>Senha</label>
       <input type="password" value={senha} onChange={e => setSenha(e.target.value)} onKeyDown={e => e.key==='Enter'&&entrar()} placeholder="••••••" style={{ ...inp, marginBottom:6 }} />
       {erro && <p style={{ color:'#B71C1C', fontSize:12, marginBottom:4 }}>{erro}</p>}
-      <button onClick={entrar} style={{ ...btnPrimary, letterSpacing:0.5, textTransform:'uppercase', fontSize:13 }}>Entrar</button>
-      <p style={{ color:'#aab', fontSize:11, marginTop:10, textAlign:'center', fontWeight:400 }}>Esqueceu a senha? Fale com o gestor para resetar.</p>
+      <button onClick={entrar} disabled={entrando} style={{ ...btnPrimary, letterSpacing:0.5, textTransform:'uppercase', fontSize:13, opacity:entrando?0.7:1 }}>{entrando?'Entrando...':'Entrar'}</button>
+      <p style={{ color:'#aab', fontSize:11, marginTop:10, textAlign:'center', fontWeight:400 }}>Primeiro acesso? Senha temporária: <strong>matrícula@32bpm</strong> (ex: 67135@32bpm)</p>
     </div>
   );
 }
@@ -1397,7 +1378,7 @@ function TelaSolicitacao({ usuario }) {
 
   const carregarMinhas = useCallback(async () => {
     setLoading(true);
-    const { data } = await supabase.from('solicitacoes').select('*').eq('policial_id', usuario.id).order('created_at', { ascending:false });
+    const { data } = await supabase.from('folgas_solicitacoes').select('*').eq('policial_id', usuario.id).order('created_at', { ascending:false });
     setMinhas(data || []);
     setLoading(false);
   }, [usuario.id]);
@@ -1411,7 +1392,7 @@ function TelaSolicitacao({ usuario }) {
       return;
     }
     const { data } = await supabase
-      .from('solicitacoes')
+      .from('folgas_solicitacoes')
       .select('*')
       .eq('secao', usuario.secao)
       .eq('semana', semanaIso)
@@ -1455,22 +1436,16 @@ function TelaSolicitacao({ usuario }) {
       }
     }
     setEnviando(true);
-    const { error } = await supabase.from('solicitacoes').insert({ policial_id:usuario.id, policial_nome:usuario.nome, matricula:usuario.matricula, patente:usuario.patente, secao:usuario.secao||'—', dia, semana, motivo, status:'pendente', email_policial:email });
+    const { error } = await supabase.from('folgas_solicitacoes').insert({ policial_id:usuario.id, policial_nome:usuario.nome, matricula:usuario.matricula, patente:usuario.patente, secao:usuario.secao||'—', dia, semana, motivo, status:'pendente', email_policial:email });
 
     // Se o email mudou (ou nunca foi salvo), persiste no cadastro do policial.
     // Falha silenciosa: solicitação já foi enviada, não bloqueia em erro de coluna.
     if (!error && email !== usuarioLocal.email) {
-      const { error: errEmail } = await supabase.from('policiais').update({ email }).eq('id', usuario.id);
+      // Persiste o email de contato direto em `perfis` (sem mexer no auth.users.email,
+      // que continua sendo <matricula>@32bpm.local — usado só pra login).
+      const { error: errEmail } = await supabase.from('perfis').update({ email_contato: email }).eq('id', usuario.id);
       if (!errEmail) {
         setUsuarioLocal(u => ({ ...u, email }));
-        // Atualiza também a sessão para refletir nas próximas solicitações
-        try {
-          const tipo = sessionStorage.getItem('sessao_tipo');
-          if (tipo === 'policial') {
-            const sess = JSON.parse(sessionStorage.getItem('sessao_dados') || '{}');
-            sessionStorage.setItem('sessao_dados', JSON.stringify({ ...sess, email }));
-          }
-        } catch(e) {}
       }
     }
 
@@ -1486,14 +1461,14 @@ function TelaSolicitacao({ usuario }) {
 
   async function cancelarSolicitacao(id) {
     if (!window.confirm('Cancelar esta solicitação?')) return;
-    await supabase.from('solicitacoes').delete().eq('id', id);
+    await supabase.from('folgas_solicitacoes').delete().eq('id', id);
     setMinhas(prev => prev.filter(s => s.id !== id));
   }
 
   async function enviarTroca(sol) {
     if (!novoDiaTroca) { setMsg({ tipo:'erro', texto:'Selecione o novo dia.' }); return; }
     if (novoDiaTroca === sol.dia) { setMsg({ tipo:'erro', texto:'O novo dia deve ser diferente do atual.' }); return; }
-    await supabase.from('solicitacoes').update({ dia_troca:novoDiaTroca, status_troca:'pendente' }).eq('id', sol.id);
+    await supabase.from('folgas_solicitacoes').update({ dia_troca:novoDiaTroca, status_troca:'pendente' }).eq('id', sol.id);
     setMinhas(prev => prev.map(s => s.id === sol.id ? { ...s, dia_troca:novoDiaTroca, status_troca:'pendente' } : s));
     setSolicitandoTroca(null); setNovoDiaTroca('');
     setMsg({ tipo:'ok', texto:'⏳ Solicitação de troca enviada! Aguarde aprovação.' });
@@ -1501,7 +1476,7 @@ function TelaSolicitacao({ usuario }) {
   }
 
   async function cancelarTroca(id) {
-    await supabase.from('solicitacoes').update({ dia_troca:'', status_troca:'' }).eq('id', id);
+    await supabase.from('folgas_solicitacoes').update({ dia_troca:'', status_troca:'' }).eq('id', id);
     setMinhas(prev => prev.map(s => s.id === id ? { ...s, dia_troca:'', status_troca:'' } : s));
   }
 
@@ -1643,7 +1618,7 @@ function TelaGestor({ gestorLogado }) {
 
   const carregar = useCallback(async () => {
     const [s, p, g] = await Promise.all([
-      supabase.from('solicitacoes').select('*').order('created_at', { ascending:false }),
+      supabase.from('folgas_solicitacoes').select('*').order('created_at', { ascending:false }),
       supabase.from('policiais').select('*').order('nome'),
       supabase.from('gestores').select('*').order('created_at'),
     ]);
@@ -1736,7 +1711,7 @@ function TelaGestor({ gestorLogado }) {
     if (!isMaster) return;
     const check = rateLimiterAprovacao.podeExecutar();
     if (!check.permitido) { showToast(`Aguarde ${check.proxemaEmMs}s antes de fazer nova aprovação`, 'erro'); return; }
-    await supabase.from('solicitacoes').update({ status }).eq('id', id);
+    await supabase.from('folgas_solicitacoes').update({ status }).eq('id', id);
     setSolicitacoes(prev => prev.map(s => s.id === id ? { ...s, status } : s));
     showToast(status === 'aprovado' ? '✅ Solicitação aprovada!' : '❌ Solicitação recusada!', status === 'aprovado' ? 'ok' : 'erro');
     const sol = solicitacoes.find(s => s.id === id);
@@ -1749,28 +1724,33 @@ function TelaGestor({ gestorLogado }) {
 
   async function aprovarTroca(sol) {
     if (!isMaster) return;
-    await supabase.from('solicitacoes').update({ dia:sol.dia_troca, status_troca:'aprovado' }).eq('id', sol.id);
+    await supabase.from('folgas_solicitacoes').update({ dia:sol.dia_troca, status_troca:'aprovado' }).eq('id', sol.id);
     setSolicitacoes(prev => prev.map(s => s.id === sol.id ? { ...s, dia:sol.dia_troca, status_troca:'aprovado' } : s));
     showToast('✅ Troca aprovada!');
   }
 
   async function recusarTroca(id) {
     if (!isMaster) return;
-    await supabase.from('solicitacoes').update({ status_troca:'recusado' }).eq('id', id);
+    await supabase.from('folgas_solicitacoes').update({ status_troca:'recusado' }).eq('id', id);
     setSolicitacoes(prev => prev.map(s => s.id === id ? { ...s, status_troca:'recusado' } : s));
     showToast('❌ Troca recusada.', 'erro');
   }
 
   async function excluirSolicitacao(id) {
     if (!window.confirm('Excluir esta solicitação?')) return;
-    await supabase.from('solicitacoes').delete().eq('id', id);
+    await supabase.from('folgas_solicitacoes').delete().eq('id', id);
     setSolicitacoes(prev => prev.filter(s => s.id !== id));
   }
 
   async function resetarSenhaPolicial(id, nome) {
-    if (!window.confirm(`Resetar a senha de ${nome}?`)) return;
-    await supabase.from('policiais').update({ senha:'' }).eq('id', id);
-    showToast('🔑 Senha resetada!');
+    if (!window.confirm(`Forçar troca de senha de ${nome} no próximo login?`)) return;
+    // No modelo novo a senha vive em auth.users (bcrypt). Frontend com anon key
+    // não consegue mexer na senha de outro usuário — só seta a flag.
+    // Se o policial esqueceu a senha atual, o Aydano reseta no dashboard Supabase
+    // (Auth → Users → ... → Send password recovery, OU edita a senha direto).
+    const { error } = await supabase.from('perfis').update({ precisa_trocar_senha: true }).eq('id', id);
+    if (error) { showToast('Erro ao marcar troca', 'erro'); return; }
+    showToast(`🔑 ${nome} terá que trocar a senha no próximo login.`);
   }
 
   async function atualizarPolicial(id, campo, valor) {
@@ -1781,7 +1761,8 @@ function TelaGestor({ gestorLogado }) {
       const conflito = policiais.find(p => p.id !== id && p.matricula === v);
       if (conflito) { showToast(`Matrícula ${v} já pertence a ${conflito.nome}`, 'erro'); return false; }
     }
-    const { error } = await supabase.from('policiais').update({ [campo]:valor }).eq('id', id);
+    // View `policiais` é read-only — UPDATE direto em `perfis`.
+    const { error } = await supabase.from('perfis').update({ [campo]:valor }).eq('id', id);
     if (error) { showToast('Erro ao salvar', 'erro'); return false; }
     setPoliciais(prev => prev.map(p => p.id === id ? { ...p, [campo]:valor } : p));
     return true;
@@ -1789,54 +1770,67 @@ function TelaGestor({ gestorLogado }) {
 
   async function removerPolicial(id) {
     if (!window.confirm('Confirmar remoção?')) return;
-    await supabase.from('solicitacoes').delete().eq('policial_id', id);
-    await supabase.from('policiais').delete().eq('id', id);
+    await supabase.from('folgas_solicitacoes').delete().eq('policial_id', id);
+    // Deletar o perfil cascateia pro auth.users (FK ON DELETE CASCADE).
+    const { error } = await supabase.from('perfis').delete().eq('id', id);
+    if (error) {
+      showToast('Erro ao remover. Talvez precise excluir pelo dashboard Supabase Auth.', 'erro');
+      return;
+    }
     setPoliciais(prev => prev.filter(p => p.id !== id));
     setSolicitacoes(prev => prev.filter(s => s.policial_id !== id));
   }
 
   async function adicionarPolicial() {
-    if (!novoNome.trim() || !validarMatricula(novaMatricula) || !novaSecao) { alert('Preencha todos os campos corretamente'); return; }
-    const { data, error } = await supabase.from('policiais').insert({ nome:novoNome.toUpperCase(), matricula:novaMatricula, patente:novaPatente, secao:novaSecao, senha:'', sit_sanitaria:'Apto A', situacao:'Pronto', restricao:'Sem restrição' }).select().single();
-    if (!error && data) setPoliciais(prev => [...prev, data].sort((a,b) => a.nome.localeCompare(b.nome)));
+    // Criar usuário novo precisa da admin API (service_role) — não rola via anon key
+    // no frontend. Por enquanto, orienta a usar o dashboard Supabase.
+    alert('Para adicionar policial novo:\n\n1) Supabase Dashboard → Authentication → Users → Add user\n   Email: <matricula>@32bpm.local\n   Senha: <matricula>@32bpm\n   Marca "Auto Confirm User"\n\n2) Dashboard → Table Editor → perfis → Insert row\n   id = id do user que acabou de criar\n   role = policial\n   precisa_trocar_senha = true\n   Preencha nome/matrícula/patente/seção\n\nDepois ele aparece na lista. Em uma próxima versão, criamos uma Edge Function pra fazer isso pelo app.');
     setNovoNome(''); setNovaMatricula(''); setNovaPatente('3º SGT PM'); setNovaSecao('');
   }
 
   async function alterarMinhaSenha() {
-    const mim = gestores.find(g => g.id === gestorLogado.id);
-    if (!mim || mim.senha !== senhaAtual) { setMsgSenha({ tipo:'erro', texto:'Senha atual incorreta.' }); return; }
-    if (!validarSenha(novaSenha)) { setMsgSenha({ tipo:'erro', texto:'Mínimo 4 caracteres.' }); return; }
+    setMsgSenha(null);
+    if (!senhaAtual) { setMsgSenha({ tipo:'erro', texto:'Informe a senha atual.' }); return; }
+    if (novaSenha.length < 6) { setMsgSenha({ tipo:'erro', texto:'Nova senha precisa ter no mínimo 6 caracteres.' }); return; }
     if (novaSenha !== confirmaSenha) { setMsgSenha({ tipo:'erro', texto:'Senhas não coincidem.' }); return; }
-    await supabase.from('gestores').update({ senha:novaSenha }).eq('id', gestorLogado.id);
+    // Valida senha atual re-logando (auth.users garante bcrypt).
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user || !user.email) { setMsgSenha({ tipo:'erro', texto:'Sessão expirou. Faça login de novo.' }); return; }
+    const { error: errSign } = await supabase.auth.signInWithPassword({ email: user.email, password: senhaAtual });
+    if (errSign) { setMsgSenha({ tipo:'erro', texto:'Senha atual incorreta.' }); return; }
+    const { error: errUpd } = await supabase.auth.updateUser({ password: novaSenha });
+    if (errUpd) { setMsgSenha({ tipo:'erro', texto:'Erro ao trocar senha: ' + errUpd.message }); return; }
     setSenhaAtual(''); setNovaSenha(''); setConfirmaSenha('');
     setMsgSenha({ tipo:'ok', texto:'Senha alterada!' });
     setTimeout(() => setMsgSenha(null), 3000);
   }
 
   async function adicionarGestor() {
-    if (!novoGestorNome.trim() || !validarMatricula(novoGestorMatricula) || !validarSenha(novoGestorSenha)) { setMsgGestor({ tipo:'erro', texto:'Preencha todos os campos corretamente.' }); return; }
-    if (gestores.find(g => g.matricula === novoGestorMatricula)) { setMsgGestor({ tipo:'erro', texto:'Matrícula já cadastrada.' }); return; }
-    const { data, error } = await supabase.from('gestores').insert({ nome:novoGestorNome.toUpperCase(), matricula:novoGestorMatricula, senha:novoGestorSenha, principal:false, nivel:novoGestorNivel, funcao:novoGestorFuncao }).select().single();
-    if (error) { setMsgGestor({ tipo:'erro', texto:'Erro ao cadastrar.' }); return; }
-    setGestores(prev => [...prev, data]);
-    setNovoGestorNome(''); setNovoGestorMatricula(''); setNovoGestorSenha(''); setNovoGestorFuncao(''); setNovoGestorNivel('gestor');
-    setMsgGestor({ tipo:'ok', texto:'Gestor cadastrado!' });
-    setTimeout(() => setMsgGestor(null), 3000);
+    // Mesmo motivo do adicionarPolicial — precisa de service_role.
+    setMsgGestor({
+      tipo:'erro',
+      texto:'Para cadastrar gestor novo, use o Supabase Dashboard: Auth → Users → Add user + Table Editor → perfis → Insert row (role=gestor ou comandante).',
+    });
+    setTimeout(() => setMsgGestor(null), 8000);
   }
 
   async function alterarNivelGestor(id, nivel) {
-    await supabase.from('gestores').update({ nivel }).eq('id', id);
+    await supabase.from('perfis').update({ nivel }).eq('id', id);
     setGestores(prev => prev.map(g => g.id === id ? { ...g, nivel } : g));
   }
 
   async function alterarFuncaoGestor(id, funcao) {
-    await supabase.from('gestores').update({ funcao }).eq('id', id);
+    await supabase.from('perfis').update({ funcao }).eq('id', id);
     setGestores(prev => prev.map(g => g.id === id ? { ...g, funcao } : g));
   }
 
   async function removerGestor(id) {
     if (!window.confirm('Remover este gestor?')) return;
-    await supabase.from('gestores').delete().eq('id', id);
+    const { error } = await supabase.from('perfis').delete().eq('id', id);
+    if (error) {
+      showToast('Erro ao remover. Talvez precise excluir pelo dashboard Supabase Auth.', 'erro');
+      return;
+    }
     setGestores(prev => prev.filter(g => g.id !== id));
   }
 
@@ -2369,10 +2363,24 @@ const MODULOS_PORTAL = [
 ];
 
 function TelaPortal({ gestor, onSelecionarInterno }) {
-  function abrirModulo(m) {
+  async function abrirModulo(m) {
     if (!m.ativo) return;
     if (m.tipo === 'externo') {
-      window.open(m.destino, '_blank', 'noopener,noreferrer');
+      // SSO bridge: anexa access_token + refresh_token no hash da URL.
+      // O app destino (AJD, EscalaDiaria) tem detectSessionInUrl=true no createClient
+      // e captura a sessão automaticamente no boot — sem segundo login.
+      let url = m.destino;
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session && session.access_token && session.refresh_token) {
+          const u = new URL(m.destino);
+          u.hash = `access_token=${session.access_token}&refresh_token=${session.refresh_token}&token_type=bearer&expires_in=${session.expires_in || 3600}&type=recovery`;
+          url = u.toString();
+        }
+      } catch (e) {
+        // Se falhar, abre sem bridge — o destino exige login mas pelo menos abre.
+      }
+      window.open(url, '_blank', 'noopener,noreferrer');
     } else if (m.tipo === 'interno') {
       onSelecionarInterno(m.destino);
     }
@@ -2482,12 +2490,67 @@ function TelaPortal({ gestor, onSelecionarInterno }) {
   );
 }
 
+// ========== TROCA DE SENHA OBRIGATÓRIA ==========
+// Aparece quando perfil.precisa_trocar_senha === true. Não tem jeito de pular.
+// Disparado pelo router central no App() default.
+function TrocaSenhaObrigatoria({ perfil, onTrocada }) {
+  const [s1, setS1] = useState('');
+  const [s2, setS2] = useState('');
+  const [erro, setErro] = useState('');
+  const [salvando, setSalvando] = useState(false);
+
+  async function trocar() {
+    setErro('');
+    if (s1.length < 6) { setErro('Senha deve ter no mínimo 6 caracteres.'); return; }
+    if (s1 !== s2) { setErro('As senhas não coincidem.'); return; }
+    setSalvando(true);
+    const { error: errAuth } = await supabase.auth.updateUser({ password: s1 });
+    if (errAuth) {
+      setSalvando(false);
+      setErro('Erro ao trocar senha: ' + errAuth.message);
+      return;
+    }
+    const { error: errPerfil } = await supabase.from('perfis').update({ precisa_trocar_senha: false }).eq('id', perfil.id);
+    setSalvando(false);
+    if (errPerfil) {
+      setErro('Senha trocada mas erro ao atualizar perfil. Saia e entre de novo.');
+      return;
+    }
+    onTrocada();
+  }
+
+  return (
+    <div style={{ maxWidth: 420, margin: '40px auto', background: '#0d1a2e', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 12, padding: '28px 26px', color: '#e2e8f0' }}>
+      <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:14 }}>
+        <div style={{ width:28, height:1, background:'#fbbf24' }} />
+        <span style={{ color:'#fbbf24', fontSize:10, fontWeight:700, letterSpacing:'0.3em', textTransform:'uppercase' }}>Primeiro acesso</span>
+      </div>
+      <h2 style={{ color:'#fff', fontWeight:700, fontSize:28, margin:'0 0 8px', fontFamily:"'Rajdhani',sans-serif", lineHeight:1.05 }}>Cadastre uma senha pessoal</h2>
+      <p style={{ color:'#94a3b8', fontSize:13, margin:'0 0 22px' }}>
+        Olá, <strong style={{ color:'#fff' }}>{perfil.nome}</strong>! Você está usando a senha temporária.
+        Para sua segurança, escolha uma nova senha antes de continuar.
+      </p>
+      <label style={lbl}>Nova senha *</label>
+      <input type="password" value={s1} onChange={e => setS1(e.target.value)} placeholder="Mínimo 6 caracteres" style={{ ...inp, marginBottom:10 }} />
+      <label style={lbl}>Confirmar nova senha *</label>
+      <input type="password" value={s2} onChange={e => setS2(e.target.value)} onKeyDown={e => e.key === 'Enter' && trocar()} placeholder="Repita a senha" style={{ ...inp, marginBottom:6 }} />
+      {erro && <p style={{ color:'#f87171', fontSize:12, marginBottom:4 }}>{erro}</p>}
+      <button onClick={trocar} disabled={salvando} style={{ ...btnPrimary, opacity:salvando?0.7:1 }}>{salvando ? 'Salvando...' : 'Trocar senha e continuar'}</button>
+      <p style={{ color:'#475569', fontSize:10, marginTop:14, textAlign:'center', fontWeight:500, letterSpacing:'0.08em', textTransform:'uppercase' }}>PMERJ · 32º BPM</p>
+    </div>
+  );
+}
+
 export default function App() {
-  const [modo, setModo] = useState('login');
+  // modos possíveis: 'carregando' | 'login' | 'trocaSenha' | 'policial' | 'portal' | 'gestor'
+  const [modo, setModo] = useState('carregando');
   const [usuarioSel, setUsuarioSel] = useState(null);
   const [gestorLogado, setGestorLogado] = useState(null);
+  // Tela de login do gestor agora pede email + senha (em vez de só senha)
+  const [emailGestor, setEmailGestor] = useState('');
   const [senhaGestor, setSenhaGestor] = useState('');
-  const [erroSenha, setErroSenha] = useState(false);
+  const [erroLoginGestor, setErroLoginGestor] = useState('');
+  const [entrandoGestor, setEntrandoGestor] = useState(false);
 
   // Viewport tracking — split layout fica autônomo via inline styles,
   // não depende do CSS externo ser carregado corretamente.
@@ -2500,21 +2563,112 @@ export default function App() {
     return () => window.removeEventListener('resize', onResize);
   }, []);
 
-  useEffect(() => {
-    const sessao = carregarSessao();
-    if (sessao) {
-      if (sessao.tipo === 'policial') { setUsuarioSel(sessao.dados); setModo('policial'); }
-      else if (sessao.tipo === 'gestor') { setGestorLogado(sessao.dados); setModo('portal'); }
+  // Carrega o perfil do user autenticado e decide pra qual tela mandar.
+  // Chamado no boot (com a session que o supabase-js já restaurou) e a cada
+  // mudança no auth state (signin/signout/refresh).
+  const carregarPerfilEDirecionar = useCallback(async (user) => {
+    if (!user) {
+      setUsuarioSel(null);
+      setGestorLogado(null);
+      setModo('login');
+      return;
     }
+    const { data: perfil, error } = await supabase.from('perfis').select('*').eq('id', user.id).single();
+    if (error || !perfil) {
+      // Auth OK mas perfil sumiu — desloga pra não travar.
+      await supabase.auth.signOut();
+      setUsuarioSel(null);
+      setGestorLogado(null);
+      setModo('login');
+      return;
+    }
+    // Normaliza email_contato → email pra manter compat com o resto do código
+    // (TelaSolicitacao, DetalhesPolicialCard etc esperam `usuario.email`).
+    const perfilNormalizado = { ...perfil, email: perfil.email_contato || '' };
+
+    if (perfil.precisa_trocar_senha) {
+      setUsuarioSel(perfilNormalizado);
+      setGestorLogado(perfilNormalizado);
+      setModo('trocaSenha');
+      return;
+    }
+    if (perfil.role === 'policial') {
+      setUsuarioSel(perfilNormalizado);
+      setGestorLogado(null);
+      setModo('policial');
+      return;
+    }
+    if (perfil.role === 'gestor' || perfil.role === 'comandante') {
+      setUsuarioSel(null);
+      setGestorLogado(perfilNormalizado);
+      setModo('portal');
+      return;
+    }
+    if (perfil.role === 'admin_ajd' || perfil.role === 'encarregado') {
+      // Esses roles não têm tela aqui ainda. Mostra o portal pra eles acessarem
+      // o AJD via SSO. Nada de "Controle de Folgas" interno.
+      setUsuarioSel(null);
+      setGestorLogado(perfilNormalizado);
+      setModo('portal');
+      return;
+    }
+    setModo('login');
   }, []);
 
+  // Boot: pega sessão atual + escuta mudanças no auth state.
+  useEffect(() => {
+    let canceled = false;
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (canceled) return;
+      carregarPerfilEDirecionar(session?.user || null);
+    });
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'SIGNED_OUT') {
+        setUsuarioSel(null);
+        setGestorLogado(null);
+        setModo('login');
+        return;
+      }
+      if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'USER_UPDATED') {
+        carregarPerfilEDirecionar(session?.user || null);
+      }
+    });
+    return () => {
+      canceled = true;
+      subscription?.unsubscribe();
+    };
+  }, [carregarPerfilEDirecionar]);
+
   async function loginGestor() {
-    const { data } = await supabase.from('gestores').select('*').eq('senha', senhaGestor).single();
-    if (data) { salvarSessao('gestor', data); setGestorLogado(data); setModo('portal'); setErroSenha(false); }
-    else setErroSenha(true);
+    setErroLoginGestor('');
+    if (!emailGestor || !senhaGestor) { setErroLoginGestor('Preencha email e senha.'); return; }
+    setEntrandoGestor(true);
+    const { error } = await supabase.auth.signInWithPassword({
+      email: emailGestor.trim().toLowerCase(),
+      password: senhaGestor,
+    });
+    setEntrandoGestor(false);
+    if (error) {
+      setErroLoginGestor('Email ou senha incorretos.');
+      return;
+    }
+    // onAuthStateChange leva o resto. Limpa campo de senha por segurança.
+    setSenhaGestor('');
   }
 
-  function sair() { limparSessao(); setModo('login'); setUsuarioSel(null); setGestorLogado(null); setSenhaGestor(''); setErroSenha(false); }
+  async function sair() {
+    await supabase.auth.signOut();
+    setEmailGestor('');
+    setSenhaGestor('');
+    setErroLoginGestor('');
+  }
+
+  // Re-carrega perfil depois da troca de senha forçada — pra sair do modo
+  // 'trocaSenha' e cair na tela certa (policial / portal).
+  async function aoTrocarSenha() {
+    const { data: { user } } = await supabase.auth.getUser();
+    carregarPerfilEDirecionar(user);
+  }
 
   const [abaLogin, setAbaLogin] = useState('policial');
 
@@ -2530,7 +2684,7 @@ export default function App() {
             <div style={{ color:'#475569', fontSize:9, fontWeight:600, letterSpacing:'0.18em', textTransform:'uppercase' }}>PCSV · Expediente Semanal · v2.2</div>
           </div>
         </div>
-        {modo !== 'login' && (
+        {modo !== 'login' && modo !== 'carregando' && (
           <div style={{ display:'flex', alignItems:'center', gap:8 }}>
             {modo === 'gestor' && gestorLogado && (
               <button
@@ -2655,24 +2809,35 @@ export default function App() {
 
               {/* Conteúdo das abas */}
               {abaLogin === 'policial' && (
-                <LoginPolicial onLogin={p => { setUsuarioSel(p); setModo('policial'); }} />
+                <LoginPolicial />
               )}
               {abaLogin === 'gestor' && (
                 <div>
                   <p style={{ color:'#475569', fontSize:12, marginBottom:20 }}>
                     Acesso restrito a gestores autorizados.
                   </p>
-                  <label style={lbl}>Senha de acesso</label>
+                  <label style={lbl}>Email</label>
+                  <input
+                    type="email"
+                    value={emailGestor}
+                    onChange={e => setEmailGestor(e.target.value)}
+                    onKeyDown={e => e.key === 'Enter' && loginGestor()}
+                    placeholder="seu.email@exemplo.com"
+                    autoComplete="email"
+                    style={{ ...inp, marginBottom:10 }}
+                  />
+                  <label style={lbl}>Senha</label>
                   <input
                     type="password"
                     value={senhaGestor}
                     onChange={e => setSenhaGestor(e.target.value)}
                     onKeyDown={e => e.key === 'Enter' && loginGestor()}
                     placeholder="••••••"
+                    autoComplete="current-password"
                     style={{ ...inp, marginBottom:6 }}
                   />
-                  {erroSenha && <p style={{ color:'#f87171', fontSize:12, marginBottom:4 }}>Senha incorreta. Tente novamente.</p>}
-                  <button onClick={loginGestor} style={btnPrimary}>Entrar</button>
+                  {erroLoginGestor && <p style={{ color:'#f87171', fontSize:12, marginBottom:4 }}>{erroLoginGestor}</p>}
+                  <button onClick={loginGestor} disabled={entrandoGestor} style={{ ...btnPrimary, opacity: entrandoGestor ? 0.7 : 1 }}>{entrandoGestor ? 'Entrando...' : 'Entrar'}</button>
                 </div>
               )}
 
@@ -2688,8 +2853,20 @@ export default function App() {
         </div>
       )}
 
-      {/* TELAS INTERNAS */}
-      {modo !== 'login' && (
+      {/* CARREGANDO (boot — supabase-js restaurando sessão do localStorage) */}
+      {modo === 'carregando' && (
+        <div style={{ minHeight:'calc(100vh - 58px)', display:'flex', alignItems:'center', justifyContent:'center', color:'#475569', fontSize:13, letterSpacing:'0.12em', textTransform:'uppercase' }}>
+          Carregando sessão...
+        </div>
+      )}
+
+      {/* TROCA DE SENHA OBRIGATÓRIA */}
+      {modo === 'trocaSenha' && (usuarioSel || gestorLogado) && (
+        <TrocaSenhaObrigatoria perfil={usuarioSel || gestorLogado} onTrocada={aoTrocarSenha} />
+      )}
+
+      {/* TELAS INTERNAS (portal / gestor / policial) */}
+      {(modo === 'portal' || modo === 'policial' || modo === 'gestor') && (
         <div style={{
           maxWidth: 1100,
           margin: '24px auto',
