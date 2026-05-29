@@ -8,7 +8,6 @@ import {
   paginar,
   validarEmail,
   validarMatricula,
-  validarSenha,
   rateLimiterSolicitacao,
   rateLimiterAprovacao,
   registrarHistorico,
