@@ -1741,14 +1741,30 @@ function TelaGestor({ gestorLogado }) {
     setSolicitacoes(prev => prev.filter(s => s.id !== id));
   }
 
+  // Helper: chama a Edge Function admin-users e devolve a mensagem REAL do erro
+  // (em vez do genérico "non-2xx status code" que o supabase-js retorna).
+  async function chamarAdminUsers(action, payload) {
+    const { data, error } = await supabase.functions.invoke('admin-users', {
+      body: { action, payload },
+    });
+    if (error) {
+      // Tenta extrair a mensagem do body de resposta do servidor
+      let msg = error.message || 'Erro na Edge Function';
+      try {
+        const ctx = await error.context?.json?.();
+        if (ctx?.error) msg = ctx.error;
+      } catch (_) {}
+      return { ok: false, error: msg };
+    }
+    if (data?.ok === false) return { ok: false, error: data.error || 'Erro' };
+    return { ok: true, data };
+  }
+
   async function resetarSenhaPolicial(id, nome, matricula) {
     if (!window.confirm(`Resetar a senha de ${nome} para a temporária (${matricula}@32bpm)?`)) return;
-    // Chama Edge Function admin-users: reset senha pra <matricula>@32bpm + flag de troca.
-    const { data, error } = await supabase.functions.invoke('admin-users', {
-      body: { action: 'reset-senha-policial', payload: { perfil_id: id } },
-    });
-    if (error) { showToast(`Erro ao resetar: ${error.message}`, 'erro'); return; }
-    if (data?.ok === false) { showToast(data.error || 'Erro ao resetar', 'erro'); return; }
+    const r = await chamarAdminUsers('reset-senha-policial', { perfil_id: id });
+    if (!r.ok) { showToast(`Erro: ${r.error}`, 'erro'); return; }
+    const data = r.data;
     setPoliciais(prev => prev.map(p => p.id === id ? { ...p, precisa_trocar_senha: true } : p));
     showToast(`🔑 Senha de ${nome} resetada para ${data.senha_temporaria}`);
     // Aviso adicional persistente — gestor precisa anotar/avisar o policial
@@ -1788,15 +1804,11 @@ function TelaGestor({ gestorLogado }) {
       showToast('Preencha nome, matrícula e seção', 'erro');
       return;
     }
-    // Chama Edge Function admin-users — cria auth.user + perfil no servidor.
-    const { data, error } = await supabase.functions.invoke('admin-users', {
-      body: {
-        action: 'add-policial',
-        payload: { nome: novoNome, matricula: novaMatricula, patente: novaPatente, secao: novaSecao },
-      },
+    const r = await chamarAdminUsers('add-policial', {
+      nome: novoNome, matricula: novaMatricula, patente: novaPatente, secao: novaSecao,
     });
-    if (error) { showToast(`Erro ao criar: ${error.message}`, 'erro'); return; }
-    if (data?.ok === false) { showToast(data.error || 'Erro ao criar', 'erro'); return; }
+    if (!r.ok) { showToast(`Erro: ${r.error}`, 'erro'); return; }
+    const data = r.data;
     // Reidrata a lista local (a Edge Function não devolve o perfil completo)
     const { data: novoPerfil } = await supabase.from('policiais').select('*').eq('id', data.perfil_id).single();
     if (novoPerfil) setPoliciais(prev => [...prev, novoPerfil].sort((a, b) => a.nome.localeCompare(b.nome)));
@@ -1826,21 +1838,15 @@ function TelaGestor({ gestorLogado }) {
     if (!novoGestorNome.trim()) { setMsgGestor({ tipo:'erro', texto:'Nome obrigatório.' }); return; }
     if (!validarMatricula(novoGestorMatricula)) { setMsgGestor({ tipo:'erro', texto:'Matrícula inválida.' }); return; }
     if (!validarEmail(novoGestorEmail)) { setMsgGestor({ tipo:'erro', texto:'Email inválido.' }); return; }
-    // Chama Edge Function admin-users — cria auth.user + perfil no servidor.
-    const { data, error } = await supabase.functions.invoke('admin-users', {
-      body: {
-        action: 'add-gestor',
-        payload: {
-          nome: novoGestorNome,
-          matricula: novoGestorMatricula,
-          email: novoGestorEmail,
-          funcao: novoGestorFuncao,
-          nivel: novoGestorNivel,
-        },
-      },
+    const r = await chamarAdminUsers('add-gestor', {
+      nome: novoGestorNome,
+      matricula: novoGestorMatricula,
+      email: novoGestorEmail,
+      funcao: novoGestorFuncao,
+      nivel: novoGestorNivel,
     });
-    if (error) { setMsgGestor({ tipo:'erro', texto:`Erro: ${error.message}` }); return; }
-    if (data?.ok === false) { setMsgGestor({ tipo:'erro', texto: data.error || 'Erro ao cadastrar' }); return; }
+    if (!r.ok) { setMsgGestor({ tipo:'erro', texto:`Erro: ${r.error}` }); return; }
+    const data = r.data;
     const { data: novoG } = await supabase.from('gestores').select('*').eq('id', data.perfil_id).single();
     if (novoG) setGestores(prev => [...prev, novoG]);
     setNovoGestorNome(''); setNovoGestorMatricula(''); setNovoGestorEmail(''); setNovoGestorFuncao(''); setNovoGestorNivel('gestor');
