@@ -8,7 +8,6 @@ import {
   paginar,
   validarEmail,
   validarMatricula,
-  validarSenha,
   rateLimiterSolicitacao,
   rateLimiterAprovacao,
   registrarHistorico,
@@ -1606,7 +1605,7 @@ function TelaGestor({ gestorLogado }) {
   const [msgSenha, setMsgSenha] = useState(null);
   const [novoGestorNome, setNovoGestorNome] = useState('');
   const [novoGestorMatricula, setNovoGestorMatricula] = useState('');
-  const [novoGestorSenha, setNovoGestorSenha] = useState('');
+  const [novoGestorEmail, setNovoGestorEmail] = useState('');
   const [novoGestorFuncao, setNovoGestorFuncao] = useState('');
   const [novoGestorNivel, setNovoGestorNivel] = useState('gestor');
   const [msgGestor, setMsgGestor] = useState(null);
@@ -1742,15 +1741,34 @@ function TelaGestor({ gestorLogado }) {
     setSolicitacoes(prev => prev.filter(s => s.id !== id));
   }
 
-  async function resetarSenhaPolicial(id, nome) {
-    if (!window.confirm(`Forçar troca de senha de ${nome} no próximo login?`)) return;
-    // No modelo novo a senha vive em auth.users (bcrypt). Frontend com anon key
-    // não consegue mexer na senha de outro usuário — só seta a flag.
-    // Se o policial esqueceu a senha atual, o Aydano reseta no dashboard Supabase
-    // (Auth → Users → ... → Send password recovery, OU edita a senha direto).
-    const { error } = await supabase.from('perfis').update({ precisa_trocar_senha: true }).eq('id', id);
-    if (error) { showToast('Erro ao marcar troca', 'erro'); return; }
-    showToast(`🔑 ${nome} terá que trocar a senha no próximo login.`);
+  // Helper: chama a Edge Function admin-users e devolve a mensagem REAL do erro
+  // (em vez do genérico "non-2xx status code" que o supabase-js retorna).
+  async function chamarAdminUsers(action, payload) {
+    const { data, error } = await supabase.functions.invoke('admin-users', {
+      body: { action, payload },
+    });
+    if (error) {
+      // Tenta extrair a mensagem do body de resposta do servidor
+      let msg = error.message || 'Erro na Edge Function';
+      try {
+        const ctx = await error.context?.json?.();
+        if (ctx?.error) msg = ctx.error;
+      } catch (_) {}
+      return { ok: false, error: msg };
+    }
+    if (data?.ok === false) return { ok: false, error: data.error || 'Erro' };
+    return { ok: true, data };
+  }
+
+  async function resetarSenhaPolicial(id, nome, matricula) {
+    if (!window.confirm(`Resetar a senha de ${nome} para a temporária (${matricula}@32bpm)?`)) return;
+    const r = await chamarAdminUsers('reset-senha-policial', { perfil_id: id });
+    if (!r.ok) { showToast(`Erro: ${r.error}`, 'erro'); return; }
+    const data = r.data;
+    setPoliciais(prev => prev.map(p => p.id === id ? { ...p, precisa_trocar_senha: true } : p));
+    showToast(`🔑 Senha de ${nome} resetada para ${data.senha_temporaria}`);
+    // Aviso adicional persistente — gestor precisa anotar/avisar o policial
+    window.alert(`Senha temporária de ${nome}:\n\n   ${data.senha_temporaria}\n\nPasse essa senha pro policial. Ele será obrigado a trocar no próximo login.`);
   }
 
   async function atualizarPolicial(id, campo, valor) {
@@ -1782,9 +1800,20 @@ function TelaGestor({ gestorLogado }) {
   }
 
   async function adicionarPolicial() {
-    // Criar usuário novo precisa da admin API (service_role) — não rola via anon key
-    // no frontend. Por enquanto, orienta a usar o dashboard Supabase.
-    alert('Para adicionar policial novo:\n\n1) Supabase Dashboard → Authentication → Users → Add user\n   Email: <matricula>@32bpm.local\n   Senha: <matricula>@32bpm\n   Marca "Auto Confirm User"\n\n2) Dashboard → Table Editor → perfis → Insert row\n   id = id do user que acabou de criar\n   role = policial\n   precisa_trocar_senha = true\n   Preencha nome/matrícula/patente/seção\n\nDepois ele aparece na lista. Em uma próxima versão, criamos uma Edge Function pra fazer isso pelo app.');
+    if (!novoNome.trim() || !validarMatricula(novaMatricula) || !novaSecao) {
+      showToast('Preencha nome, matrícula e seção', 'erro');
+      return;
+    }
+    const r = await chamarAdminUsers('add-policial', {
+      nome: novoNome, matricula: novaMatricula, patente: novaPatente, secao: novaSecao,
+    });
+    if (!r.ok) { showToast(`Erro: ${r.error}`, 'erro'); return; }
+    const data = r.data;
+    // Reidrata a lista local (a Edge Function não devolve o perfil completo)
+    const { data: novoPerfil } = await supabase.from('policiais').select('*').eq('id', data.perfil_id).single();
+    if (novoPerfil) setPoliciais(prev => [...prev, novoPerfil].sort((a, b) => a.nome.localeCompare(b.nome)));
+    showToast(`✅ ${data.nome} adicionado. Senha: ${data.senha_temporaria}`);
+    window.alert(`Policial cadastrado!\n\nNome: ${data.nome}\nMatrícula: ${data.matricula}\nSenha temporária: ${data.senha_temporaria}\n\nPasse essa senha pro policial — ele será obrigado a trocar no primeiro login.`);
     setNovoNome(''); setNovaMatricula(''); setNovaPatente('3º SGT PM'); setNovaSecao('');
   }
 
@@ -1806,11 +1835,23 @@ function TelaGestor({ gestorLogado }) {
   }
 
   async function adicionarGestor() {
-    // Mesmo motivo do adicionarPolicial — precisa de service_role.
-    setMsgGestor({
-      tipo:'erro',
-      texto:'Para cadastrar gestor novo, use o Supabase Dashboard: Auth → Users → Add user + Table Editor → perfis → Insert row (role=gestor ou comandante).',
+    if (!novoGestorNome.trim()) { setMsgGestor({ tipo:'erro', texto:'Nome obrigatório.' }); return; }
+    if (!validarMatricula(novoGestorMatricula)) { setMsgGestor({ tipo:'erro', texto:'Matrícula inválida.' }); return; }
+    if (!validarEmail(novoGestorEmail)) { setMsgGestor({ tipo:'erro', texto:'Email inválido.' }); return; }
+    const r = await chamarAdminUsers('add-gestor', {
+      nome: novoGestorNome,
+      matricula: novoGestorMatricula,
+      email: novoGestorEmail,
+      funcao: novoGestorFuncao,
+      nivel: novoGestorNivel,
     });
+    if (!r.ok) { setMsgGestor({ tipo:'erro', texto:`Erro: ${r.error}` }); return; }
+    const data = r.data;
+    const { data: novoG } = await supabase.from('gestores').select('*').eq('id', data.perfil_id).single();
+    if (novoG) setGestores(prev => [...prev, novoG]);
+    setNovoGestorNome(''); setNovoGestorMatricula(''); setNovoGestorEmail(''); setNovoGestorFuncao(''); setNovoGestorNivel('gestor');
+    setMsgGestor({ tipo:'ok', texto:`✅ ${data.nome} cadastrado. Senha temporária: ${data.senha_temporaria}` });
+    window.alert(`Gestor cadastrado!\n\nNome: ${data.nome}\nEmail: ${data.email}\nSenha temporária: ${data.senha_temporaria}\n\nPasse essas credenciais pro gestor — ele será obrigado a trocar a senha no primeiro login.`);
     setTimeout(() => setMsgGestor(null), 8000);
   }
 
@@ -1832,6 +1873,16 @@ function TelaGestor({ gestorLogado }) {
       return;
     }
     setGestores(prev => prev.filter(g => g.id !== id));
+  }
+
+  async function resetarSenhaGestor(id, nome, matricula) {
+    if (!window.confirm(`Resetar a senha de ${nome} para a temporária (${matricula}@32bpm)?`)) return;
+    const r = await chamarAdminUsers('reset-senha-gestor', { perfil_id: id });
+    if (!r.ok) { showToast(`Erro: ${r.error}`, 'erro'); return; }
+    const data = r.data;
+    setGestores(prev => prev.map(g => g.id === id ? { ...g, precisa_trocar_senha: true } : g));
+    showToast(`🔑 Senha de ${nome} resetada para ${data.senha_temporaria}`);
+    window.alert(`Senha temporária de ${nome}:\n\n   ${data.senha_temporaria}\n\nPasse essa senha pro gestor. Ele será obrigado a trocar no próximo login.`);
   }
 
   const ABAS = [
@@ -2225,7 +2276,7 @@ function TelaGestor({ gestorLogado }) {
                   <div style={{ marginTop:8, display:'flex', gap:6, flexWrap:'wrap', alignItems:'center' }}>
                     <SSBadge p={p} /><SituacaoBadge situacao={p.situacao||'Pronto'} />
                     {p.restricao && p.restricao !== 'Sem restrição' && <span style={{ background:'#FFF3E0', color:'#E65100', borderRadius:6, padding:'2px 8px', fontSize:11, fontWeight:800 }}>{p.restricao}</span>}
-                    <button onClick={() => resetarSenhaPolicial(p.id, p.nome)} style={{ ...btnSm, background:'#FFF8E1', color:'#7B5800' }}>🔑 Resetar senha</button>
+                    <button onClick={() => resetarSenhaPolicial(p.id, p.nome, p.matricula)} style={{ ...btnSm, background:'#FFF8E1', color:'#7B5800' }}>🔑 Resetar senha</button>
                   </div>
                 </div>
                 <button onClick={() => removerPolicial(p.id)} style={{ ...btnSm, background:'#FFEBEE', color:'#B71C1C', marginTop:4 }}>Remover</button>
@@ -2265,8 +2316,9 @@ function TelaGestor({ gestorLogado }) {
               <input value={novoGestorNome} onChange={e => setNovoGestorNome(e.target.value)} placeholder="Ex.: TEN CEL SILVA" style={{ ...inp, marginBottom:10 }} />
               <label style={lbl}>Matrícula *</label>
               <input value={novoGestorMatricula} onChange={e => setNovoGestorMatricula(e.target.value)} placeholder="Ex.: 80231" style={{ ...inp, marginBottom:10 }} />
-              <label style={lbl}>Senha de acesso *</label>
-              <input type="password" value={novoGestorSenha} onChange={e => setNovoGestorSenha(e.target.value)} placeholder="Mínimo 4 caracteres" style={{ ...inp, marginBottom:10 }} />
+              <label style={lbl}>Email *</label>
+              <input type="email" value={novoGestorEmail} onChange={e => setNovoGestorEmail(e.target.value)} placeholder="email.do.gestor@exemplo.com" style={{ ...inp, marginBottom:10 }} />
+              <p style={{ color:'#6b8099', fontSize:11, marginTop:-8, marginBottom:10 }}>Senha temporária = matrícula@32bpm (ex: 80231@32bpm). Gestor troca no primeiro login.</p>
               <label style={lbl}>Função</label>
               <select value={novoGestorFuncao} onChange={e => setNovoGestorFuncao(e.target.value)} style={{ ...inp, marginBottom:10 }}>
                 {FUNCOES_GESTOR.map(f => <option key={f} value={f}>{f || '— Sem função específica —'}</option>)}
@@ -2305,7 +2357,12 @@ function TelaGestor({ gestorLogado }) {
                       </div>
                     )}
                   </div>
-                  {!g.principal && g.id !== gestorLogado.id && isPrincipal && <button onClick={() => removerGestor(g.id)} style={{ ...btnSm, background:'#FFEBEE', color:'#B71C1C' }}>Remover</button>}
+                  {!g.principal && g.id !== gestorLogado.id && isPrincipal && (
+                    <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
+                      <button onClick={() => resetarSenhaGestor(g.id, g.nome, g.matricula)} style={{ ...btnSm, background:'#FFF8E1', color:'#7B5800' }}>🔑 Resetar senha</button>
+                      <button onClick={() => removerGestor(g.id)} style={{ ...btnSm, background:'#FFEBEE', color:'#B71C1C' }}>Remover</button>
+                    </div>
+                  )}
                 </div>
               </Card>
             );
@@ -2662,7 +2719,7 @@ export default function App() {
     setSenhaGestor('');
     setErroLoginGestor('');
   }
-
+  
   // Re-carrega perfil depois da troca de senha forçada — pra sair do modo
   // 'trocaSenha' e cair na tela certa (policial / portal).
   async function aoTrocarSenha() {
