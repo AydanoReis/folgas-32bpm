@@ -2719,7 +2719,7 @@ export default function App() {
     setSenhaGestor('');
     setErroLoginGestor('');
   }
-
+  
   // Re-carrega perfil depois da troca de senha forçada — pra sair do modo
   // 'trocaSenha' e cair na tela certa (policial / portal).
   async function aoTrocarSenha() {
