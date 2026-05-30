@@ -1875,6 +1875,16 @@ function TelaGestor({ gestorLogado }) {
     setGestores(prev => prev.filter(g => g.id !== id));
   }
 
+  async function resetarSenhaGestor(id, nome, matricula) {
+    if (!window.confirm(`Resetar a senha de ${nome} para a temporária (${matricula}@32bpm)?`)) return;
+    const r = await chamarAdminUsers('reset-senha-gestor', { perfil_id: id });
+    if (!r.ok) { showToast(`Erro: ${r.error}`, 'erro'); return; }
+    const data = r.data;
+    setGestores(prev => prev.map(g => g.id === id ? { ...g, precisa_trocar_senha: true } : g));
+    showToast(`🔑 Senha de ${nome} resetada para ${data.senha_temporaria}`);
+    window.alert(`Senha temporária de ${nome}:\n\n   ${data.senha_temporaria}\n\nPasse essa senha pro gestor. Ele será obrigado a trocar no próximo login.`);
+  }
+
   const ABAS = [
     { id:'solicitacoes', label:'📋 Solicitações' },
     { id:'trocas', label:`🔄 Trocas${trocasPendentes.length > 0 ? ` (${trocasPendentes.length})` : ''}` },
@@ -2347,7 +2357,12 @@ function TelaGestor({ gestorLogado }) {
                       </div>
                     )}
                   </div>
-                  {!g.principal && g.id !== gestorLogado.id && isPrincipal && <button onClick={() => removerGestor(g.id)} style={{ ...btnSm, background:'#FFEBEE', color:'#B71C1C' }}>Remover</button>}
+                  {!g.principal && g.id !== gestorLogado.id && isPrincipal && (
+                    <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
+                      <button onClick={() => resetarSenhaGestor(g.id, g.nome, g.matricula)} style={{ ...btnSm, background:'#FFF8E1', color:'#7B5800' }}>🔑 Resetar senha</button>
+                      <button onClick={() => removerGestor(g.id)} style={{ ...btnSm, background:'#FFEBEE', color:'#B71C1C' }}>Remover</button>
+                    </div>
+                  )}
                 </div>
               </Card>
             );
