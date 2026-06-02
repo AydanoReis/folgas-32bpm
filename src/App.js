@@ -18,6 +18,7 @@ import {
   ComponentePaginacao,
   DetalhesPolicialCard,
 } from './utils';
+import AjdApp from './modules/ajd';
 
 const EMAILJS_SERVICE_ID = 'service_97rq307';
 const EMAILJS_TEMPLATE_ID = 'template_y0wm9hp';
@@ -2392,8 +2393,8 @@ const MODULOS_PORTAL = [
     descricao: 'Averiguações, IPMs, sindicâncias e demais procedimentos administrativos com alerta de prazo.',
     icone: '⚖️',
     cor: '#60a5fa',
-    tipo: 'externo',
-    destino: 'https://controlede-procedimentos.vercel.app',
+    tipo: 'interno',
+    destino: 'ajd',
     ativo: true,
   },
   // Espaço reservado para próximos módulos — basta adicionar aqui
@@ -2599,10 +2600,11 @@ function TrocaSenhaObrigatoria({ perfil, onTrocada }) {
 }
 
 export default function App() {
-  // modos possíveis: 'carregando' | 'login' | 'trocaSenha' | 'policial' | 'portal' | 'gestor'
+  // modos possíveis: 'carregando' | 'login' | 'trocaSenha' | 'policial' | 'portal' | 'gestor' | 'ajd'
   const [modo, setModo] = useState('carregando');
   const [usuarioSel, setUsuarioSel] = useState(null);
   const [gestorLogado, setGestorLogado] = useState(null);
+  const [sessionAtual, setSessionAtual] = useState(null);
   // Tela de login do gestor agora pede email + senha (em vez de só senha)
   const [emailGestor, setEmailGestor] = useState('');
   const [senhaGestor, setSenhaGestor] = useState('');
@@ -2677,16 +2679,19 @@ export default function App() {
     let canceled = false;
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (canceled) return;
+      setSessionAtual(session || null);
       carregarPerfilEDirecionar(session?.user || null);
     });
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === 'SIGNED_OUT') {
         setUsuarioSel(null);
         setGestorLogado(null);
+        setSessionAtual(null);
         setModo('login');
         return;
       }
       if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'USER_UPDATED') {
+        setSessionAtual(session || null);
         carregarPerfilEDirecionar(session?.user || null);
       }
     });
@@ -2741,7 +2746,7 @@ export default function App() {
             <div style={{ color:'#475569', fontSize:9, fontWeight:600, letterSpacing:'0.18em', textTransform:'uppercase' }}>PCSV · Expediente Semanal · v2.2</div>
           </div>
         </div>
-        {modo !== 'login' && modo !== 'carregando' && (
+        {modo !== 'login' && modo !== 'carregando' && modo !== 'ajd' && (
           <div style={{ display:'flex', alignItems:'center', gap:8 }}>
             {modo === 'gestor' && gestorLogado && (
               <button
@@ -2920,6 +2925,15 @@ export default function App() {
       {/* TROCA DE SENHA OBRIGATÓRIA */}
       {modo === 'trocaSenha' && (usuarioSel || gestorLogado) && (
         <TrocaSenhaObrigatoria perfil={usuarioSel || gestorLogado} onTrocada={aoTrocarSenha} />
+      )}
+
+      {/* MÓDULO AJD — toma a tela inteira (tem TopBar próprio) */}
+      {modo === 'ajd' && gestorLogado && (
+        <AjdApp
+          perfil={gestorLogado}
+          session={sessionAtual}
+          onVoltarPortal={() => setModo('portal')}
+        />
       )}
 
       {/* TELAS INTERNAS (portal / gestor / policial) */}
