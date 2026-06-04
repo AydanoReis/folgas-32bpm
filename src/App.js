@@ -1610,6 +1610,10 @@ function TelaGestor({ gestorLogado }) {
   const [novoGestorFuncao, setNovoGestorFuncao] = useState('');
   const [novoGestorNivel, setNovoGestorNivel] = useState('gestor');
   const [msgGestor, setMsgGestor] = useState(null);
+  // Fase 3: cadastro de gestor com 2 modos
+  const [modoCadastroGestor, setModoCadastroGestor] = useState('promover'); // 'promover' | 'novo'
+  const [policialParaPromover, setPolicialParaPromover] = useState(null);
+  const [buscaPolicialPromover, setBuscaPolicialPromover] = useState('');
   const [ultimaAtualizacao, setUltimaAtualizacao] = useState(new Date());
   const [paginaSolicitacoes, setPaginaSolicitacoes] = useState(1);
   const [paginaEfetivo, setPaginaEfetivo] = useState(1);
@@ -1854,6 +1858,34 @@ function TelaGestor({ gestorLogado }) {
     setMsgGestor({ tipo:'ok', texto:`✅ ${data.nome} cadastrado. Senha temporária: ${data.senha_temporaria}` });
     window.alert(`Gestor cadastrado!\n\nNome: ${data.nome}\nEmail: ${data.email}\nSenha temporária: ${data.senha_temporaria}\n\nPasse essas credenciais pro gestor — ele será obrigado a trocar a senha no primeiro login.`);
     setTimeout(() => setMsgGestor(null), 8000);
+  }
+
+  async function promoverPolicialAGestor() {
+    setMsgGestor(null);
+    if (!policialParaPromover) { setMsgGestor({ tipo:'erro', texto:'Selecione um policial pra promover.' }); return; }
+    if (!validarEmail(novoGestorEmail)) { setMsgGestor({ tipo:'erro', texto:'Email pessoal inválido.' }); return; }
+    const r = await chamarAdminUsers('promover-policial-a-gestor', {
+      perfil_id: policialParaPromover.id,
+      email_contato: novoGestorEmail,
+      funcao: novoGestorFuncao,
+      nivel: novoGestorNivel,
+    });
+    if (!r.ok) { setMsgGestor({ tipo:'erro', texto:`Erro: ${r.error}` }); return; }
+    const { data: novoG } = await supabase.from('gestores').select('*').eq('id', policialParaPromover.id).single();
+    if (novoG) setGestores(prev => [...prev.filter(g => g.id !== novoG.id), novoG]);
+    const nomePromovido = policialParaPromover.nome;
+    setPolicialParaPromover(null); setBuscaPolicialPromover('');
+    setNovoGestorEmail(''); setNovoGestorFuncao(''); setNovoGestorNivel('gestor');
+    setMsgGestor({ tipo:'ok', texto:`✅ ${nomePromovido} promovido(a) a gestor. Continua no efetivo como policial.` });
+    setTimeout(() => setMsgGestor(null), 8000);
+  }
+
+  async function rebaixarGestor(id, nome) {
+    if (!window.confirm(`Rebaixar ${nome} de gestor?\n\nEle(a) volta a ser apenas policial do efetivo (perde permissões de gestão).`)) return;
+    const r = await chamarAdminUsers('rebaixar-gestor', { perfil_id: id });
+    if (!r.ok) { showToast(`Erro: ${r.error}`, 'erro'); return; }
+    setGestores(prev => prev.filter(g => g.id !== id));
+    showToast(`${nome} voltou a ser apenas policial.`);
   }
 
   async function alterarNivelGestor(id, nivel) {
@@ -2312,25 +2344,70 @@ function TelaGestor({ gestorLogado }) {
           </Card>
           {isPrincipal && (
             <Card>
-              <h3 style={{ fontSize:14, fontWeight:800, color:'#1a3a5c', marginBottom:4 }}>➕ Cadastrar Novo Gestor</h3>
-              <label style={lbl}>Nome / Patente *</label>
-              <input value={novoGestorNome} onChange={e => setNovoGestorNome(e.target.value)} placeholder="Ex.: TEN CEL SILVA" style={{ ...inp, marginBottom:10 }} />
-              <label style={lbl}>Matrícula *</label>
-              <input value={novoGestorMatricula} onChange={e => setNovoGestorMatricula(e.target.value)} placeholder="Ex.: 80231" style={{ ...inp, marginBottom:10 }} />
-              <label style={lbl}>Email *</label>
-              <input type="email" value={novoGestorEmail} onChange={e => setNovoGestorEmail(e.target.value)} placeholder="email.do.gestor@exemplo.com" style={{ ...inp, marginBottom:10 }} />
-              <p style={{ color:'#6b8099', fontSize:11, marginTop:-8, marginBottom:10 }}>Senha temporária = matrícula@32bpm (ex: 80231@32bpm). Gestor troca no primeiro login.</p>
-              <label style={lbl}>Função</label>
-              <select value={novoGestorFuncao} onChange={e => setNovoGestorFuncao(e.target.value)} style={{ ...inp, marginBottom:10 }}>
-                {FUNCOES_GESTOR.map(f => <option key={f} value={f}>{f || '— Sem função específica —'}</option>)}
-              </select>
-              <label style={lbl}>Nível de acesso</label>
-              <select value={novoGestorNivel} onChange={e => setNovoGestorNivel(e.target.value)} style={{ ...inp, marginBottom:6 }}>
-                <option value="gestor">Gestor (apenas visualização)</option>
-                <option value="master">Master (pode aprovar/recusar)</option>
-              </select>
-              {msgGestor && <div style={{ padding:'10px 14px', borderRadius:8, fontWeight:600, marginBottom:6, background:msgGestor.tipo==='ok'?'#E8F5E9':'#FFEBEE', color:msgGestor.tipo==='ok'?'#1B5E20':'#B71C1C' }}>{msgGestor.texto}</div>}
-              <button onClick={adicionarGestor} style={btnPrimary}>Cadastrar Gestor</button>
+              <h3 style={{ fontSize:14, fontWeight:800, color:'#1a3a5c', marginBottom:10 }}>➕ Cadastrar Novo Gestor</h3>
+              <div style={{ display:'flex', gap:6, marginBottom:14, background:'#f0f4f8', borderRadius:8, padding:4 }}>
+                <button onClick={() => { setModoCadastroGestor('promover'); setMsgGestor(null); }} style={{ flex:1, padding:'8px 12px', borderRadius:6, border:'none', cursor:'pointer', fontSize:12, fontWeight:700, background:modoCadastroGestor==='promover'?'#1a3a5c':'transparent', color:modoCadastroGestor==='promover'?'#fff':'#6b8099' }}>⬆️ Promover policial existente</button>
+                <button onClick={() => { setModoCadastroGestor('novo'); setMsgGestor(null); }} style={{ flex:1, padding:'8px 12px', borderRadius:6, border:'none', cursor:'pointer', fontSize:12, fontWeight:700, background:modoCadastroGestor==='novo'?'#1a3a5c':'transparent', color:modoCadastroGestor==='novo'?'#fff':'#6b8099' }}>🆕 Criar gestor novo</button>
+              </div>
+              {modoCadastroGestor === 'promover' ? (
+                <>
+                  <p style={{ color:'#6b8099', fontSize:11, marginBottom:10 }}>Use isso quando o gestor já está cadastrado como policial. Ele ganha permissões de gestor mas continua no efetivo recebendo folga.</p>
+                  <label style={lbl}>Buscar policial *</label>
+                  <div style={{ position:'relative', marginBottom:10 }}>
+                    <input value={buscaPolicialPromover} onChange={e => { setBuscaPolicialPromover(e.target.value); setPolicialParaPromover(null); }} placeholder="Digite nome ou matrícula" style={{ ...inp }} autoComplete="off" />
+                    {buscaPolicialPromover.length >= 2 && !policialParaPromover && (
+                      <div style={{ position:'absolute', top:'100%', left:0, right:0, background:'#fff', border:'1.5px solid #d0dce8', borderRadius:8, boxShadow:'0 4px 16px #00000020', zIndex:100, maxHeight:240, overflowY:'auto' }}>
+                        {policiais.filter(p => !p.is_gestor && (p.nome.toLowerCase().includes(buscaPolicialPromover.toLowerCase()) || (p.matricula||'').includes(buscaPolicialPromover))).slice(0, 8).map(p => (
+                          <div key={p.id} onClick={() => { setPolicialParaPromover(p); setBuscaPolicialPromover(p.nome); }} style={{ padding:'10px 14px', cursor:'pointer', borderBottom:'1px solid #f0f4f8', fontSize:13, color:'#1a3a5c' }} onMouseEnter={e => e.currentTarget.style.background='#f0f6ff'} onMouseLeave={e => e.currentTarget.style.background='#fff'}>
+                            <div style={{ fontWeight:600 }}>{p.patente} {p.nome}</div>
+                            <div style={{ fontSize:11, color:'#6b8099' }}>Mat. {p.matricula} — {p.secao||'Sem seção'}</div>
+                          </div>
+                        ))}
+                        {policiais.filter(p => !p.is_gestor && (p.nome.toLowerCase().includes(buscaPolicialPromover.toLowerCase()) || (p.matricula||'').includes(buscaPolicialPromover))).length === 0 && (
+                          <div style={{ padding:'10px 14px', fontSize:12, color:'#aab' }}>Nenhum policial encontrado (ou já é gestor)</div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                  {policialParaPromover && <div style={{ background:'#E8F5E9', borderRadius:8, padding:'8px 12px', marginBottom:12, fontSize:12, color:'#1B5E20', fontWeight:600 }}>✅ Selecionado: {policialParaPromover.patente} {policialParaPromover.nome} — Mat. {policialParaPromover.matricula}</div>}
+                  <label style={lbl}>Email pessoal *</label>
+                  <input type="email" value={novoGestorEmail} onChange={e => setNovoGestorEmail(e.target.value)} placeholder="email.do.gestor@exemplo.com" style={{ ...inp, marginBottom:10 }} />
+                  <p style={{ color:'#6b8099', fontSize:11, marginTop:-8, marginBottom:10 }}>O policial continua logando com a matrícula. O email pessoal é só pra contato/notificação futura.</p>
+                  <label style={lbl}>Função</label>
+                  <select value={novoGestorFuncao} onChange={e => setNovoGestorFuncao(e.target.value)} style={{ ...inp, marginBottom:10 }}>
+                    {FUNCOES_GESTOR.map(f => <option key={f} value={f}>{f || '— Sem função específica —'}</option>)}
+                  </select>
+                  <label style={lbl}>Nível de acesso</label>
+                  <select value={novoGestorNivel} onChange={e => setNovoGestorNivel(e.target.value)} style={{ ...inp, marginBottom:6 }}>
+                    <option value="gestor">Gestor (apenas visualização)</option>
+                    <option value="master">Master (pode aprovar/recusar)</option>
+                  </select>
+                  {msgGestor && <div style={{ padding:'10px 14px', borderRadius:8, fontWeight:600, marginBottom:6, background:msgGestor.tipo==='ok'?'#E8F5E9':'#FFEBEE', color:msgGestor.tipo==='ok'?'#1B5E20':'#B71C1C' }}>{msgGestor.texto}</div>}
+                  <button onClick={promoverPolicialAGestor} style={btnPrimary}>Promover a Gestor</button>
+                </>
+              ) : (
+                <>
+                  <p style={{ color:'#6b8099', fontSize:11, marginBottom:10 }}>Use isso pra cadastrar alguém que é gestor mas NÃO faz parte do efetivo (não recebe folga). Ex: pessoal administrativo, gestor externo.</p>
+                  <label style={lbl}>Nome / Patente *</label>
+                  <input value={novoGestorNome} onChange={e => setNovoGestorNome(e.target.value)} placeholder="Ex.: TEN CEL SILVA" style={{ ...inp, marginBottom:10 }} />
+                  <label style={lbl}>Matrícula *</label>
+                  <input value={novoGestorMatricula} onChange={e => setNovoGestorMatricula(e.target.value)} placeholder="Ex.: 80231" style={{ ...inp, marginBottom:10 }} />
+                  <label style={lbl}>Email *</label>
+                  <input type="email" value={novoGestorEmail} onChange={e => setNovoGestorEmail(e.target.value)} placeholder="email.do.gestor@exemplo.com" style={{ ...inp, marginBottom:10 }} />
+                  <p style={{ color:'#6b8099', fontSize:11, marginTop:-8, marginBottom:10 }}>Senha temporária = matrícula@32bpm (ex: 80231@32bpm). Gestor troca no primeiro login.</p>
+                  <label style={lbl}>Função</label>
+                  <select value={novoGestorFuncao} onChange={e => setNovoGestorFuncao(e.target.value)} style={{ ...inp, marginBottom:10 }}>
+                    {FUNCOES_GESTOR.map(f => <option key={f} value={f}>{f || '— Sem função específica —'}</option>)}
+                  </select>
+                  <label style={lbl}>Nível de acesso</label>
+                  <select value={novoGestorNivel} onChange={e => setNovoGestorNivel(e.target.value)} style={{ ...inp, marginBottom:6 }}>
+                    <option value="gestor">Gestor (apenas visualização)</option>
+                    <option value="master">Master (pode aprovar/recusar)</option>
+                  </select>
+                  {msgGestor && <div style={{ padding:'10px 14px', borderRadius:8, fontWeight:600, marginBottom:6, background:msgGestor.tipo==='ok'?'#E8F5E9':'#FFEBEE', color:msgGestor.tipo==='ok'?'#1B5E20':'#B71C1C' }}>{msgGestor.texto}</div>}
+                  <button onClick={adicionarGestor} style={btnPrimary}>Cadastrar Gestor</button>
+                </>
+              )}
             </Card>
           )}
           <h3 style={{ fontSize:14, fontWeight:800, color:'#1a3a5c', margin:'20px 0 10px' }}>Gestores Cadastrados</h3>
@@ -2361,6 +2438,7 @@ function TelaGestor({ gestorLogado }) {
                   {!g.principal && g.id !== gestorLogado.id && isPrincipal && (
                     <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
                       <button onClick={() => resetarSenhaGestor(g.id, g.nome, g.matricula)} style={{ ...btnSm, background:'#FFF8E1', color:'#7B5800' }}>🔑 Resetar senha</button>
+                      {g.role === 'policial' && <button onClick={() => rebaixarGestor(g.id, g.nome)} style={{ ...btnSm, background:'#FFF3E0', color:'#E65100' }}>⬇️ Rebaixar a policial</button>}
                       <button onClick={() => removerGestor(g.id)} style={{ ...btnSm, background:'#FFEBEE', color:'#B71C1C' }}>Remover</button>
                     </div>
                   )}
