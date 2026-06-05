@@ -2788,6 +2788,7 @@ export default function App() {
   const [usuarioSel, setUsuarioSel] = useState(null);
   const [gestorLogado, setGestorLogado] = useState(null);
   const [sessionAtual, setSessionAtual] = useState(null);
+  const currentUserIdRef = useRef(null);
   // Tela de login do gestor agora pede email + senha (em vez de só senha)
   const [emailGestor, setEmailGestor] = useState('');
   const [senhaGestor, setSenhaGestor] = useState('');
@@ -2810,6 +2811,7 @@ export default function App() {
   // mudança no auth state (signin/signout/refresh).
   const carregarPerfilEDirecionar = useCallback(async (user) => {
     if (!user) {
+      currentUserIdRef.current = null;
       setUsuarioSel(null);
       setGestorLogado(null);
       setModo('login');
@@ -2819,6 +2821,7 @@ export default function App() {
     if (error || !perfil) {
       // Auth OK mas perfil sumiu — desloga pra não travar.
       await supabase.auth.signOut();
+      currentUserIdRef.current = null;
       setUsuarioSel(null);
       setGestorLogado(null);
       setModo('login');
@@ -2827,6 +2830,7 @@ export default function App() {
     // Normaliza email_contato → email pra manter compat com o resto do código
     // (TelaSolicitacao, DetalhesPolicialCard etc esperam `usuario.email`).
     const perfilNormalizado = { ...perfil, email: perfil.email_contato || '' };
+    currentUserIdRef.current = user.id;
 
     if (perfil.precisa_trocar_senha) {
       setUsuarioSel(perfilNormalizado);
@@ -2865,8 +2869,9 @@ export default function App() {
       setSessionAtual(session || null);
       carregarPerfilEDirecionar(session?.user || null);
     });
-  const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === 'SIGNED_OUT') {
+        currentUserIdRef.current = null;
         setUsuarioSel(null);
         setGestorLogado(null);
         setSessionAtual(null);
@@ -2875,12 +2880,22 @@ export default function App() {
       }
       if (event === 'TOKEN_REFRESHED') {
         setSessionAtual(session || null);
-        // Não recarrega o perfil — só o token mudou, usuário é o mesmo.
-        // Sem isso, trocar de janela dispara TOKEN_REFRESHED e reseta a tela.
+        // Só o token mudou, usuário é o mesmo — não reseta a tela.
         return;
       }
-      if (event === 'SIGNED_IN' || event === 'USER_UPDATED') {
+      if (event === 'SIGNED_IN') {
         setSessionAtual(session || null);
+        // Só recarrega o perfil se for um novo login (user ID diferente).
+        // Evita reset de tela quando o Supabase re-dispara SIGNED_IN ao
+        // voltar de outra janela (Cmd+Tab).
+        if (session?.user?.id && session.user.id !== currentUserIdRef.current) {
+          carregarPerfilEDirecionar(session?.user || null);
+        }
+        return;
+      }
+      if (event === 'USER_UPDATED') {
+        setSessionAtual(session || null);
+        // USER_UPDATED é intencional (ex: troca de senha) — sempre recarrega.
         carregarPerfilEDirecionar(session?.user || null);
       }
     });
