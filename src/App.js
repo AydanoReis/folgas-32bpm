@@ -2865,7 +2865,7 @@ export default function App() {
       setSessionAtual(session || null);
       carregarPerfilEDirecionar(session?.user || null);
     });
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+  const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === 'SIGNED_OUT') {
         setUsuarioSel(null);
         setGestorLogado(null);
@@ -2873,7 +2873,13 @@ export default function App() {
         setModo('login');
         return;
       }
-      if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'USER_UPDATED') {
+      if (event === 'TOKEN_REFRESHED') {
+        setSessionAtual(session || null);
+        // Não recarrega o perfil — só o token mudou, usuário é o mesmo.
+        // Sem isso, trocar de janela dispara TOKEN_REFRESHED e reseta a tela.
+        return;
+      }
+      if (event === 'SIGNED_IN' || event === 'USER_UPDATED') {
         setSessionAtual(session || null);
         carregarPerfilEDirecionar(session?.user || null);
       }
