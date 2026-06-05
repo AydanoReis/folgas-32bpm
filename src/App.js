@@ -1361,6 +1361,97 @@ function GradeFolgasSecao({ folgas, meuId, secao, semana }) {
 }
 
 // ========== TELA DE SOLICITAÇÃO (Policial) ==========
+// ========== MEU PERFIL (componente compartilhado) ==========
+// Tela onde o usuário (policial OU gestor) edita seus próprios dados de contato
+// (email pessoal, telefone) e troca de senha. Auto-atendimento — não depende
+// de gestor. Dados básicos (nome, matrícula, patente, seção) são read-only
+// porque essas mudanças devem passar pelo gestor.
+function MeuPerfilCard({ perfil, onPerfilAtualizado }) {
+  const [emailContato, setEmailContato] = useState(perfil.email_contato || '');
+  const [telefone, setTelefone] = useState(perfil.telefone || '');
+  const [msgPerfil, setMsgPerfil] = useState(null);
+  const [salvandoPerfil, setSalvandoPerfil] = useState(false);
+  const [senhaAtualMP, setSenhaAtualMP] = useState('');
+  const [novaSenhaMP, setNovaSenhaMP] = useState('');
+  const [confirmaSenhaMP, setConfirmaSenhaMP] = useState('');
+  const [msgSenhaMP, setMsgSenhaMP] = useState(null);
+  const [trocandoSenha, setTrocandoSenha] = useState(false);
+
+  async function salvarDados() {
+    setMsgPerfil(null);
+    const novoEmail = emailContato.trim();
+    const novoTelefone = telefone.trim();
+    if (novoEmail && !validarEmail(novoEmail)) { setMsgPerfil({ tipo:'erro', texto:'Email inválido.' }); return; }
+    const updates = {};
+    if (novoEmail !== (perfil.email_contato || '')) updates.email_contato = novoEmail || null;
+    if (novoTelefone !== (perfil.telefone || '')) updates.telefone = novoTelefone || null;
+    if (Object.keys(updates).length === 0) { setMsgPerfil({ tipo:'erro', texto:'Nada pra salvar (nenhum campo mudou).' }); return; }
+    setSalvandoPerfil(true);
+    const { error } = await supabase.from('perfis').update(updates).eq('id', perfil.id);
+    setSalvandoPerfil(false);
+    if (error) { setMsgPerfil({ tipo:'erro', texto:'Erro ao salvar: ' + error.message }); return; }
+    setMsgPerfil({ tipo:'ok', texto:'✅ Dados salvos.' });
+    if (onPerfilAtualizado) onPerfilAtualizado({ ...perfil, ...updates });
+    setTimeout(() => setMsgPerfil(null), 3000);
+  }
+
+  async function trocarSenhaMP() {
+    setMsgSenhaMP(null);
+    if (!senhaAtualMP) { setMsgSenhaMP({ tipo:'erro', texto:'Informe a senha atual.' }); return; }
+    if (novaSenhaMP.length < 6) { setMsgSenhaMP({ tipo:'erro', texto:'Nova senha precisa ter no mínimo 6 caracteres.' }); return; }
+    if (novaSenhaMP !== confirmaSenhaMP) { setMsgSenhaMP({ tipo:'erro', texto:'Senhas não coincidem.' }); return; }
+    setTrocandoSenha(true);
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user || !user.email) { setMsgSenhaMP({ tipo:'erro', texto:'Sessão expirou. Faça login de novo.' }); setTrocandoSenha(false); return; }
+    const { error: errSign } = await supabase.auth.signInWithPassword({ email: user.email, password: senhaAtualMP });
+    if (errSign) { setMsgSenhaMP({ tipo:'erro', texto:'Senha atual incorreta.' }); setTrocandoSenha(false); return; }
+    const { error: errUpd } = await supabase.auth.updateUser({ password: novaSenhaMP });
+    setTrocandoSenha(false);
+    if (errUpd) { setMsgSenhaMP({ tipo:'erro', texto:'Erro ao trocar senha: ' + errUpd.message }); return; }
+    setSenhaAtualMP(''); setNovaSenhaMP(''); setConfirmaSenhaMP('');
+    setMsgSenhaMP({ tipo:'ok', texto:'✅ Senha alterada com sucesso!' });
+    setTimeout(() => setMsgSenhaMP(null), 3000);
+  }
+
+  return (
+    <>
+      <Card>
+        <h3 style={{ fontSize:14, fontWeight:800, color:'#1a3a5c', marginBottom:10 }}>👤 Meus Dados</h3>
+        <div style={{ background:'#f0f4f8', borderRadius:8, padding:'12px 14px', marginBottom:14, fontSize:12, color:'#1a3a5c', lineHeight:1.7 }}>
+          <div><strong>Nome:</strong> {perfil.nome}</div>
+          <div><strong>Matrícula:</strong> {perfil.matricula}</div>
+          {perfil.patente && <div><strong>Patente:</strong> {perfil.patente}</div>}
+          {perfil.secao && <div><strong>Seção:</strong> {perfil.secao}</div>}
+          {perfil.is_gestor && <div><strong>Gestão:</strong> {perfil.nivel || 'gestor'}{perfil.funcao ? ` — ${perfil.funcao}` : ''}</div>}
+          <div style={{ color:'#6b8099', fontSize:11, marginTop:6 }}>Pra alterar nome, matrícula, patente ou seção, fale com o gestor.</div>
+        </div>
+        <label style={lbl}>Email pessoal (para contato/notificações)</label>
+        <input type="email" value={emailContato} onChange={e => setEmailContato(e.target.value)} placeholder="seu.email@exemplo.com" style={{ ...inp, marginBottom:10 }} />
+        <label style={lbl}>Telefone (WhatsApp)</label>
+        <input type="tel" value={telefone} onChange={e => setTelefone(e.target.value)} placeholder="(21) 99999-9999" style={{ ...inp, marginBottom:6 }} />
+        {msgPerfil && <div style={{ padding:'10px 14px', borderRadius:8, fontWeight:600, marginBottom:6, background:msgPerfil.tipo==='ok'?'#E8F5E9':'#FFEBEE', color:msgPerfil.tipo==='ok'?'#1B5E20':'#B71C1C' }}>{msgPerfil.texto}</div>}
+        <button onClick={salvarDados} disabled={salvandoPerfil} style={{ ...btnPrimary, opacity:salvandoPerfil?0.7:1 }}>
+          {salvandoPerfil ? 'Salvando...' : 'Salvar dados'}
+        </button>
+      </Card>
+
+      <Card>
+        <h3 style={{ fontSize:14, fontWeight:800, color:'#1a3a5c', marginBottom:10 }}>🔒 Trocar Senha</h3>
+        <label style={lbl}>Senha atual</label>
+        <input type="password" value={senhaAtualMP} onChange={e => setSenhaAtualMP(e.target.value)} placeholder="••••" style={{ ...inp, marginBottom:10 }} />
+        <label style={lbl}>Nova senha</label>
+        <input type="password" value={novaSenhaMP} onChange={e => setNovaSenhaMP(e.target.value)} placeholder="Mínimo 6 caracteres" style={{ ...inp, marginBottom:10 }} />
+        <label style={lbl}>Confirmar nova senha</label>
+        <input type="password" value={confirmaSenhaMP} onChange={e => setConfirmaSenhaMP(e.target.value)} placeholder="Repita a nova senha" style={{ ...inp, marginBottom:6 }} />
+        {msgSenhaMP && <div style={{ padding:'10px 14px', borderRadius:8, fontWeight:600, marginBottom:6, background:msgSenhaMP.tipo==='ok'?'#E8F5E9':'#FFEBEE', color:msgSenhaMP.tipo==='ok'?'#1B5E20':'#B71C1C' }}>{msgSenhaMP.texto}</div>}
+        <button onClick={trocarSenhaMP} disabled={trocandoSenha} style={{ ...btnPrimary, opacity:trocandoSenha?0.7:1 }}>
+          {trocandoSenha ? 'Salvando...' : 'Salvar nova senha'}
+        </button>
+      </Card>
+    </>
+  );
+}
+
 function TelaSolicitacao({ usuario }) {
   const [dia, setDia] = useState(null);
   const [semana, setSemana] = useState('');
@@ -1573,6 +1664,12 @@ function TelaSolicitacao({ usuario }) {
           </>
         )
       }
+
+      <h3 style={{ fontSize:15, fontWeight:800, color:'#1a3a5c', margin:'22px 0 10px' }}>👤 Meu Perfil</h3>
+      <MeuPerfilCard
+        perfil={usuarioLocal}
+        onPerfilAtualizado={(novo) => setUsuarioLocal(prev => ({ ...prev, ...novo }))}
+      />
     </div>
   );
 }
@@ -1926,6 +2023,7 @@ function TelaGestor({ gestorLogado }) {
     { id:'estatisticas', label:'📈 Estatísticas' },
     { id:'efetivo', label:'👮 Efetivo' },
     { id:'gestores', label:'🗝️ Gestores' },
+    { id:'meu-perfil', label:'👤 Meu Perfil' },
   ];
 
   if (loading) return <Spinner />;
@@ -2447,6 +2545,13 @@ function TelaGestor({ gestorLogado }) {
             );
           })}
         </>
+      )}
+
+      {aba === 'meu-perfil' && (
+        <MeuPerfilCard
+          perfil={gestores.find(g => g.id === gestorLogado.id) || gestorLogado}
+          onPerfilAtualizado={(novo) => setGestores(prev => prev.map(g => g.id === novo.id ? { ...g, ...novo } : g))}
+        />
       )}
     </div>
   );
