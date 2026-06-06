@@ -2634,15 +2634,15 @@ function TelaPortal({ gestor, onSelecionarInterno }) {
       {/* Cabeçalho de boas-vindas */}
       <div style={{ marginBottom: 28 }}>
         <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:14 }}>
-          <div style={{ width:28, height:1, background:'#fbbf24' }} />
-          <span style={{ color:'#fbbf24', fontSize:10, fontWeight:700, letterSpacing:'0.3em', textTransform:'uppercase' }}>
+          <div style={{ width:28, height:1, background:'#1a3a5c' }} />
+          <span style={{ color:'#1a3a5c', fontSize:10, fontWeight:700, letterSpacing:'0.3em', textTransform:'uppercase' }}>
             Portal do Comando
           </span>
         </div>
-        <h1 style={{ color:'#fff', fontWeight:700, fontSize:38, margin:'0 0 6px', fontFamily:"'Rajdhani',sans-serif", lineHeight:1.05 }}>
+        <h1 style={{ color:'#0f172a', fontWeight:700, fontSize:38, margin:'0 0 6px', fontFamily:"'Rajdhani',sans-serif", lineHeight:1.05 }}>
           Bem-vindo{gestor && gestor.nome ? `, ${gestor.nome.split(' ')[0]}` : ''}
         </h1>
-        <p style={{ color:'#94a3b8', fontSize:14, margin:0 }}>
+        <p style={{ color:'#64748b', fontSize:14, margin:0 }}>
           Selecione o módulo que deseja acessar. Mais funções serão adicionadas em breve.
         </p>
       </div>
@@ -2658,8 +2658,8 @@ function TelaPortal({ gestor, onSelecionarInterno }) {
             key={m.id}
             onClick={() => abrirModulo(m)}
             style={{
-              background: m.ativo ? 'rgba(255,255,255,0.03)' : 'rgba(255,255,255,0.015)',
-              border: `1px solid ${m.ativo ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.04)'}`,
+              background: m.ativo ? '#fff' : '#f8fafc',
+              border: `1px solid ${m.ativo ? '#e2e8f0' : '#f1f5f9'}`,
               borderLeft: `3px solid ${m.cor}`,
               borderRadius: 10,
               padding: '20px 18px',
@@ -2673,13 +2673,13 @@ function TelaPortal({ gestor, onSelecionarInterno }) {
             }}
             onMouseEnter={e => {
               if (!m.ativo) return;
-              e.currentTarget.style.background = 'rgba(255,255,255,0.06)';
+              e.currentTarget.style.background = 'rgba(26,58,92,0.04)';
               e.currentTarget.style.transform = 'translateY(-2px)';
-              e.currentTarget.style.boxShadow = `0 8px 24px rgba(0,0,0,0.4), 0 0 0 1px ${m.cor}33`;
+              e.currentTarget.style.boxShadow = `0 4px 16px rgba(0,0,0,0.1), 0 0 0 1px ${m.cor}33`;
             }}
             onMouseLeave={e => {
               if (!m.ativo) return;
-              e.currentTarget.style.background = 'rgba(255,255,255,0.03)';
+              e.currentTarget.style.background = '#fff';
               e.currentTarget.style.transform = 'translateY(0)';
               e.currentTarget.style.boxShadow = 'none';
             }}
@@ -2701,10 +2701,10 @@ function TelaPortal({ gestor, onSelecionarInterno }) {
                 }}>Em breve</span>
               )}
             </div>
-            <div style={{ color:'#fff', fontWeight:700, fontSize:17, marginBottom:6, fontFamily:"'Rajdhani',sans-serif", letterSpacing:'0.02em' }}>
+            <div style={{ color:'#0f172a', fontWeight:700, fontSize:17, marginBottom:6, fontFamily:"'Rajdhani',sans-serif", letterSpacing:'0.02em' }}>
               {m.titulo}
             </div>
-            <div style={{ color:'#94a3b8', fontSize:12.5, lineHeight:1.5, flex:1 }}>
+            <div style={{ color:'#475569', fontSize:12.5, lineHeight:1.5, flex:1 }}>
               {m.descricao}
             </div>
           </div>
@@ -2715,7 +2715,7 @@ function TelaPortal({ gestor, onSelecionarInterno }) {
       <div style={{
         marginTop: 32,
         paddingTop: 18,
-        borderTop: '1px solid rgba(255,255,255,0.05)',
+        borderTop: '1px solid #e2e8f0',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
@@ -2763,14 +2763,14 @@ function TrocaSenhaObrigatoria({ perfil, onTrocada }) {
   }
 
   return (
-    <div style={{ maxWidth: 420, margin: '40px auto', background: '#0d1a2e', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 12, padding: '28px 26px', color: '#e2e8f0' }}>
+    <div style={{ maxWidth: 420, margin: '40px auto', background: '#fff', border: '1px solid #e2e8f0', borderRadius: 12, padding: '28px 26px', color: '#0f172a' }}>
       <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:14 }}>
-        <div style={{ width:28, height:1, background:'#fbbf24' }} />
-        <span style={{ color:'#fbbf24', fontSize:10, fontWeight:700, letterSpacing:'0.3em', textTransform:'uppercase' }}>Primeiro acesso</span>
+        <div style={{ width:28, height:1, background:'#1a3a5c' }} />
+        <span style={{ color:'#1a3a5c', fontSize:10, fontWeight:700, letterSpacing:'0.3em', textTransform:'uppercase' }}>Primeiro acesso</span>
       </div>
-      <h2 style={{ color:'#fff', fontWeight:700, fontSize:28, margin:'0 0 8px', fontFamily:"'Rajdhani',sans-serif", lineHeight:1.05 }}>Cadastre uma senha pessoal</h2>
-      <p style={{ color:'#94a3b8', fontSize:13, margin:'0 0 22px' }}>
-        Olá, <strong style={{ color:'#fff' }}>{perfil.nome}</strong>! Você está usando a senha temporária.
+      <h2 style={{ color:'#0f172a', fontWeight:700, fontSize:28, margin:'0 0 8px', fontFamily:"'Rajdhani',sans-serif", lineHeight:1.05 }}>Cadastre uma senha pessoal</h2>
+      <p style={{ color:'#64748b', fontSize:13, margin:'0 0 22px' }}>
+        Olá, <strong style={{ color:'#0f172a' }}>{perfil.nome}</strong>! Você está usando a senha temporária.
         Para sua segurança, escolha uma nova senha antes de continuar.
       </p>
       <label style={lbl}>Nova senha *</label>
@@ -2941,15 +2941,15 @@ export default function App() {
   const [abaLogin, setAbaLogin] = useState('policial');
 
   return (
-    <div style={{ minHeight:'100vh', background:'#070f1e', fontFamily:"'Inter','Segoe UI',sans-serif" }}>
+    <div style={{ minHeight:'100vh', background:'#f1f5f9', fontFamily:"'Inter','Segoe UI',sans-serif" }}>
 
       {/* CABEÇALHO */}
-      <div style={{ background:'#070f1e', borderTop:'3px solid #fbbf24', padding:'13px 24px', display:'flex', alignItems:'center', justifyContent:'space-between', borderBottom:'1px solid rgba(255,255,255,0.05)', boxShadow:'0 4px 24px rgba(0,0,0,0.5)' }}>
+      <div style={{ background:'#1a3a5c', borderTop:'3px solid #f59e0b', padding:'13px 24px', display:'flex', alignItems:'center', justifyContent:'space-between', borderBottom:'1px solid rgba(255,255,255,0.1)', boxShadow:'0 4px 24px rgba(0,0,0,0.2)' }}>
         <div style={{ display:'flex', alignItems:'center', gap:12 }}>
-          <img src="/logo.jpeg" alt="32 BPM" style={{ height:36, width:36, objectFit:'contain', borderRadius:'50%', border:'1.5px solid rgba(251,191,36,0.4)' }} />
+          <img src="/logo.jpeg" alt="32 BPM" style={{ height:36, width:36, objectFit:'contain', borderRadius:'50%', border:'1.5px solid rgba(255,255,255,0.3)' }} />
           <div>
             <div style={{ color:'#fff', fontWeight:700, fontSize:15, letterSpacing:0.5, fontFamily:"'Rajdhani',sans-serif" }}>32º BPM — Controle de Folgas</div>
-            <div style={{ color:'#475569', fontSize:9, fontWeight:600, letterSpacing:'0.18em', textTransform:'uppercase' }}>PCSV · Expediente Semanal · v2.2</div>
+            <div style={{ color:'rgba(255,255,255,0.55)', fontSize:9, fontWeight:600, letterSpacing:'0.18em', textTransform:'uppercase' }}>PCSV · Expediente Semanal · v2.2</div>
           </div>
         </div>
         {modo !== 'login' && modo !== 'carregando' && modo !== 'ajd' && (
@@ -2958,12 +2958,12 @@ export default function App() {
               <button
                 onClick={() => setModo('portal')}
                 title="Voltar ao portal de módulos"
-                style={{ background:'rgba(251,191,36,0.08)', color:'#fbbf24', border:'1px solid rgba(251,191,36,0.25)', borderRadius:8, padding:'6px 14px', cursor:'pointer', fontSize:11, fontWeight:700, letterSpacing:'0.1em', textTransform:'uppercase' }}
+                style={{ background:'rgba(255,255,255,0.1)', color:'#fff', border:'1px solid rgba(255,255,255,0.2)', borderRadius:8, padding:'6px 14px', cursor:'pointer', fontSize:11, fontWeight:700, letterSpacing:'0.1em', textTransform:'uppercase' }}
               >
                 ← Portal
               </button>
             )}
-            <button onClick={sair} style={{ background:'rgba(255,255,255,0.05)', color:'#94a3b8', border:'1px solid rgba(255,255,255,0.1)', borderRadius:8, padding:'6px 14px', cursor:'pointer', fontSize:11, fontWeight:600, letterSpacing:'0.1em', textTransform:'uppercase' }}>← Sair</button>
+            <button onClick={sair} style={{ background:'rgba(255,255,255,0.1)', color:'#fff', border:'1px solid rgba(255,255,255,0.2)', borderRadius:8, padding:'6px 14px', cursor:'pointer', fontSize:11, fontWeight:600, letterSpacing:'0.1em', textTransform:'uppercase' }}>← Sair</button>
           </div>
         )}
       </div>
@@ -2977,7 +2977,7 @@ export default function App() {
           alignItems: isDesktop ? 'stretch' : 'center',
           justifyContent: isDesktop ? 'flex-start' : 'center',
           position:'relative',
-          background:'#070f1e',
+          background:'#f1f5f9',
         }}>
 
           {/* ── PAINEL ESQUERDO (só desktop) ── */}
@@ -3028,7 +3028,7 @@ export default function App() {
           </div>
           )}
 
-          {/* ── PAINEL DIREITO (form) — fundo escuro puro ── */}
+          {/* ── PAINEL DIREITO (form) ── */}
           <div className="login-right" style={{
             flex: isDesktop ? 1 : 'initial',
             width: isDesktop ? 'auto' : '100%',
@@ -3037,7 +3037,7 @@ export default function App() {
             justifyContent:'center',
             padding: isDesktop ? '48px 32px' : '48px 24px',
             position:'relative',
-            background:'#070f1e',
+            background:'#f1f5f9',
           }}>
 
             {/* Wrapper — max 360px, direto no painel sem card */}
@@ -3046,15 +3046,15 @@ export default function App() {
               {/* Header do form */}
               <div style={{ marginBottom:32 }}>
                 <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:16 }}>
-                  <div style={{ width:28, height:1, background:'#fbbf24' }} />
-                  <span style={{ color:'#fbbf24', fontSize:9, fontWeight:700, letterSpacing:'0.3em', textTransform:'uppercase' }}>Acesso Restrito</span>
+                  <div style={{ width:28, height:1, background:'#1a3a5c' }} />
+                  <span style={{ color:'#1a3a5c', fontSize:9, fontWeight:700, letterSpacing:'0.3em', textTransform:'uppercase' }}>Acesso Restrito</span>
                 </div>
-                <h2 style={{ color:'#fff', fontWeight:700, fontSize:48, margin:'0 0 8px', fontFamily:"'Rajdhani',sans-serif", lineHeight:1 }}>Entrar</h2>
-                <p style={{ color:'#475569', fontSize:12, margin:0 }}>Sistema restrito ao efetivo do 32º BPM.</p>
+                <h2 style={{ color:'#0f172a', fontWeight:700, fontSize:48, margin:'0 0 8px', fontFamily:"'Rajdhani',sans-serif", lineHeight:1 }}>Entrar</h2>
+                <p style={{ color:'#64748b', fontSize:12, margin:0 }}>Sistema restrito ao efetivo do 32º BPM.</p>
               </div>
 
               {/* Abas — sem card, só linha */}
-              <div style={{ display:'flex', borderBottom:'1px solid rgba(255,255,255,0.07)', marginBottom:28 }}>
+              <div style={{ display:'flex', borderBottom:'1px solid #e2e8f0', marginBottom:28 }}>
                 {[
                   { id:'policial', label:'Sou Policial' },
                   { id:'gestor', label:'Sou Gestor' },
@@ -3063,9 +3063,9 @@ export default function App() {
                     flex:1, padding:'10px 8px',
                     fontWeight:700, fontSize:10,
                     cursor:'pointer', border:'none',
-                    borderBottom: abaLogin === a.id ? '2px solid #fbbf24' : '2px solid transparent',
+                    borderBottom: abaLogin === a.id ? '2px solid #1a3a5c' : '2px solid transparent',
                     background:'transparent',
-                    color: abaLogin === a.id ? '#fbbf24' : '#475569',
+                    color: abaLogin === a.id ? '#1a3a5c' : '#64748b',
                     transition:'all 0.15s',
                     letterSpacing:'0.12em', textTransform:'uppercase',
                     marginBottom:'-1px',
@@ -3104,16 +3104,16 @@ export default function App() {
                     autoComplete="current-password"
                     style={{ ...inp, marginBottom:6 }}
                   />
-                  {erroLoginGestor && <p style={{ color:'#f87171', fontSize:12, marginBottom:4 }}>{erroLoginGestor}</p>}
+                  {erroLoginGestor && <p style={{ color:'#dc2626', fontSize:12, marginBottom:4 }}>{erroLoginGestor}</p>}
                   <button onClick={loginGestor} disabled={entrandoGestor} style={{ ...btnPrimary, opacity: entrandoGestor ? 0.7 : 1 }}>{entrandoGestor ? 'Entrando...' : 'Entrar'}</button>
                 </div>
               )}
 
               {/* Rodapé */}
               <div style={{ display:'flex', alignItems:'center', gap:12, marginTop:32 }}>
-                <div style={{ flex:1, height:1, background:'rgba(255,255,255,0.04)' }} />
-                <span style={{ fontSize:9, color:'#334155', fontWeight:500, letterSpacing:'0.12em', textTransform:'uppercase' }}>PMERJ · 32º BPM</span>
-                <div style={{ flex:1, height:1, background:'rgba(255,255,255,0.04)' }} />
+                <div style={{ flex:1, height:1, background:'#e2e8f0' }} />
+                <span style={{ fontSize:9, color:'#94a3b8', fontWeight:500, letterSpacing:'0.12em', textTransform:'uppercase' }}>PMERJ · 32º BPM</span>
+                <div style={{ flex:1, height:1, background:'#e2e8f0' }} />
               </div>
 
             </div>
@@ -3150,12 +3150,12 @@ export default function App() {
           padding: '0 16px',
         }}>
           <div style={{
-            background: '#0d1a2e',
-            border: '1px solid rgba(255,255,255,0.05)',
+            background: '#fff',
+            border: '1px solid #e2e8f0',
             borderRadius: 12,
             padding: '32px 28px',
-            color: '#e2e8f0',
-            boxShadow: '0 1px 0 rgba(255,255,255,0.03) inset, 0 8px 32px rgba(0,0,0,0.25)',
+            color: '#0f172a',
+            boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
           }}>
             {modo === 'portal' && gestorLogado && <TelaPortal gestor={gestorLogado} onSelecionarInterno={setModo} />}
             {modo === 'policial' && usuarioSel && <TelaSolicitacao usuario={usuarioSel} />}
