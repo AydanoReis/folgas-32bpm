@@ -1814,7 +1814,8 @@ function TelaGestor({ gestorLogado }) {
     if (!isMaster) return;
     const check = rateLimiterAprovacao.podeExecutar();
     if (!check.permitido) { showToast(`Aguarde ${check.proxemaEmMs}s antes de fazer nova aprovação`, 'erro'); return; }
-    await supabase.from('folgas_solicitacoes').update({ status }).eq('id', id);
+const { error: updErr } = await supabase.rpc('atualizar_status_solicitacao', { p_id: id, p_status: status });
+if (updErr) { showToast(`Erro: ${updErr.message}`, 'erro'); return; }
     setSolicitacoes(prev => prev.map(s => s.id === id ? { ...s, status } : s));
     showToast(status === 'aprovado' ? '✅ Solicitação aprovada!' : '❌ Solicitação recusada!', status === 'aprovado' ? 'ok' : 'erro');
     const sol = solicitacoes.find(s => s.id === id);
