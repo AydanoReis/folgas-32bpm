@@ -1173,7 +1173,9 @@ function LoginPolicial() {
   // View `policiais` = perfis WHERE role='policial'. GRANT SELECT TO anon
   // garante que isso lê antes do usuário se autenticar.
   useEffect(() => {
-    supabase.from('policiais').select('*').order('nome')
+    // Usa RPC SECURITY DEFINER que expõe só 5 campos ao anon
+    // (sem rg, telefone, email_contato, sit_sanitaria etc.)
+    supabase.rpc('policiais_para_login')
       .then(({ data }) => { setPoliciais(data || []); setCarregando(false); });
   }, []);
 
