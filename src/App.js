@@ -1682,6 +1682,7 @@ function TelaSolicitacao({ usuario }) {
                 {s.status === 'aprovado' && s.status_troca === 'aprovado' && <div style={{ background:'#E8F5E9', borderRadius:8, padding:'6px 10px', marginTop:8, fontSize:12, color:'#1B5E20', fontWeight:700 }}>✅ Troca aprovada! Novo dia: <strong>{s.dia_troca}</strong></div>}
                 {s.status === 'aprovado' && s.status_troca === 'pendente' && <div style={{ background:'#FFF8E1', borderRadius:8, padding:'6px 10px', marginTop:8, fontSize:12, color:'#7B5800', fontWeight:700, display:'flex', justifyContent:'space-between', alignItems:'center' }}><span>⏳ Troca para <strong>{s.dia_troca}</strong> aguardando aprovação</span><button onClick={() => cancelarTroca(s.id)} style={{ ...btnSm, background:'#FFEBEE', color:'#B71C1C', fontSize:11 }}>Cancelar troca</button></div>}
                 {s.status === 'aprovado' && s.status_troca === 'recusado' && <div style={{ background:'#FFEBEE', borderRadius:8, padding:'6px 10px', marginTop:8, fontSize:12, color:'#B71C1C', fontWeight:700 }}>❌ Troca para <strong>{s.dia_troca}</strong> foi recusada</div>}
+                {s.status === 'recusado' && s.motivo_recusa && <div style={{ background:'#FFEBEE', borderRadius:8, padding:'6px 10px', marginTop:8, fontSize:12, color:'#B71C1C', fontWeight:700 }}>✘ Motivo da recusa: {s.motivo_recusa}</div>}
                 <p style={{ color:'#bbb', fontSize:12, marginTop:6 }}>Enviado em {formatarDataHora(s.created_at)}</p>
                 <div style={{ display:'flex', gap:8, flexWrap:'wrap', marginTop:8 }}>
                   {s.status === 'pendente' && <button onClick={() => cancelarSolicitacao(s.id)} style={{ ...btnSm, background:'#FFEBEE', color:'#B71C1C' }}>✕ Cancelar</button>}
@@ -1759,6 +1760,8 @@ function TelaGestor({ gestorLogado }) {
   const [minPorSecao, setMinPorSecao] = useState({});      // { secao: min_prontos } — cobertura mínima
   const [mostrarConfigCob, setMostrarConfigCob] = useState(false);
   const [selecionadas, setSelecionadas] = useState([]);    // ids p/ ações em lote
+  const [recusandoId, setRecusandoId] = useState(null);    // id em recusa (mostra campo de motivo)
+  const [motivoRecusaTxt, setMotivoRecusaTxt] = useState('');
   const intervalRef = useRef(null);
 
   const carregar = useCallback(async () => {
@@ -1806,8 +1809,8 @@ function TelaGestor({ gestorLogado }) {
     setFiltroStatus('pendente');
   }, [semanaAtual]);
 
-  // Limpa a seleção em lote quando muda o recorte da lista
-  useEffect(() => { setSelecionadas([]); }, [semanaAtual, filtroStatus, filtroSecao, filtroDia, filtroMotivo]);
+  // Limpa a seleção em lote / recusa em andamento quando muda o recorte da lista
+  useEffect(() => { setSelecionadas([]); setRecusandoId(null); setMotivoRecusaTxt(''); }, [semanaAtual, filtroStatus, filtroSecao, filtroDia, filtroMotivo]);
 
   function semanaAnterior() { const d = new Date(semanaAtual); d.setDate(d.getDate()-7); setSemanaAtual(d); }
   function proximaSemana() { const d = new Date(semanaAtual); d.setDate(d.getDate()+7); setSemanaAtual(d); }
@@ -1860,14 +1863,15 @@ function TelaGestor({ gestorLogado }) {
 
   // Aplica a mudança no banco (RPC) + estado + email + histórico. SEM rate limiter
   // (pra poder rodar em loop nas ações em lote). Retorna true se deu certo.
-  async function aplicarStatus(id, status, solDireta) {
-    const { error: updErr } = await supabase.rpc('atualizar_status_solicitacao', { p_id: id, p_status: status });
+  async function aplicarStatus(id, status, solDireta, motivo) {
+    const motivoRec = (status === 'recusado') ? (motivo || null) : null;
+    const { error: updErr } = await supabase.rpc('atualizar_status_solicitacao', { p_id: id, p_status: status, p_motivo: motivoRec });
     if (updErr) { showToast(`Erro: ${updErr.message}`, 'erro'); return false; }
-    setSolicitacoes(prev => prev.map(s => s.id === id ? { ...s, status } : s));
+    setSolicitacoes(prev => prev.map(s => s.id === id ? { ...s, status, motivo_recusa: motivoRec } : s));
     const sol = solDireta || solicitacoes.find(s => s.id === id);
     if (sol && sol.email_policial && status !== 'pendente') {
       emailjs.init(EMAILJS_PUBLIC_KEY);
-      emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, { email:sol.email_policial, nome:sol.policial_nome, motivo:sol.motivo, dia:sol.dia, semana:sol.semana, status:status==='aprovado'?'✅ APROVADA':'❌ RECUSADA', secao:sol.secao, matricula:sol.matricula });
+      emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, { email:sol.email_policial, nome:sol.policial_nome, motivo:sol.motivo, dia:sol.dia, semana:sol.semana, status:status==='aprovado'?'✅ APROVADA':'❌ RECUSADA', secao:sol.secao, matricula:sol.matricula, motivo_recusa: motivoRec || '' });
     }
     registrarHistorico(supabase, 'solicitacoes', 'mudança_status', { id, status }, gestorLogado.id, gestorLogado.nome);
     return true;
@@ -1903,6 +1907,16 @@ function TelaGestor({ gestorLogado }) {
     await mudarStatus(s.id, 'aprovado');
   }
 
+  // Confirma a recusa com o motivo digitado no campo inline.
+  async function confirmarRecusa(s) {
+    if (!isMaster) return;
+    const check = rateLimiterAprovacao.podeExecutar();
+    if (!check.permitido) { showToast(`Aguarde ${check.proxemaEmMs}s antes de fazer nova ação`, 'erro'); return; }
+    const ok = await aplicarStatus(s.id, 'recusado', s, motivoRecusaTxt.trim());
+    if (ok) showToast('❌ Solicitação recusada!', 'erro');
+    setRecusandoId(null); setMotivoRecusaTxt('');
+  }
+
   function toggleSelecao(id) {
     setSelecionadas(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
   }
@@ -1927,8 +1941,9 @@ function TelaGestor({ gestorLogado }) {
     if (!isMaster) return;
     const alvos = pendentesFiltradas.filter(s => selecionadas.includes(s.id));
     if (alvos.length === 0) return;
-    if (!window.confirm(`Recusar ${alvos.length} solicitação(ões) selecionada(s)?`)) return;
-    for (const s of alvos) { await aplicarStatus(s.id, 'recusado', s); }
+    const motivo = window.prompt(`Recusar ${alvos.length} solicitação(ões)? Informe o motivo (opcional, vale pra todas):`, '');
+    if (motivo === null) return; // cancelou
+    for (const s of alvos) { await aplicarStatus(s.id, 'recusado', s, motivo.trim()); }
     showToast(`❌ ${alvos.length} recusada(s).`, 'erro');
     setSelecionadas([]);
   }
@@ -2354,12 +2369,22 @@ function TelaGestor({ gestorLogado }) {
                       )}
                       {s.status_troca === 'pendente' && <div style={{ background:'#FFF8E1', borderRadius:6, padding:'4px 10px', marginTop:6, fontSize:12, color:'#7B5800', fontWeight:700 }}>⏳ Troca pendente para: <strong>{s.dia_troca}</strong></div>}
                       {s.status_troca === 'aprovado' && <div style={{ background:'#E8F5E9', borderRadius:6, padding:'4px 10px', marginTop:6, fontSize:12, color:'#1B5E20', fontWeight:700 }}>✅ Troca aprovada para: <strong>{s.dia_troca}</strong></div>}
+                      {s.status === 'recusado' && s.motivo_recusa && <div style={{ background:'#FFEBEE', borderRadius:6, padding:'4px 10px', marginTop:6, fontSize:12, color:'#B71C1C', fontWeight:700 }}>✘ Motivo: {s.motivo_recusa}</div>}
                       {s.email_policial && <p style={{ color:'#aab', fontSize:12, marginTop:4 }}>📧 {s.email_policial}</p>}
                       <p style={{ color:'#bbb', fontSize:12, marginTop:4 }}>{formatarDataHora(s.created_at)}</p>
-                      {isMaster && s.status === 'pendente' && (
+                      {isMaster && s.status === 'pendente' && recusandoId !== s.id && (
                         <div style={{ display:'flex', gap:8, marginTop:10 }}>
                           <button onClick={() => aprovarUma(s)} style={{ ...btnSm, background:'#1B5E20', color:'#fff' }}>✔ Aprovar</button>
-                          <button onClick={() => mudarStatus(s.id,'recusado')} style={{ ...btnSm, background:'#B71C1C', color:'#fff' }}>✘ Recusar</button>
+                          <button onClick={() => { setRecusandoId(s.id); setMotivoRecusaTxt(''); }} style={{ ...btnSm, background:'#B71C1C', color:'#fff' }}>✘ Recusar</button>
+                        </div>
+                      )}
+                      {isMaster && s.status === 'pendente' && recusandoId === s.id && (
+                        <div style={{ background:'#FFF5F5', border:'1px solid #FECACA', borderRadius:8, padding:10, marginTop:10 }}>
+                          <textarea value={motivoRecusaTxt} onChange={e => setMotivoRecusaTxt(e.target.value)} placeholder="Motivo da recusa (opcional — o policial vai ver)" rows={2} style={{ width:'100%', padding:'8px', borderRadius:6, border:'1.5px solid #d1d5db', fontSize:13, boxSizing:'border-box', resize:'vertical', color:'#0f172a' }} />
+                          <div style={{ display:'flex', gap:8, marginTop:8 }}>
+                            <button onClick={() => confirmarRecusa(s)} style={{ ...btnSm, background:'#B71C1C', color:'#fff' }}>Confirmar recusa</button>
+                            <button onClick={() => { setRecusandoId(null); setMotivoRecusaTxt(''); }} style={{ ...btnSm, background:'#f0f4f8', color:'#2d4a63' }}>Cancelar</button>
+                          </div>
                         </div>
                       )}
                       {isMaster && s.status === 'recusado' && <button onClick={() => excluirSolicitacao(s.id)} style={{ ...btnSm, background:'#FFEBEE', color:'#B71C1C', marginTop:8 }}>🗑️ Excluir</button>}
