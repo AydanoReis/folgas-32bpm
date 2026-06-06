@@ -88,9 +88,9 @@ function ContadorFolgas({ solicitacoes, policialId, compact = false }) {
   );
 }
 
-const inp = { width:'100%', padding:'10px 14px', borderRadius:8, border:'1.5px solid rgba(255,255,255,0.1)', fontSize:14, color:'#e2e8f0', background:'rgba(255,255,255,0.04)', boxSizing:'border-box', outline:'none', transition:'border-color 0.2s, background 0.2s' };
+const inp = { width:'100%', padding:'10px 14px', borderRadius:8, border:'1.5px solid #d1d5db', fontSize:14, color:'#0f172a', background:'#fff', boxSizing:'border-box', outline:'none', transition:'border-color 0.2s, background 0.2s' };
 const lbl = { display:'block', fontSize:10, fontWeight:800, color:'#64748b', marginBottom:6, textTransform:'uppercase', letterSpacing:1.5 };
-const btnPrimary = { display:'block', width:'100%', padding:'13px', background:'#fbbf24', color:'#000', border:'none', borderRadius:8, fontWeight:800, fontSize:13, cursor:'pointer', marginTop:12, letterSpacing:'0.12em', textTransform:'uppercase' };
+const btnPrimary = { display:'block', width:'100%', padding:'13px', background:'#1a3a5c', color:'#fff', border:'none', borderRadius:8, fontWeight:800, fontSize:13, cursor:'pointer', marginTop:12, letterSpacing:'0.12em', textTransform:'uppercase' };
 const btnSm = { padding:'6px 13px', borderRadius:7, fontWeight:700, fontSize:12, cursor:'pointer', border:'none' };
 
 function getInicioSemana(date) {
