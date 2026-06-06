@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'folgas-32bpm-v13052026';
+const CACHE_VERSION = 'folgas-32bpm-v06062026';
 
 self.addEventListener('install', e => {
   self.skipWaiting();
@@ -22,6 +22,11 @@ self.addEventListener('activate', e => {
 });
 
 self.addEventListener('fetch', e => {
+  // Só intercepta GET do próprio domínio — POST e APIs externas passam direto
+  if (e.request.method !== 'GET') return;
+  const url = new URL(e.request.url);
+  if (url.origin !== self.location.origin) return;
+
   e.respondWith(
     fetch(e.request).catch(() => caches.match(e.request))
   );
