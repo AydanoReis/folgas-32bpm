@@ -1958,6 +1958,12 @@ function TelaGestor({ gestorLogado }) {
 
   async function aprovarTroca(sol) {
     if (!isMaster) return;
+    // #6 — cobertura no dia NOVO da troca (a folga migra pra esse dia)
+    const cob = calcularCobertura(sol.secao, sol.semana, sol.dia_troca, true);
+    if (cob && cob.critico) {
+      const ok = window.confirm(`⚠️ Aprovar a troca para ${sol.dia_troca} deixa a seção ${sol.secao} com apenas ${cob.presentes} prontos nesse dia (mínimo ${cob.min}).\n\nAprovar mesmo assim?`);
+      if (!ok) return;
+    }
     await supabase.from('folgas_solicitacoes').update({ dia:sol.dia_troca, status_troca:'aprovado' }).eq('id', sol.id);
     setSolicitacoes(prev => prev.map(s => s.id === sol.id ? { ...s, dia:sol.dia_troca, status_troca:'aprovado' } : s));
     showToast('✅ Troca aprovada!');
@@ -2424,6 +2430,16 @@ function TelaGestor({ gestorLogado }) {
                   <div style={{ textAlign:'center' }}><div style={{ fontSize:10, color:'#6b8099', fontWeight:700, marginBottom:4 }}>NOVO DIA</div><div style={{ fontWeight:900, color:'#1B5E20', fontSize:16 }}>{s.dia_troca}</div></div>
                   <div style={{ fontSize:10, color:'#6b8099', marginLeft:'auto' }}>Semana: {s.semana}</div>
                 </div>
+                {(() => {
+                  const cob = calcularCobertura(s.secao, s.semana, s.dia_troca, true);
+                  if (!cob) return null;
+                  const cor = cob.critico ? '#B71C1C' : (cob.min > 0 && cob.presentes === cob.min ? '#E65100' : '#1B5E20');
+                  return (
+                    <div style={{ marginTop:8, fontSize:12, fontWeight:700, color:cor, background: cob.critico ? '#FFEBEE' : '#f1f5f9', borderRadius:8, padding:'6px 10px' }}>
+                      🪖 Cobertura {s.secao} · {s.dia_troca} (novo dia): <strong>{cob.presentes}</strong> prontos se aprovar{cob.min > 0 ? ` (mín ${cob.min})` : ''}{cob.critico ? ' ⚠️' : ''}
+                    </div>
+                  );
+                })()}
                 {isMaster && (
                   <div style={{ display:'flex', gap:8, marginTop:10 }}>
                     <button onClick={() => aprovarTroca(s)} style={{ ...btnSm, background:'#1B5E20', color:'#fff' }}>✔ Aprovar troca</button>
