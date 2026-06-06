@@ -1756,17 +1756,22 @@ function TelaGestor({ gestorLogado }) {
   const [paginaSolicitacoes, setPaginaSolicitacoes] = useState(1);
   const [paginaEfetivo, setPaginaEfetivo] = useState(1);
   const [toast, setToast] = useState(null);
+  const [minPorSecao, setMinPorSecao] = useState({});      // { secao: min_prontos } — cobertura mínima
+  const [mostrarConfigCob, setMostrarConfigCob] = useState(false);
+  const [selecionadas, setSelecionadas] = useState([]);    // ids p/ ações em lote
   const intervalRef = useRef(null);
 
   const carregar = useCallback(async () => {
-    const [s, p, g] = await Promise.all([
+    const [s, p, g, c] = await Promise.all([
       supabase.from('folgas_solicitacoes').select('*').order('created_at', { ascending:false }),
       supabase.from('policiais').select('*').order('nome'),
       supabase.from('gestores').select('*').order('created_at'),
+      supabase.from('folgas_config_secao').select('*'),
     ]);
     setSolicitacoes(s.data || []);
     setPoliciais(p.data || []);
     setGestores(g.data || []);
+    const mp = {}; (c.data || []).forEach(r => { mp[r.secao] = r.min_prontos; }); setMinPorSecao(mp);
     setUltimaAtualizacao(new Date());
     setLoading(false);
   }, []);
@@ -1801,6 +1806,9 @@ function TelaGestor({ gestorLogado }) {
     setFiltroStatus('pendente');
   }, [semanaAtual]);
 
+  // Limpa a seleção em lote quando muda o recorte da lista
+  useEffect(() => { setSelecionadas([]); }, [semanaAtual, filtroStatus, filtroSecao, filtroDia, filtroMotivo]);
+
   function semanaAnterior() { const d = new Date(semanaAtual); d.setDate(d.getDate()-7); setSemanaAtual(d); }
   function proximaSemana() { const d = new Date(semanaAtual); d.setDate(d.getDate()+7); setSemanaAtual(d); }
 
@@ -1815,6 +1823,7 @@ function TelaGestor({ gestorLogado }) {
     .filter(s => filtroSecao === 'todas' || s.secao === filtroSecao)
     .filter(s => filtroDia === 'todos' || s.dia === filtroDia)
     .filter(s => filtroMotivo === 'todos' || s.motivo === filtroMotivo);
+  const pendentesFiltradas = filtradas.filter(s => s.status === 'pendente');
 
   const semSecao = policiais.filter(p => !p.secao || p.secao === '');
   const retornosProximos = policiais.filter(p => p.situacao === 'Férias' && p.ferias_fim && diasParaRetorno(p.ferias_fim) !== null && diasParaRetorno(p.ferias_fim) <= 3 && diasParaRetorno(p.ferias_fim) >= 0);
@@ -1849,20 +1858,87 @@ function TelaGestor({ gestorLogado }) {
     setTimeout(() => setToast(null), 3000);
   }
 
-  async function mudarStatus(id, status) {
-    if (!isMaster) return;
-    const check = rateLimiterAprovacao.podeExecutar();
-    if (!check.permitido) { showToast(`Aguarde ${check.proxemaEmMs}s antes de fazer nova aprovação`, 'erro'); return; }
-const { error: updErr } = await supabase.rpc('atualizar_status_solicitacao', { p_id: id, p_status: status });
-if (updErr) { showToast(`Erro: ${updErr.message}`, 'erro'); return; }
+  // Aplica a mudança no banco (RPC) + estado + email + histórico. SEM rate limiter
+  // (pra poder rodar em loop nas ações em lote). Retorna true se deu certo.
+  async function aplicarStatus(id, status, solDireta) {
+    const { error: updErr } = await supabase.rpc('atualizar_status_solicitacao', { p_id: id, p_status: status });
+    if (updErr) { showToast(`Erro: ${updErr.message}`, 'erro'); return false; }
     setSolicitacoes(prev => prev.map(s => s.id === id ? { ...s, status } : s));
-    showToast(status === 'aprovado' ? '✅ Solicitação aprovada!' : '❌ Solicitação recusada!', status === 'aprovado' ? 'ok' : 'erro');
-    const sol = solicitacoes.find(s => s.id === id);
+    const sol = solDireta || solicitacoes.find(s => s.id === id);
     if (sol && sol.email_policial && status !== 'pendente') {
       emailjs.init(EMAILJS_PUBLIC_KEY);
       emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, { email:sol.email_policial, nome:sol.policial_nome, motivo:sol.motivo, dia:sol.dia, semana:sol.semana, status:status==='aprovado'?'✅ APROVADA':'❌ RECUSADA', secao:sol.secao, matricula:sol.matricula });
     }
     registrarHistorico(supabase, 'solicitacoes', 'mudança_status', { id, status }, gestorLogado.id, gestorLogado.nome);
+    return true;
+  }
+
+  async function mudarStatus(id, status) {
+    if (!isMaster) return;
+    const check = rateLimiterAprovacao.podeExecutar();
+    if (!check.permitido) { showToast(`Aguarde ${check.proxemaEmMs}s antes de fazer nova aprovação`, 'erro'); return; }
+    const ok = await aplicarStatus(id, status);
+    if (ok) showToast(status === 'aprovado' ? '✅ Solicitação aprovada!' : '❌ Solicitação recusada!', status === 'aprovado' ? 'ok' : 'erro');
+  }
+
+  // Quantos prontos da seção ficam presentes naquele dia/semana.
+  // contarEsta=true desconta também a solicitação que está sendo avaliada.
+  function calcularCobertura(secao, semana, dia, contarEsta) {
+    if (!secao || secao === '—' || secao === '') return null;
+    const totalProntos = policiais.filter(p => p.secao === secao && (p.situacao || 'Pronto') === 'Pronto').length;
+    const jaDeFolga = solicitacoes.filter(s => s.secao === secao && s.semana === semana && s.dia === dia && s.status === 'aprovado').length;
+    const presentes = totalProntos - jaDeFolga - (contarEsta ? 1 : 0);
+    const min = minPorSecao[secao] ?? 0;
+    return { totalProntos, jaDeFolga, presentes, min, critico: min > 0 && presentes < min };
+  }
+
+  // Aprova uma única, avisando+confirmando se estourar a cobertura mínima.
+  async function aprovarUma(s) {
+    if (!isMaster) return;
+    const cob = calcularCobertura(s.secao, s.semana, s.dia, true);
+    if (cob && cob.critico) {
+      const ok = window.confirm(`⚠️ Aprovar deixa a seção ${s.secao} com apenas ${cob.presentes} prontos na ${s.dia} (mínimo ${cob.min}).\n\nAprovar mesmo assim?`);
+      if (!ok) return;
+    }
+    await mudarStatus(s.id, 'aprovado');
+  }
+
+  function toggleSelecao(id) {
+    setSelecionadas(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+  }
+  function selecionarTodasPendentes() {
+    const ids = pendentesFiltradas.map(s => s.id);
+    const todas = ids.length > 0 && ids.every(id => selecionadas.includes(id));
+    setSelecionadas(todas ? [] : ids);
+  }
+  async function aprovarSelecionadas() {
+    if (!isMaster) return;
+    const alvos = pendentesFiltradas.filter(s => selecionadas.includes(s.id));
+    if (alvos.length === 0) return;
+    const criticas = alvos.filter(s => { const c = calcularCobertura(s.secao, s.semana, s.dia, true); return c && c.critico; });
+    let aviso = `Aprovar ${alvos.length} solicitação(ões) selecionada(s)?`;
+    if (criticas.length > 0) aviso += `\n\n⚠️ ${criticas.length} delas deixaria(m) a seção abaixo do mínimo de cobertura.`;
+    if (!window.confirm(aviso)) return;
+    for (const s of alvos) { await aplicarStatus(s.id, 'aprovado', s); }
+    showToast(`✅ ${alvos.length} aprovada(s)!`);
+    setSelecionadas([]);
+  }
+  async function recusarSelecionadas() {
+    if (!isMaster) return;
+    const alvos = pendentesFiltradas.filter(s => selecionadas.includes(s.id));
+    if (alvos.length === 0) return;
+    if (!window.confirm(`Recusar ${alvos.length} solicitação(ões) selecionada(s)?`)) return;
+    for (const s of alvos) { await aplicarStatus(s.id, 'recusado', s); }
+    showToast(`❌ ${alvos.length} recusada(s).`, 'erro');
+    setSelecionadas([]);
+  }
+
+  async function salvarMinSecao(secao, valor) {
+    const n = parseInt(valor, 10);
+    const min = (isNaN(n) || n < 0) ? 0 : n;
+    setMinPorSecao(prev => ({ ...prev, [secao]: min }));
+    const { error } = await supabase.from('folgas_config_secao').upsert({ secao, min_prontos: min });
+    if (error) showToast('Erro ao salvar mínimo da seção.', 'erro');
   }
 
   async function aprovarTroca(sol) {
@@ -2114,6 +2190,26 @@ if (updErr) { showToast(`Erro: ${updErr.message}`, 'erro'); return; }
           </div>
           <button onClick={() => gerarPDF(solicitacoesSemana, policiais, semanaAtual)} style={{ ...btnPrimary, marginTop:0, marginBottom:14, background:'#1B5E20' }}>📄 Gerar Relatório PDF</button>
 
+          {/* Config: cobertura mínima por seção */}
+          {isMaster && (
+            <div style={{ marginBottom:14 }}>
+              <button onClick={() => setMostrarConfigCob(v => !v)} style={{ ...btnSm, background:'#f0f4f8', color:'#1a3a5c' }}>⚙️ Cobertura mínima por seção {mostrarConfigCob ? '▲' : '▼'}</button>
+              {mostrarConfigCob && (
+                <div style={{ background:'#fff', borderRadius:10, padding:12, marginTop:8, boxShadow:'0 2px 8px #00000012' }}>
+                  <p style={{ color:'#6b8099', fontSize:12, marginBottom:10 }}>Mínimo de policiais <strong>prontos</strong> que devem permanecer em cada seção por dia. <strong>0 = sem alerta.</strong> Salva automaticamente.</p>
+                  <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(140px, 1fr))', gap:8 }}>
+                    {SECOES.map(sec => (
+                      <div key={sec} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:6, background:'#f8fafc', borderRadius:8, padding:'6px 10px' }}>
+                        <span style={{ fontSize:12, fontWeight:700, color:'#2d4a63' }}>{sec}</span>
+                        <input type="number" min="0" defaultValue={minPorSecao[sec] ?? 0} onBlur={e => salvarMinSecao(sec, e.target.value)} style={{ width:54, padding:'4px 6px', borderRadius:6, border:'1.5px solid #d1d5db', fontSize:13, textAlign:'center', color:'#0f172a' }} />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Sub-abas de status — Pendentes / Aprovados / Todos */}
           <div style={{ display:'flex', gap:6, marginBottom:14, flexWrap:'wrap' }}>
             {[
@@ -2201,6 +2297,18 @@ if (updErr) { showToast(`Erro: ${updErr.message}`, 'erro'); return; }
               {DIAS.map(d => <option key={d}>{d}</option>)}
             </select>
           </div>
+          {/* Ações em lote — só nas pendentes */}
+          {isMaster && filtroStatus === 'pendente' && pendentesFiltradas.length > 0 && (
+            <div style={{ display:'flex', alignItems:'center', gap:8, flexWrap:'wrap', background:'#eef4ff', borderRadius:10, padding:'8px 12px', marginBottom:12 }}>
+              <button onClick={selecionarTodasPendentes} style={{ ...btnSm, background:'#fff', color:'#1a3a5c' }}>
+                {pendentesFiltradas.every(s => selecionadas.includes(s.id)) ? 'Limpar seleção' : 'Selecionar todas'}
+              </button>
+              <span style={{ fontSize:12, color:'#3d5a9e', fontWeight:700 }}>{selecionadas.length} selecionada(s)</span>
+              <div style={{ flex:1 }} />
+              <button onClick={aprovarSelecionadas} disabled={selecionadas.length===0} style={{ ...btnSm, background:selecionadas.length?'#1B5E20':'#cdd5df', color:'#fff', cursor:selecionadas.length?'pointer':'not-allowed' }}>✔ Aprovar ({selecionadas.length})</button>
+              <button onClick={recusarSelecionadas} disabled={selecionadas.length===0} style={{ ...btnSm, background:selecionadas.length?'#B71C1C':'#cdd5df', color:'#fff', cursor:selecionadas.length?'pointer':'not-allowed' }}>✘ Recusar ({selecionadas.length})</button>
+            </div>
+          )}
           {paginadasSolic.dados.length === 0
             ? <p style={{ color:'#aab', fontSize:13, textAlign:'center', padding:20 }}>Nenhuma solicitação nesta semana.</p>
             : (
@@ -2209,8 +2317,13 @@ if (updErr) { showToast(`Erro: ${updErr.message}`, 'erro'); return; }
                   const policial = policiais.find(p => p.id === s.policial_id);
                   return (
                     <Card key={s.id}>
-                      <div style={{ display:'flex', justifyContent:'space-between', flexWrap:'wrap', gap:8 }}>
-                        <div><span style={{ fontWeight:800, color:'#1a3a5c', fontSize:14 }}>{s.patente} {s.policial_nome}</span><span style={{ color:'#6b8099', fontSize:12, marginLeft:8 }}>Mat. {s.matricula}</span></div>
+                      <div style={{ display:'flex', justifyContent:'space-between', flexWrap:'wrap', gap:8, alignItems:'center' }}>
+                        <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+                          {isMaster && s.status === 'pendente' && (
+                            <input type="checkbox" checked={selecionadas.includes(s.id)} onChange={() => toggleSelecao(s.id)} style={{ width:18, height:18, cursor:'pointer', flexShrink:0 }} />
+                          )}
+                          <div><span style={{ fontWeight:800, color:'#1a3a5c', fontSize:14 }}>{s.patente} {s.policial_nome}</span><span style={{ color:'#6b8099', fontSize:12, marginLeft:8 }}>Mat. {s.matricula}</span></div>
+                        </div>
                         <Badge status={s.status} />
                       </div>
                       <div style={{ display:'flex', gap:8, flexWrap:'wrap', marginTop:8, alignItems:'center' }}>
@@ -2218,6 +2331,16 @@ if (updErr) { showToast(`Erro: ${updErr.message}`, 'erro'); return; }
                         <span style={{ background:'#e8f0fe', color:'#3d5a9e', borderRadius:6, padding:'2px 8px', fontSize:12, fontWeight:700 }}>{s.secao&&s.secao!=='—'?s.secao:'Não vinculada'}</span>
                         <span style={{ color:'#2d4a63', fontSize:13 }}>📅 <strong>{s.dia}</strong> — {s.semana}</span>
                       </div>
+                      {(() => {
+                        const cob = calcularCobertura(s.secao, s.semana, s.dia, s.status !== 'aprovado');
+                        if (!cob) return null;
+                        const cor = cob.critico ? '#B71C1C' : (cob.min > 0 && cob.presentes === cob.min ? '#E65100' : '#1B5E20');
+                        return (
+                          <div style={{ marginTop:8, fontSize:12, fontWeight:700, color:cor, background: cob.critico ? '#FFEBEE' : '#f1f5f9', borderRadius:8, padding:'6px 10px' }}>
+                            🪖 Cobertura {s.secao} · {s.dia}: <strong>{cob.presentes}</strong> prontos{cob.min > 0 ? ` (mín ${cob.min})` : ''}{s.status !== 'aprovado' ? ' se aprovar' : ''}{cob.critico ? ' ⚠️' : ''}
+                          </div>
+                        );
+                      })()}
                       {/* Contador compacto do policial */}
                       {policial && <ContadorFolgas solicitacoes={solicitacoes} policialId={s.policial_id} compact={true} />}
                       {/* Detalhes do policial */}
@@ -2235,7 +2358,7 @@ if (updErr) { showToast(`Erro: ${updErr.message}`, 'erro'); return; }
                       <p style={{ color:'#bbb', fontSize:12, marginTop:4 }}>{formatarDataHora(s.created_at)}</p>
                       {isMaster && s.status === 'pendente' && (
                         <div style={{ display:'flex', gap:8, marginTop:10 }}>
-                          <button onClick={() => mudarStatus(s.id,'aprovado')} style={{ ...btnSm, background:'#1B5E20', color:'#fff' }}>✔ Aprovar</button>
+                          <button onClick={() => aprovarUma(s)} style={{ ...btnSm, background:'#1B5E20', color:'#fff' }}>✔ Aprovar</button>
                           <button onClick={() => mudarStatus(s.id,'recusado')} style={{ ...btnSm, background:'#B71C1C', color:'#fff' }}>✘ Recusar</button>
                         </div>
                       )}
