@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Rajdhani:wght@600;700&family=Inter:wght@300;400;500;600;700;800;900&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=Inter:wght@300;400;500;600;700;800;900&display=swap');
 
 *, *::before, *::after {
   box-sizing: border-box;
@@ -6,98 +6,82 @@
   padding: 0;
 }
 
-html, body {
-  height: 100%;
-}
+html, body { height: 100%; }
 
 body {
   font-family: 'Inter', 'Segoe UI', Tahoma, sans-serif;
   font-size: 14px;
-  color: #e2e8f0;
-  background: #070f1e;
+  color: #0f172a;
+  background: #f1f5f9;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
-#root {
-  min-height: 100vh;
-}
+#root { min-height: 100vh; }
 
-/* Scrollbar discreta dark */
 ::-webkit-scrollbar { width: 5px; height: 5px; }
-::-webkit-scrollbar-track { background: #0d1a2e; }
-::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.2); }
+::-webkit-scrollbar-track { background: #e8edf2; }
+::-webkit-scrollbar-thumb { background: rgba(26,58,92,0.2); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(26,58,92,0.3); }
+
+input, select, textarea { font-family: inherit; }
 
 input, select, textarea {
-  font-family: inherit;
+  background: #fff !important;
+  border-color: #d1d5db !important;
+  color: #0f172a !important;
 }
-
-/* Input dark theme global */
-input, select, textarea {
-  background: rgba(255,255,255,0.04) !important;
-  border-color: rgba(255,255,255,0.1) !important;
-  color: #e2e8f0 !important;
-}
-input::placeholder { color: #475569 !important; }
+input::placeholder, textarea::placeholder { color: #94a3b8 !important; }
 input:focus, select:focus, textarea:focus {
-  border-color: rgba(251,191,36,0.5) !important;
-  background: rgba(255,255,255,0.07) !important;
+  border-color: rgba(26,58,92,0.5) !important;
+  background: #f8fafc !important;
   outline: none !important;
 }
+select option { background: #fff; color: #0f172a; }
 
-select option {
-  background: #0d1a2e;
-  color: #e2e8f0;
-}
-
-/* Override: dentro de cards de fundo claro, inputs voltam ao tema light.
-   Resolve "fonte muito clara" em formulários sobre fundo branco
-   (form de solicitação do policial, adicionar efetivo, edição, etc). */
 .card-light input,
 .card-light select,
 .card-light textarea {
-  background: #f8fafc !important;
-  border-color: #d0dce8 !important;
+  background: #fff !important;
+  border-color: #d1d5db !important;
   color: #0f172a !important;
 }
-.card-light input::placeholder { color: #94a3b8 !important; }
+.card-light input::placeholder,
+.card-light textarea::placeholder { color: #94a3b8 !important; }
 .card-light input:focus,
 .card-light select:focus,
 .card-light textarea:focus {
-  border-color: #1a3a5c !important;
-  background: #fff !important;
-  outline: none !important;
+  border-color: rgba(26,58,92,0.5) !important;
+  background: #f8fafc !important;
 }
-.card-light select option {
-  background: #fff;
-  color: #0f172a;
-}
-/* iOS/Safari: força tipografia legível em input[type=date] dentro de cards claros */
+.card-light select option { background: #fff; color: #0f172a; }
 .card-light input[type="date"]::-webkit-datetime-edit,
 .card-light input[type="date"]::-webkit-datetime-edit-text,
 .card-light input[type="date"]::-webkit-datetime-edit-month-field,
 .card-light input[type="date"]::-webkit-datetime-edit-day-field,
-.card-light input[type="date"]::-webkit-datetime-edit-year-field {
-  color: #0f172a;
-}
+.card-light input[type="date"]::-webkit-datetime-edit-year-field { color:#0f172a; }
 
 button:focus-visible {
-  outline: 2px solid #fbbf24;
+  outline: 2px solid #1a3a5c;
   outline-offset: 2px;
 }
 
-/* Fonte display militar para títulos */
-.font-heading {
-  font-family: 'Rajdhani', sans-serif;
-}
+.font-heading { font-family: 'Rajdhani', sans-serif; }
 
-/* ── Split login layout ──────────────────────────────────────────
-   Estilos abaixo são o "fallback" — o JSX já aplica inline styles
-   condicionais via `isDesktop`. Mantemos o CSS para:
-   1) Garantir comportamento correto mesmo sem JS
-   2) Adicionar regras de hover/focus que não fazem sentido inline
-*/
+/* Pulsação para alertas de vencimento próximo */
+@keyframes pulse-warn {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(249,168,37,0.6); }
+  50%      { box-shadow: 0 0 0 8px rgba(249,168,37,0); }
+}
+.pulse-warn { animation: pulse-warn 1.8s infinite; }
+
+@keyframes pulse-danger {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(183,28,28,0.6); }
+  50%      { box-shadow: 0 0 0 8px rgba(183,28,28,0); }
+}
+.pulse-danger { animation: pulse-danger 1.4s infinite; }
+
+/* Login split */
 .login-split {
   display: flex;
   flex-direction: column;
@@ -105,22 +89,17 @@ button:focus-visible {
   justify-content: center;
   padding: 24px 16px;
   min-height: calc(100vh - 58px);
-  background: #070f1e;
+  background: #f1f5f9;
 }
-.login-left {
-  display: none;
-}
+.login-left  { display: none; }
 .login-right {
   width: 100%;
   display: flex;
   align-items: center;
   justify-content: center;
   padding: 48px 24px;
-  background: #070f1e;
+  background: #f1f5f9;
 }
-/* Mobile: mostra header interno do card, esconde o desktop */
-.login-mobile-header { display: block; }
-.login-desktop-header { display: none; }
 
 @media (min-width: 1024px) {
   .login-split {
@@ -138,17 +117,43 @@ button:focus-visible {
     justify-content: flex-end;
     padding: 0 48px 64px 64px;
     overflow: hidden;
+    background: linear-gradient(135deg, #0a1428 0%, #1a3a5c 100%);
   }
   .login-right {
     flex: 1;
     width: auto;
-    display: flex;
-    align-items: center;
-    justify-content: center;
     padding: 48px 32px;
-    position: relative;
   }
-  /* Desktop: esconde header do card (já tem o painel esquerdo) */
-  .login-mobile-header { display: none; }
-  .login-desktop-header { display: block; }
 }
+
+table.tbl-proc {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+}
+table.tbl-proc thead th {
+  position: sticky; top: 0;
+  background: #1a3a5c;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  text-align: left;
+  padding: 12px 10px;
+  border-bottom: 2px solid rgba(255,255,255,0.15);
+  z-index: 1;
+}
+table.tbl-proc tbody td {
+  padding: 12px 10px;
+  border-bottom: 1px solid #f1f5f9;
+  font-size: 13px;
+  color: #334155;
+  vertical-align: middle;
+}
+table.tbl-proc tbody tr:hover { background: rgba(26,58,92,0.03); }
+
+.row-vencido    { background: rgba(239,68,68,0.07); }
+.row-proximo    { background: rgba(249,168,37,0.08); }
+.row-sobrestado { background: rgba(168,85,247,0.07); }
+.row-concluido  { opacity: 0.55; }
