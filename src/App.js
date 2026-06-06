@@ -1457,6 +1457,12 @@ function MeuPerfilCard({ perfil, onPerfilAtualizado }) {
 function TelaSolicitacao({ usuario }) {
   const [dia, setDia] = useState(null);
   const [semana, setSemana] = useState('');
+  const [semanaBase, setSemanaBase] = useState(() => {
+    const base = getInicioSemana(new Date());
+    const dow = new Date().getDay();
+    if (dow === 0 || dow === 6) base.setDate(base.getDate() + 7); // fim de semana -> abre na proxima
+    return base;
+  });
   const [motivo, setMotivo] = useState('');
   const [email, setEmail] = useState(usuario.email || '');
   const [minhas, setMinhas] = useState([]);
@@ -1575,6 +1581,22 @@ function TelaSolicitacao({ usuario }) {
 
   const paginado = paginar(minhas, paginaMinhas, POR_PAGINA);
 
+  // --- Seletor unificado de semana + dia ---
+  const hojeZero = new Date(); hojeZero.setHours(0,0,0,0);
+  const semanaBaseIso = semanaBase.toISOString().split('T')[0];
+  const semanaAtualIso = getInicioSemana(hojeZero).toISOString().split('T')[0];
+  const podeVoltar = semanaBaseIso > semanaAtualIso;
+  const diasSemana = DIAS.map((nome, i) => {
+    const d = new Date(semanaBase); d.setDate(d.getDate() + i); d.setHours(0,0,0,0);
+    return { nome, abbr: nome.slice(0,3), dataNum: d.getDate(), passado: d < hojeZero };
+  });
+  function voltarSemana() { const d = new Date(semanaBase); d.setDate(d.getDate() - 7); setSemanaBase(d); }
+  function avancarSemana() { const d = new Date(semanaBase); d.setDate(d.getDate() + 7); setSemanaBase(d); }
+  const diaEscolhidoLabel = (semana && dia) ? (() => {
+    const d = new Date(semana + 'T00:00:00'); d.setDate(d.getDate() + DIAS.indexOf(dia));
+    return d.toLocaleDateString('pt-BR');
+  })() : '';
+
   return (
     <div>
       <h2 style={{ fontSize:18, fontWeight:900, color:'#1a3a5c', marginBottom:4 }}>Nova Solicitação</h2>
@@ -1591,12 +1613,29 @@ function TelaSolicitacao({ usuario }) {
             <div style={{ display:'flex', gap:10, marginBottom:16 }}>
               {MOTIVOS.map(m => <button key={m} onClick={() => setMotivo(m)} style={{ flex:1, padding:'14px 10px', borderRadius:10, fontWeight:800, fontSize:15, cursor:'pointer', background:motivo===m?(m==='Folga'?'#0D47A1':'#6A1B9A'):'#f0f4f8', color:motivo===m?'#fff':'#2d4a63', border:motivo===m?`2px solid ${m==='Folga'?'#0D47A1':'#6A1B9A'}`:'2px solid transparent' }}>{m==='Folga'?'🌙 Folga':'🎖️ Concessão'}</button>)}
             </div>
-            <label style={lbl}>Dia da semana *</label>
-            <div style={{ display:'flex', gap:6, flexWrap:'wrap', marginBottom:16 }}>
-              {DIAS.map(d => <button key={d} onClick={() => setDia(d)} style={{ padding:'7px 11px', borderRadius:8, fontWeight:700, fontSize:13, cursor:'pointer', background:dia===d?'#1a3a5c':'#f0f4f8', color:dia===d?'#fff':'#2d4a63', border:dia===d?'2px solid #1a3a5c':'2px solid transparent' }}>{d}</button>)}
+            <label style={lbl}>Semana e dia da folga *</label>
+            <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', background:'#f0f4f8', borderRadius:10, padding:'8px 12px', marginBottom:8 }}>
+              <button onClick={voltarSemana} disabled={!podeVoltar} style={{ ...btnSm, background:podeVoltar?'#fff':'#e2e8f0', color:podeVoltar?'#1a3a5c':'#94a3b8', cursor:podeVoltar?'pointer':'not-allowed' }}>← Anterior</button>
+              <span style={{ fontWeight:800, color:'#1a3a5c', fontSize:13 }}>📅 {formatarSemana(semanaBase)}</span>
+              <button onClick={avancarSemana} style={{ ...btnSm, background:'#fff', color:'#1a3a5c' }}>Próxima →</button>
             </div>
-            <label style={lbl}>Semana de referência *</label>
-            <input type="date" value={semana} onChange={e => setSemana(e.target.value)} style={{ ...inp, marginBottom:14 }} />
+            <div style={{ display:'grid', gridTemplateColumns:'repeat(5,1fr)', gap:6, marginBottom:8 }}>
+              {diasSemana.map(ds => {
+                const sel = semana === semanaBaseIso && dia === ds.nome;
+                return (
+                  <button key={ds.nome} disabled={ds.passado} onClick={() => { setSemana(semanaBaseIso); setDia(ds.nome); }}
+                    style={{ padding:'10px 4px', borderRadius:10, cursor:ds.passado?'not-allowed':'pointer', textAlign:'center',
+                      background:ds.passado?'#f1f5f9':(sel?'#1a3a5c':'#fff'), color:ds.passado?'#cbd5e1':(sel?'#fff':'#2d4a63'),
+                      border:sel?'2px solid #1a3a5c':'2px solid #e2e8f0', opacity:ds.passado?0.6:1 }}>
+                    <div style={{ fontSize:11, fontWeight:700, textTransform:'uppercase', letterSpacing:0.5 }}>{ds.abbr}</div>
+                    <div style={{ fontSize:18, fontWeight:900, marginTop:2 }}>{ds.dataNum}</div>
+                  </button>
+                );
+              })}
+            </div>
+            {semana && dia
+              ? <div style={{ background:'#E8F5E9', color:'#1B5E20', borderRadius:8, padding:'8px 12px', fontSize:13, fontWeight:700, marginBottom:14 }}>✓ {dia}, {diaEscolhidoLabel}</div>
+              : <div style={{ color:'#94a3b8', fontSize:12, marginBottom:14 }}>Escolha o dia da folga acima.</div>}
 
             {/* Grade de folgas já marcadas na seção, na semana escolhida.
                 Não aparece se o policial não tem seção definida. */}
