@@ -2790,12 +2790,12 @@ const MODULOS_PORTAL = [
   {
     id: 'escala',
     titulo: 'Escala de Serviço',
-    descricao: 'Em breve — escala diária do efetivo de serviço.',
+    descricao: 'Registro e controle de assunção de serviço das guarnições.',
     icone: '🛡️',
-    cor: '#475569',
-    tipo: 'futuro',
-    destino: null,
-    ativo: false,
+    cor: '#34d399',
+    tipo: 'externo',
+    destino: 'https://32bpm-escaladiaria.vercel.app/sso',
+    ativo: true,
   },
   {
     id: 'p3',
