@@ -3046,7 +3046,7 @@ export default function App() {
     }
     if (perfil.role === 'policial') {
       setUsuarioSel(perfilNormalizado);
-      setGestorLogado(null);
+      setGestorLogado(perfil.is_gestor ? perfilNormalizado : null);
       setModo('policial');
       return;
     }
@@ -3353,6 +3353,12 @@ export default function App() {
           margin: '24px auto',
           padding: '0 16px',
         }}>
+          {usuarioSel && usuarioSel.is_gestor && usuarioSel.role === 'policial' && (
+            <div style={{ display:'flex', gap:8, marginBottom:14 }}>
+              <button onClick={() => setModo('policial')} style={{ padding:'8px 16px', borderRadius:8, cursor:'pointer', fontWeight:700, fontSize:13, border:'1px solid #1a3a5c', background: modo === 'policial' ? '#1a3a5c' : '#fff', color: modo === 'policial' ? '#fff' : '#1a3a5c' }}>Minha Folga</button>
+              <button onClick={() => setModo('portal')} style={{ padding:'8px 16px', borderRadius:8, cursor:'pointer', fontWeight:700, fontSize:13, border:'1px solid #1a3a5c', background: (modo === 'portal' || modo === 'gestor') ? '#1a3a5c' : '#fff', color: (modo === 'portal' || modo === 'gestor') ? '#fff' : '#1a3a5c' }}>Gestão</button>
+            </div>
+          )}
           <div style={{
             background: '#fff',
             border: '1px solid #e2e8f0',
