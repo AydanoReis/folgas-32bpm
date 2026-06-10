@@ -77,11 +77,11 @@ export default function Dashboard({ procedimentos, tipos, onIrPara }) {
       }}>
         {/* Pizza por status */}
         <div style={{
-          background: '#0d1a2e', border: '1px solid rgba(255,255,255,0.06)',
+          background: '#f8fafc', border: '1px solid #e2e8f0',
           borderRadius: 12, padding: '18px 20px',
         }}>
           <h3 style={{
-            color: '#fbbf24', fontSize: 11, fontWeight: 800,
+            color: '#b45309', fontSize: 11, fontWeight: 800,
             letterSpacing: '0.16em', textTransform: 'uppercase', marginBottom: 14,
           }}>
             Distribuição por status
@@ -98,11 +98,11 @@ export default function Dashboard({ procedimentos, tipos, onIrPara }) {
                   {pieData.map((d, i) => <Cell key={i} fill={d.fill} />)}
                 </Pie>
                 <Tooltip contentStyle={{
-                  background: '#0a1428',
-                  border: '1px solid rgba(255,255,255,0.1)',
+                  background: '#ffffff',
+                  border: '1px solid #e2e8f0',
                   borderRadius: 8,
                 }} />
-                <Legend wrapperStyle={{ fontSize: 11, color: '#cbd5e1' }} />
+                <Legend wrapperStyle={{ fontSize: 11, color: '#475569' }} />
               </PieChart>
             </ResponsiveContainer>
           )}
@@ -110,11 +110,11 @@ export default function Dashboard({ procedimentos, tipos, onIrPara }) {
 
         {/* Barras por tipo */}
         <div style={{
-          background: '#0d1a2e', border: '1px solid rgba(255,255,255,0.06)',
+          background: '#f8fafc', border: '1px solid #e2e8f0',
           borderRadius: 12, padding: '18px 20px',
         }}>
           <h3 style={{
-            color: '#fbbf24', fontSize: 11, fontWeight: 800,
+            color: '#b45309', fontSize: 11, fontWeight: 800,
             letterSpacing: '0.16em', textTransform: 'uppercase', marginBottom: 14,
           }}>
             Procedimentos ativos por tipo
@@ -126,13 +126,13 @@ export default function Dashboard({ procedimentos, tipos, onIrPara }) {
           ) : (
             <ResponsiveContainer width="100%" height={240}>
               <BarChart data={porTipo} margin={{ top: 5, right: 8, left: 0, bottom: 5 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
+                <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
                 <XAxis dataKey="nome" stroke="#64748b" fontSize={10}
                        angle={-15} textAnchor="end" height={56} interval={0} />
                 <YAxis stroke="#64748b" fontSize={11} allowDecimals={false} />
                 <Tooltip contentStyle={{
-                  background: '#0a1428',
-                  border: '1px solid rgba(255,255,255,0.1)',
+                  background: '#ffffff',
+                  border: '1px solid #e2e8f0',
                   borderRadius: 8,
                 }} />
                 <Bar dataKey="quantidade" fill="#fbbf24" radius={[6, 6, 0, 0]} />
@@ -144,7 +144,7 @@ export default function Dashboard({ procedimentos, tipos, onIrPara }) {
 
       {/* Próximos vencimentos */}
       <div style={{
-        background: '#0d1a2e', border: '1px solid rgba(255,255,255,0.06)',
+        background: '#f8fafc', border: '1px solid #e2e8f0',
         borderRadius: 12, padding: '18px 20px',
       }}>
         <div style={{
@@ -152,7 +152,7 @@ export default function Dashboard({ procedimentos, tipos, onIrPara }) {
           alignItems: 'center', marginBottom: 14,
         }}>
           <h3 style={{
-            color: '#fbbf24', fontSize: 11, fontWeight: 800,
+            color: '#b45309', fontSize: 11, fontWeight: 800,
             letterSpacing: '0.16em', textTransform: 'uppercase', margin: 0,
           }}>
             ⏰ Próximos a vencer (≤ 10 dias)
@@ -171,7 +171,7 @@ export default function Dashboard({ procedimentos, tipos, onIrPara }) {
               <div key={p.id} style={{
                 display: 'flex', justifyContent: 'space-between',
                 alignItems: 'center', gap: 12,
-                background: 'rgba(255,255,255,0.02)',
+                background: '#ffffff',
                 padding: '10px 14px', borderRadius: 8,
                 borderLeft: `3px solid ${
                   p._dias < 0 ? '#ef4444' :
@@ -179,7 +179,7 @@ export default function Dashboard({ procedimentos, tipos, onIrPara }) {
                 }`,
               }}>
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ color: '#fff', fontSize: 13, fontWeight: 700 }}>
+                  <div style={{ color: '#0f172a', fontSize: 13, fontWeight: 700 }}>
                     {p.tipo_nome} · Nº {p.numero}
                   </div>
                   <div style={{ color: '#64748b', fontSize: 11, marginTop: 2 }}>
@@ -189,7 +189,7 @@ export default function Dashboard({ procedimentos, tipos, onIrPara }) {
                 <div style={{ textAlign: 'right' }}>
                   <div className="font-heading" style={{
                     color: p._dias < 0 ? '#ef4444' :
-                           p._dias <= 5 ? '#fbbf24' : '#22c55e',
+                           p._dias <= 5 ? '#b45309' : '#22c55e',
                     fontWeight: 700, fontSize: 22, lineHeight: 1,
                   }}>
                     {p._dias < 0 ? `${Math.abs(p._dias)}` : p._dias}
@@ -209,3 +209,4 @@ export default function Dashboard({ procedimentos, tipos, onIrPara }) {
     </div>
   );
 }
+
