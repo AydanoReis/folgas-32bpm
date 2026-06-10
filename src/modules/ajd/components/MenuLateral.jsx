@@ -13,8 +13,8 @@ const ITENS = [
 export default function MenuLateral({ aba, setAba }) {
   return (
     <div style={{
-      background: '#0a1428', borderRadius: 12,
-      border: '1px solid rgba(255,255,255,0.05)',
+      background: '#ffffff', borderRadius: 12,
+      border: '1px solid #e2e8f0',
       padding: 14,
       display: 'flex', flexDirection: 'column', gap: 4,
     }}>
@@ -26,7 +26,7 @@ export default function MenuLateral({ aba, setAba }) {
             display: 'flex', alignItems: 'center', gap: 10,
             padding: '11px 14px', borderRadius: 8,
             background: aba === i.id ? 'rgba(251,191,36,0.12)' : 'transparent',
-            color: aba === i.id ? '#fbbf24' : '#94a3b8',
+            color: aba === i.id ? '#b45309' : '#475569',
             border: aba === i.id
               ? '1px solid rgba(251,191,36,0.25)'
               : '1px solid transparent',
@@ -42,3 +42,4 @@ export default function MenuLateral({ aba, setAba }) {
     </div>
   );
 }
+
