@@ -6,10 +6,10 @@ export const inp = {
   width: '100%',
   padding: '10px 14px',
   borderRadius: 8,
-  border: '1.5px solid rgba(255,255,255,0.1)',
+  border: '1.5px solid #cbd5e1',
   fontSize: 14,
-  color: '#e2e8f0',
-  background: 'rgba(255,255,255,0.04)',
+  color: '#0f172a',
+  background: '#ffffff',
   boxSizing: 'border-box',
   outline: 'none',
   transition: 'border-color 0.2s, background 0.2s',
@@ -42,9 +42,9 @@ export const btnPrimary = {
 };
 
 export const btnGhost = {
-  background: 'rgba(255,255,255,0.05)',
-  color: '#cbd5e1',
-  border: '1px solid rgba(255,255,255,0.1)',
+  background: '#f1f5f9',
+  color: '#475569',
+  border: '1px solid #cbd5e1',
   borderRadius: 8,
   padding: '8px 14px',
   cursor: 'pointer',
@@ -67,3 +67,4 @@ export const btnSm = {
 
 // Roles autorizados a acessar o módulo AJD
 export const ROLES_AJD = ['admin_ajd', 'comandante'];
+
