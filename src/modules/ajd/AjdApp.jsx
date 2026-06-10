@@ -87,14 +87,14 @@ export default function AjdApp({ perfil, session, onVoltarPortal }) {
   // ============== SEM ACESSO ==============
   if (!podeAcessar) {
     return (
-      <div style={{ minHeight: '100vh', background: '#070f1e' }}>
+      <div style={{ minHeight: '100vh', background: '#f1f5f9' }}>
         <TopBar admin={null} onVoltarPortal={onVoltarPortal} />
         <div style={{
           maxWidth: 1400, margin: '24px auto', padding: '0 16px',
         }}>
           <div style={{
-            background: '#0d1a2e',
-            border: '1px solid rgba(255,255,255,0.05)',
+            background: '#ffffff',
+            border: '1px solid #e2e8f0',
             borderRadius: 12, padding: '28px 26px',
           }}>
             <TelaSemAcesso perfil={perfil} onVoltarPortal={onVoltarPortal} />
@@ -115,7 +115,7 @@ export default function AjdApp({ perfil, session, onVoltarPortal }) {
   };
 
   return (
-    <div style={{ minHeight: '100vh', background: '#070f1e' }}>
+    <div style={{ minHeight: '100vh', background: '#f1f5f9' }}>
       <TopBar admin={admin} onVoltarPortal={onVoltarPortal} />
       <div style={{
         maxWidth: 1400, margin: '24px auto', padding: '0 16px',
@@ -124,11 +124,11 @@ export default function AjdApp({ perfil, session, onVoltarPortal }) {
       }}>
         <MenuLateral aba={aba} setAba={setAba} />
         <div style={{
-          background: '#0d1a2e',
-          border: '1px solid rgba(255,255,255,0.05)',
-          borderRadius: 12, padding: '28px 26px', color: '#e2e8f0',
+          background: '#ffffff',
+          border: '1px solid #e2e8f0',
+          borderRadius: 12, padding: '28px 26px', color: '#0f172a',
           boxShadow:
-            '0 1px 0 rgba(255,255,255,0.03) inset, 0 8px 32px rgba(0,0,0,0.25)',
+            '0 1px 3px rgba(0,0,0,0.06)',
         }}>
           {aba === 'dashboard' && (
             <Dashboard procedimentos={procedimentos} tipos={tipos} onIrPara={setAba} />
@@ -157,3 +157,4 @@ export default function AjdApp({ perfil, session, onVoltarPortal }) {
     </div>
   );
 }
+
