@@ -7,8 +7,8 @@ export default function CardKPI({ valor, label, cor, icone, onClick }) {
     <div
       onClick={onClick}
       style={{
-        background: '#0d1a2e',
-        border: '1px solid rgba(255,255,255,0.06)',
+        background: '#f8fafc',
+        border: '1px solid #e2e8f0',
         borderLeft: `4px solid ${cor}`,
         borderRadius: 12,
         padding: '18px 20px',
@@ -35,10 +35,11 @@ export default function CardKPI({ valor, label, cor, icone, onClick }) {
         <span style={{ fontSize: 22 }}>{icone}</span>
       </div>
       <div className="font-heading" style={{
-        color: '#fff', fontWeight: 700, fontSize: 36, lineHeight: 1,
+        color: '#0f172a', fontWeight: 700, fontSize: 36, lineHeight: 1,
       }}>
         {valor}
       </div>
     </div>
   );
 }
+
